@@ -490,6 +490,7 @@ write_cmake_config("llvm-config") {
 
   values += [ "LLVM_HAS_XCORE_TARGET=" ]
   values += [ "LLVM_HAS_XTENSA_TARGET=" ]
+  values += [ "LLVM_HAS_ETCA_TARGET=" ]
 }
 
 ##############################################################################
