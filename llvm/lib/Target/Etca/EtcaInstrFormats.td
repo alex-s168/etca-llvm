@@ -38,7 +38,7 @@ class InstRI<bits<4> op, dag outs, dag ins, string asmstr,
   let Inst{15-11} = imm5;
 }
 
-class InstRR<bits<3> op, dag outs, dag ins, string asmstr,
+class InstRR<bits<4> op, dag outs, dag ins, string asmstr,
              list<dag> pattern>
     : InstEtca<outs, ins, asmstr, pattern>, Sched<[WriteALU]> {
   bits<3> Ra;

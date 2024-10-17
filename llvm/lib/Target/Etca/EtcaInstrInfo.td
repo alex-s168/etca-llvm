@@ -23,47 +23,47 @@ include "EtcaInstrFormats.td"
 // a = a op b
 class ArithLogic_RR<bits<4> opcode, string instrAsm,
       SDPatternOperator opNode>
-  : InstRR<opcode, (outs AR:$a), (ins AR:$a, AR:$b),
+  : InstRR<opcode, (outs GPR:$a), (ins GPR:$a, GPR:$b),
            instrAsm#"\t$a, $b",
-           [(set AR:$a, (opNode AR:$a, AR:$b))]> {
+           [(set GPR:$a, (opNode GPR:$a, GPR:$b))]> {
 }
 
 // a = a op b
 class ArithLogic_RI<bits<4> opcode, string instrAsm,
       SDPatternOperator opNode>
-  : InstRI<opcode, (outs AR:$a), (ins AR:$a, imm5:$b),
+  : InstRI<opcode, (outs GPR:$a), (ins GPR:$a, imm5:$b),
            instrAsm#"\t$a, $b",
-           [(set AR:$a, (opNode AR:$a, imm5:$b))]> {
+           [(set GPR:$a, (opNode GPR:$a, imm5:$b))]> {
 }
 
 // a = b op a
 class ArithLogic_Rev_RR<bits<4> opcode, string instrAsm,
       SDPatternOperator opNode>
-  : InstRR<opcode, (outs AR:$a), (ins AR:$a, AR:$b),
+  : InstRR<opcode, (outs GPR:$a), (ins GPR:$a, GPR:$b),
            instrAsm#"\t$a, $b",
-           [(set AR:$a, (opNode AR:$b, AR:$a))]> {
+           [(set GPR:$a, (opNode GPR:$b, GPR:$a))]> {
 }
 
 // a = b op a
 class ArithLogic_Rev_RI<bits<4> opcode, string instrAsm,
       SDPatternOperator opNode>
-  : InstRI<opcode, (outs AR:$a), (ins AR:$a, imm5:$b),
+  : InstRI<opcode, (outs GPR:$a), (ins GPR:$a, imm5:$b),
            instrAsm#"\t$a, $b",
-           [(set AR:$a, (opNode imm5:$b, AR:$a))]> {
+           [(set GPR:$a, (opNode imm5:$b, GPR:$a))]> {
 }
 
 // a = b
 class Move_RR<bits<4> opcode, string instrAsm>
-  : InstRR<opcode, (outs AR:$d), (ins AR:$s),
+  : InstRR<opcode, (outs GPR:$d), (ins GPR:$s),
            instrAsm#"\t$d, $s",
-           [(set AR:$d, AR:$s)]> {
+           [(set GPR:$d, GPR:$s)]> {
 }
 
 // a = b
 class Move_RI<bits<4> opcode, string instrAsm>
-  : InstRI<opcode, (outs AR:$d), (ins imm5:$s),
+  : InstRI<opcode, (outs GPR:$d), (ins imm5:$s),
            instrAsm#"\t$d, $s",
-           [(set AR:$d, imm5:$s)]> {
+           [(set GPR:$d, imm5:$s)]> {
 }
 
 // -------------------------------------------------- //
