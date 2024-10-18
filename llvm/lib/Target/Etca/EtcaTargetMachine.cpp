@@ -30,7 +30,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeEtcaTarget() {
 static std::string computeDataLayout(const Triple &TT, StringRef CPU,
                                      const TargetOptions &Options,
                                      bool IsLittle) {
-  std::string Ret = "e-m:e-p:16:16-i8:8:16-i16:16:16-i32:32:16-n8:16";
+  std::string Ret = "e-m:e-p:16:16-i8:8:16-i16:16:16-i32:32:32-n8:16";
   return Ret;
 }
 
