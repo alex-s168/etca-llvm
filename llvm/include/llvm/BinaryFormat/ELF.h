@@ -321,6 +321,7 @@ enum {
   EM_VE = 251,            // NEC SX-Aurora VE
   EM_CSKY = 252,          // C-SKY 32-bit processor
   EM_LOONGARCH = 258,     // LoongArch
+  EM_ETCA = 259,          // ETC.A
 };
 
 // Object file classes.
@@ -1037,6 +1038,19 @@ enum : unsigned {
 // ELF Relocation types for Xtensa
 enum {
 #include "ELFRelocs/Xtensa.def"
+};
+
+// Etca specific e_flags
+enum : unsigned {
+  // Four-bit Xtensa machine type mask.
+  EF_ETCA_MACH = 0x0000000f,
+  // Various CPU types.
+  EF_ETCA_MACH_NONE = 0x00000000, // A base Etca implementation
+};
+
+// ELF Relocation types for Etca
+enum {
+#include "ELFRelocs/Etca.def"
 };
 
 #undef ELF_RELOC

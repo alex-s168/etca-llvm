@@ -20,12 +20,48 @@
 
 using namespace llvm;
 
+namespace {
+class EtcaObjectWriter : public MCELFObjectTargetWriter {
+public:
+  EtcaObjectWriter(uint8_t OSABI);
+
+  virtual ~EtcaObjectWriter();
+
+protected:
+  unsigned getRelocType(MCContext &Ctx, const MCValue &Target,
+                        const MCFixup &Fixup, bool IsPCRel) const override;
+  bool needsRelocateWithSymbol(const MCValue &Val, const MCSymbol &Sym,
+                               unsigned Type) const override;
+};
+} // namespace
+
+EtcaObjectWriter::EtcaObjectWriter(uint8_t OSABI)
+    : MCELFObjectTargetWriter(false, OSABI, ELF::EM_ETCA,
+                              /*HasRelocationAddend=*/true) {}
+
+EtcaObjectWriter::~EtcaObjectWriter() {}
+
+unsigned EtcaObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Target,
+                                        const MCFixup &Fixup,
+                                        bool IsPCRel) const {
+  return ELF::R_ETCA_NONE;
+}
+
+bool EtcaObjectWriter::needsRelocateWithSymbol(const MCValue &,
+                                               const MCSymbol &,
+                                               unsigned Type) const {
+  return false;
+}
+
 namespace llvm {
 class MCObjectTargetWriter;
 class EtcaMCAsmBackend : public MCAsmBackend {
+  uint8_t OSABI;
+
 public:
   EtcaMCAsmBackend(uint8_t osABI, bool isLE)
-      : MCAsmBackend(llvm::endianness::little) {}
+      : MCAsmBackend(llvm::endianness::little),
+        OSABI(osABI) {}
 
   unsigned getNumFixupKinds() const override {
     return 0;
@@ -43,7 +79,7 @@ public:
                     const MCSubtargetInfo *STI) const override;
 
   std::unique_ptr<MCObjectTargetWriter> createObjectTargetWriter() const override {
-    assert(false);
+    return std::make_unique<EtcaObjectWriter>(OSABI);
   }
 };
 } // namespace llvm
@@ -74,23 +110,7 @@ void EtcaMCAsmBackend::applyFixup(const MCAssembler &Asm,
                                     MutableArrayRef<char> Data, uint64_t Value,
                                     bool IsResolved,
                                     const MCSubtargetInfo *STI) const {
-  MCContext &Ctx = Asm.getContext();
-  MCFixupKindInfo Info = getFixupKindInfo(Fixup.getKind());
 
-  Value = adjustFixupValue(Fixup, Value, Ctx);
-
-  // Shift the value into position.
-  Value <<= Info.TargetOffset;
-
-  if (!Value)
-    return; // Doesn't change encoding.
-
-  unsigned Offset = Fixup.getOffset();
-  unsigned FullSize = getSize(Fixup.getKind());
-
-  for (unsigned i = 0; i != FullSize; ++i) {
-    Data[Offset + i] |= uint8_t((Value >> (i * 8)) & 0xff);
-  }
 }
 
 bool EtcaMCAsmBackend::mayNeedRelaxation(const MCInst &Inst,
