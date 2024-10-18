@@ -16,7 +16,6 @@
 #include "EtcaFrameLowering.h"
 #include "EtcaISelLowering.h"
 #include "EtcaInstrInfo.h"
-#include "EtcaSelectionDAGInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/Target/TargetMachine.h"
@@ -59,15 +58,10 @@ public:
     return &TLInfo;
   }
 
-  const EtcaSelectionDAGInfo *getSelectionDAGInfo() const override {
-    return &TSInfo;
-  }
-
 private:
   EtcaFrameLowering FrameLowering;
   EtcaInstrInfo InstrInfo;
   EtcaTargetLowering TLInfo;
-  EtcaSelectionDAGInfo TSInfo;
 };
 } // namespace llvm
 

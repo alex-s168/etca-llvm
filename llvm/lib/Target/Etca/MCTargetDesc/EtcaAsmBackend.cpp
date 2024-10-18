@@ -23,13 +23,9 @@ using namespace llvm;
 namespace llvm {
 class MCObjectTargetWriter;
 class EtcaMCAsmBackend : public MCAsmBackend {
-  uint8_t OSABI;
-  bool IsLittleEndian;
-
 public:
   EtcaMCAsmBackend(uint8_t osABI, bool isLE)
-      : MCAsmBackend(llvm::endianness::little), OSABI(osABI),
-        IsLittleEndian(isLE) {}
+      : MCAsmBackend(llvm::endianness::little) {}
 
   unsigned getNumFixupKinds() const override {
     return 0;
@@ -63,11 +59,6 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
   switch (Kind) {
   default:
     llvm_unreachable("Unknown fixup kind!");
-  case FK_Data_1:
-  case FK_Data_2:
-  case FK_Data_4:
-  case FK_Data_8:
-    return Value;
   }
 }
 
@@ -75,10 +66,6 @@ static unsigned getSize(unsigned Kind) {
   switch (Kind) {
   default:
     return 3;
-  case MCFixupKind::FK_Data_4:
-    return 4;
-  case Etca::fixup_xtensa_branch_6:
-    return 2;
   }
 }
 

@@ -23,37 +23,41 @@ include "EtcaInstrFormats.td"
 // a = a op b
 class ArithLogic_RR<bits<4> opcode, string instrAsm,
       SDPatternOperator opNode>
-  : InstRR<opcode, (outs GPR:$Ra), (ins GPR:$Ra, GPR:$Rb),
+  : InstRR<opcode, (outs GPR:$Ra), (ins GPR:$va, GPR:$Rb),
            instrAsm#"\t$Ra, $Rb",
-           [(set GPR:$Ra, (opNode GPR:$Ra, GPR:$Rb))]> {
+           [(set GPR:$Ra, (opNode GPR:$va, GPR:$Rb))]> {
   let ss = 0b01;
+  let Constraints = "$Ra = $va";
 }
 
 // a = a op b
 class ArithLogic_RI<bits<4> opcode, string instrAsm,
       SDPatternOperator opNode>
-  : InstRI<opcode, (outs GPR:$Ra), (ins GPR:$Ra, Imm5:$imm5),
+  : InstRI<opcode, (outs GPR:$Ra), (ins GPR:$va, Imm5:$imm5),
            instrAsm#"\t$Ra, $imm5",
-           [(set GPR:$Ra, (opNode GPR:$Ra, Imm5:$imm5))]> {
+           [(set GPR:$Ra, (opNode GPR:$va, Imm5:$imm5))]> {
   let ss = 0b01;
+  let Constraints = "$Ra = $va";
 }
 
 // a = b op a
 class ArithLogic_Rev_RR<bits<4> opcode, string instrAsm,
       SDPatternOperator opNode>
-  : InstRR<opcode, (outs GPR:$Ra), (ins GPR:$Ra, GPR:$Rb),
-           instrAsm#"\t$a, $b",
-           [(set GPR:$Ra, (opNode GPR:$Rb, GPR:$Ra))]> {
+  : InstRR<opcode, (outs GPR:$Ra), (ins GPR:$va, GPR:$Rb),
+           instrAsm#"\t$Ra, $Rb",
+           [(set GPR:$Ra, (opNode GPR:$Rb, GPR:$va))]> {
   let ss = 0b01;
+  let Constraints = "$Ra = $va";
 }
 
 // a = b op a
 class ArithLogic_Rev_RI<bits<4> opcode, string instrAsm,
       SDPatternOperator opNode>
-  : InstRI<opcode, (outs GPR:$Ra), (ins GPR:$Ra, Imm5:$imm5),
-           instrAsm#"\t$a, $b",
-           [(set GPR:$Ra, (opNode Imm5:$imm5, GPR:$Ra))]> {
+  : InstRI<opcode, (outs GPR:$Ra), (ins GPR:$va, Imm5:$imm5),
+           instrAsm#"\t$Ra, $imm5",
+           [(set GPR:$Ra, (opNode Imm5:$imm5, GPR:$va))]> {
   let ss = 0b01;
+  let Constraints = "$Ra = $va";
 }
 
 // a = b

@@ -70,8 +70,8 @@ void EtcaInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                   bool RenamableDest, bool RenamableSrc) const {
   // The MOV instruction is not present in core ISA,
   // so use OR instruction.
-  if (Etca::ARRegClass.contains(DestReg, SrcReg))
-    BuildMI(MBB, MBBI, DL, get(Etca::OR), DestReg)
+  if (Etca::GPRRegClass.contains(DestReg, SrcReg))
+    BuildMI(MBB, MBBI, DL, get(Etca::MOVS_RR), DestReg)
         .addReg(SrcReg, getKillRegState(KillSrc))
         .addReg(SrcReg, getKillRegState(KillSrc));
   else

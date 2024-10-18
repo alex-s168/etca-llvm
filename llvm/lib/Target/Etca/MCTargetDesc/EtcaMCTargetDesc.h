@@ -29,7 +29,7 @@ class Target;
 MCCodeEmitter *createEtcaMCCodeEmitter(const MCInstrInfo &MCII,
                                         MCContext &Ctx);
 
-MCAsmBackend *createEtcaAsmBackend(const Target &T, const MCSubtargetInfo &STI,
+MCAsmBackend *createEtcaMCAsmBackend(const Target &T, const MCSubtargetInfo &STI,
                                     const MCRegisterInfo &MRI,
                                     const MCTargetOptions &Options);
 

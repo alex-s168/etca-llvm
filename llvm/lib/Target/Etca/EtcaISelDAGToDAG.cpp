@@ -12,7 +12,6 @@
 
 #include "Etca.h"
 #include "EtcaTargetMachine.h"
-#include "EtcaUtils.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
@@ -131,69 +130,6 @@ FunctionPass *llvm::createEtcaISelDag(EtcaTargetMachine &TM,
 void EtcaDAGToDAGISel::Select(SDNode *Node) {
   SDLoc DL(Node);
   EVT VT = Node->getValueType(0);
-
-  // If we have a custom node, we already have selected!
-  if (Node->isMachineOpcode()) {
-    Node->setNodeId(-1);
-    return;
-  }
-
-  switch (Node->getOpcode()) {
-  case ISD::SHL: {
-    SDValue N0 = Node->getOperand(0);
-    SDValue N1 = Node->getOperand(1);
-    auto *C = dyn_cast<ConstantSDNode>(N1);
-    // If C is constant in range [1..31] then we can generate SLLI
-    // instruction using pattern matching, otherwise generate SLL.
-    if (!C || C->isZero()) {
-      SDNode *SSL = CurDAG->getMachineNode(Etca::SSL, DL, MVT::Glue, N1);
-      SDNode *SLL =
-          CurDAG->getMachineNode(Etca::SLL, DL, VT, N0, SDValue(SSL, 0));
-      ReplaceNode(Node, SLL);
-      return;
-    }
-    break;
-  }
-  case ISD::SRL: {
-    SDValue N0 = Node->getOperand(0);
-    SDValue N1 = Node->getOperand(1);
-    auto *C = dyn_cast<ConstantSDNode>(N1);
-
-    // If C is constant then we can generate SRLI
-    // instruction using pattern matching or EXTUI, otherwise generate SRL.
-    if (C) {
-      if (isUInt<4>(C->getZExtValue()))
-        break;
-      unsigned ShAmt = C->getZExtValue();
-      SDNode *EXTUI = CurDAG->getMachineNode(
-          Etca::EXTUI, DL, VT, N0, CurDAG->getTargetConstant(ShAmt, DL, VT),
-          CurDAG->getTargetConstant(32 - ShAmt, DL, VT));
-      ReplaceNode(Node, EXTUI);
-      return;
-    }
-
-    SDNode *SSR = CurDAG->getMachineNode(Etca::SSR, DL, MVT::Glue, N1);
-    SDNode *SRL =
-        CurDAG->getMachineNode(Etca::SRL, DL, VT, N0, SDValue(SSR, 0));
-    ReplaceNode(Node, SRL);
-    return;
-  }
-  case ISD::SRA: {
-    SDValue N0 = Node->getOperand(0);
-    SDValue N1 = Node->getOperand(1);
-    auto *C = dyn_cast<ConstantSDNode>(N1);
-    // If C is constant then we can generate SRAI
-    // instruction using pattern matching, otherwise generate SRA.
-    if (!C) {
-      SDNode *SSR = CurDAG->getMachineNode(Etca::SSR, DL, MVT::Glue, N1);
-      SDNode *SRA =
-          CurDAG->getMachineNode(Etca::SRA, DL, VT, N0, SDValue(SSR, 0));
-      ReplaceNode(Node, SRA);
-      return;
-    }
-    break;
-  }
-  }
 
   SelectCode(Node);
 }

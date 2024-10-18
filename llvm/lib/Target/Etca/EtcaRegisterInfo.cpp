@@ -11,8 +11,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "EtcaRegisterInfo.h"
-#include "EtcaAluCode.h"
-#include "EtcaCondCode.h"
 #include "EtcaFrameLowering.h"
 #include "EtcaInstrInfo.h"
 #include "llvm/ADT/BitVector.h"

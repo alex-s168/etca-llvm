@@ -47,7 +47,6 @@ static MCInstrInfo *createEtcaMCInstrInfo() {
 
 static MCRegisterInfo *createEtcaMCRegisterInfo(const Triple & /*TT*/) {
   MCRegisterInfo *X = new MCRegisterInfo();
-  InitEtcaMCRegisterInfo(X, Etca::RCA, 0, 0, Etca::PC);
   return X;
 }
 
@@ -58,17 +57,6 @@ createEtcaMCSubtargetInfo(const Triple &TT, StringRef CPU, StringRef FS) {
     CPUName = "generic";
 
   return createEtcaMCSubtargetInfoImpl(TT, CPUName, /*TuneCPU*/ CPUName, FS);
-}
-
-static MCStreamer *createMCStreamer(const Triple &T, MCContext &Context,
-                                    std::unique_ptr<MCAsmBackend> &&MAB,
-                                    std::unique_ptr<MCObjectWriter> &&OW,
-                                    std::unique_ptr<MCCodeEmitter> &&Emitter) {
-  if (!T.isOSBinFormatELF())
-    llvm_unreachable("OS not supported");
-
-  return createELFStreamer(Context, std::move(MAB), std::move(OW),
-                           std::move(Emitter));
 }
 
 static MCInstPrinter *createEtcaMCInstPrinter(const Triple & /*T*/,
@@ -148,7 +136,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeEtcaTargetMC() {
 
   // Register the ASM Backend
   TargetRegistry::RegisterMCAsmBackend(getTheEtcaTarget(),
-                                       createEtcaAsmBackend);
+                                       createEtcaMCAsmBackend);
 
   // Register the MCInstPrinter.
   TargetRegistry::RegisterMCInstPrinter(getTheEtcaTarget(),

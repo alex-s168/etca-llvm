@@ -20,7 +20,7 @@
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 
 #define GET_INSTRINFO_HEADER
-
+#define GET_INSTRINFO_ENUM
 #include "EtcaGenInstrInfo.inc"
 
 namespace llvm {
