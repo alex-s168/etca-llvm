@@ -77,7 +77,7 @@ EtcaTargetMachine::getSubtargetImpl(const Function &F) const {
     // creation will depend on the TM and the code generation flags on the
     // function that reside in TargetOptions.
     resetTargetOptions(F);
-    I = std::make_unique<EtcaSubtarget>(TargetTriple, CPU, FS, *this);
+    I = std::make_unique<EtcaSubtarget>(TargetTriple, CPU, FS, *this, Options, getCodeModel(), getOptLevel());
   }
   return I.get();
 }

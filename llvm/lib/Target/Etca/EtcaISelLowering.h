@@ -12,7 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_LIB_TARGET_ETCA_ETCAISELLOWERING_H
-#define LLVM_LIB_TARGET_ETCA_ETCAIISELLOWERING_H
+#define LLVM_LIB_TARGET_ETCA_ETCAISELLOWERING_H
 
 #include "Etca.h"
 #include "EtcaRegisterInfo.h"
@@ -67,4 +67,4 @@ private:
 };
 } // namespace llvm
 
-#endif // LLVM_LIB_TARGET_ETCA_ETCAISELLOWERING_H
+#endif

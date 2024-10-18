@@ -44,7 +44,7 @@ addFrameReference(const MachineInstrBuilder &MIB, int FI) {
 
 EtcaInstrInfo::EtcaInstrInfo(const EtcaSubtarget &STI)
     : EtcaGenInstrInfo(),
-      RI(STI), STI(STI) {}
+      RI(), STI(STI) {}
 
 Register EtcaInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
                                               int &FrameIndex) const {

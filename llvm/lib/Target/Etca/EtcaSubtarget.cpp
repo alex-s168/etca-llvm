@@ -43,4 +43,5 @@ EtcaSubtarget::EtcaSubtarget(const Triple &TargetTriple, StringRef Cpu,
                              CodeGenOptLevel /*OptLevel*/)
     : EtcaGenSubtargetInfo(TargetTriple, Cpu, /*TuneCPU*/ Cpu, FeatureString),
       FrameLowering(initializeSubtargetDependencies(Cpu, FeatureString)),
+      InstrInfo(*this),
       TLInfo(TM, *this) {}

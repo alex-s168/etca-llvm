@@ -15,6 +15,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/MC/MCCodeEmitter.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCInst.h"
@@ -36,14 +37,23 @@ namespace llvm {
 namespace {
 
 class EtcaMCCodeEmitter : public MCCodeEmitter {
+  MCContext& Ctx;
+
 public:
-  EtcaMCCodeEmitter(const MCInstrInfo &MCII, MCContext &C) {}
+  EtcaMCCodeEmitter(const MCInstrInfo &MCII, MCContext &C):
+      Ctx(C){}
   EtcaMCCodeEmitter(const EtcaMCCodeEmitter &) = delete;
   void operator=(const EtcaMCCodeEmitter &) = delete;
   ~EtcaMCCodeEmitter() override = default;
 
   // The functions below are called by TableGen generated functions for getting
   // the binary encoding of instructions/opereands.
+  uint32_t getMachineOpValue(const MCInst &MI, const MCOperand &MO,
+                             SmallVectorImpl<MCFixup> &Fixups,
+                             const MCSubtargetInfo &STI) const;
+  uint32_t getImm5OpValue(const MCInst &MI, unsigned OpNo,
+                          SmallVectorImpl<MCFixup> &Fixups,
+                          const MCSubtargetInfo &STI) const;
 
   // getBinaryCodeForInstr - TableGen'erated function for getting the
   // binary encoding for an instruction.
@@ -58,10 +68,6 @@ public:
 
 } // end anonymous namespace
 
-static Etca::Fixups FixupKind(const MCExpr *Expr) {
-  return Etca::Fixups(0);
-}
-
 void EtcaMCCodeEmitter::encodeInstruction(
     const MCInst &Inst, SmallVectorImpl<char> &CB,
     SmallVectorImpl<MCFixup> &Fixups,
@@ -74,6 +80,28 @@ void EtcaMCCodeEmitter::encodeInstruction(
 }
 
 #include "EtcaGenMCCodeEmitter.inc"
+
+uint32_t EtcaMCCodeEmitter::getMachineOpValue(const MCInst &MI, const MCOperand &MO,
+                           SmallVectorImpl<MCFixup> &Fixups,
+                           const MCSubtargetInfo &STI) const {
+  if (MO.isReg())
+    return Ctx.getRegisterInfo()->getEncodingValue(MO.getReg());
+  if (MO.isImm()) {
+    uint32_t Res = static_cast<uint32_t>(MO.getImm());
+    return Res;
+  }
+
+  report_fatal_error("Unhandled expression!");
+  return 0;
+}
+
+uint32_t EtcaMCCodeEmitter::getImm5OpValue(const MCInst &MI, unsigned OpNo,
+                        SmallVectorImpl<MCFixup> &Fixups,
+                        const MCSubtargetInfo &STI) const {
+  const MCOperand &MO = MI.getOperand(OpNo);
+  uint32_t Res = static_cast<uint32_t>(MO.getImm());
+  return (Res & 0x1f);
+}
 
 } // end namespace llvm
 

@@ -11,10 +11,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_LANAI_LANAI_H
-#define LLVM_LIB_TARGET_LANAI_LANAI_H
+#ifndef LLVM_LIB_TARGET_ETCA_ETCA_H
+#define LLVM_LIB_TARGET_ETCA_ETCA_H
 
 #include "llvm/Pass.h"
+#include "llvm/Support/CodeGen.h"
 
 namespace llvm {
 class FunctionPass;
@@ -22,8 +23,9 @@ class EtcaTargetMachine;
 
 // createEtcaISelDag - This pass converts a legalized DAG into a
 // Etca-specific DAG, ready for instruction scheduling.
-FunctionPass *createEtcaISelDag(EtcaTargetMachine &TM);
+FunctionPass *createEtcaISelDag(EtcaTargetMachine &TM,
+                                CodeGenOptLevel OptLevel);
 
 } // namespace llvm
 
-#endif // LLVM_LIB_TARGET_LANAI_LANAI_H
+#endif

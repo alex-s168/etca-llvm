@@ -30,7 +30,7 @@
 
 using namespace llvm;
 
-EtcaRegisterInfo::EtcaRegisterInfo() : EtcaGenRegisterInfo(Etca::RCA) {}
+EtcaRegisterInfo::EtcaRegisterInfo() : EtcaGenRegisterInfo(Etca::GPR) {}
 
 const uint16_t *
 EtcaRegisterInfo::getCalleeSavedRegs(const MachineFunction * /*MF*/) const {

@@ -11,12 +11,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "EtcaISelLowering.h"
+#include "EtcaInstrInfo.h"
+#include "EtcaRegisterInfo.h"
 #include "Etca.h"
-#include "EtcaCondCode.h"
-#include "EtcaMachineFunctionInfo.h"
 #include "EtcaSubtarget.h"
-#include "EtcaTargetObjectFile.h"
-#include "MCTargetDesc/EtcaBaseInfo.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
@@ -228,7 +226,7 @@ bool EtcaTargetLowering::CanLowerReturn(
   SmallVector<CCValAssign, 16> RVLocs;
   CCState CCInfo(CallConv, IsVarArg, MF, RVLocs, Context);
 
-  return CCInfo.CheckReturn(Outs, RetCC_Etca32);
+  return true;
 }
 
 const char *EtcaTargetLowering::getTargetNodeName(unsigned Opcode) const {

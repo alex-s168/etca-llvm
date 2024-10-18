@@ -16,6 +16,7 @@
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 
 #define GET_REGINFO_HEADER
+#define GET_REGINFO_ENUM
 #include "EtcaGenRegisterInfo.inc"
 
 namespace llvm {
