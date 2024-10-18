@@ -23,47 +23,73 @@ include "EtcaInstrFormats.td"
 // a = a op b
 class ArithLogic_RR<bits<4> opcode, string instrAsm,
       SDPatternOperator opNode>
-  : InstRR<opcode, (outs GPR:$a), (ins GPR:$a, GPR:$b),
-           instrAsm#"\t$a, $b",
-           [(set GPR:$a, (opNode GPR:$a, GPR:$b))]> {
+  : InstRR<opcode, (outs GPR:$Ra), (ins GPR:$Ra, GPR:$Rb),
+           instrAsm#"\t$Ra, $Rb",
+           [(set GPR:$Ra, (opNode GPR:$Ra, GPR:$Rb))]> {
+  let ss = 0b01;
 }
 
 // a = a op b
 class ArithLogic_RI<bits<4> opcode, string instrAsm,
       SDPatternOperator opNode>
-  : InstRI<opcode, (outs GPR:$a), (ins GPR:$a, imm5:$b),
-           instrAsm#"\t$a, $b",
-           [(set GPR:$a, (opNode GPR:$a, imm5:$b))]> {
+  : InstRI<opcode, (outs GPR:$Ra), (ins GPR:$Ra, Imm5:$imm5),
+           instrAsm#"\t$Ra, $imm5",
+           [(set GPR:$Ra, (opNode GPR:$Ra, Imm5:$imm5))]> {
+  let ss = 0b01;
 }
 
 // a = b op a
 class ArithLogic_Rev_RR<bits<4> opcode, string instrAsm,
       SDPatternOperator opNode>
-  : InstRR<opcode, (outs GPR:$a), (ins GPR:$a, GPR:$b),
+  : InstRR<opcode, (outs GPR:$Ra), (ins GPR:$Ra, GPR:$Rb),
            instrAsm#"\t$a, $b",
-           [(set GPR:$a, (opNode GPR:$b, GPR:$a))]> {
+           [(set GPR:$Ra, (opNode GPR:$Rb, GPR:$Ra))]> {
+  let ss = 0b01;
 }
 
 // a = b op a
 class ArithLogic_Rev_RI<bits<4> opcode, string instrAsm,
       SDPatternOperator opNode>
-  : InstRI<opcode, (outs GPR:$a), (ins GPR:$a, imm5:$b),
+  : InstRI<opcode, (outs GPR:$Ra), (ins GPR:$Ra, Imm5:$imm5),
            instrAsm#"\t$a, $b",
-           [(set GPR:$a, (opNode imm5:$b, GPR:$a))]> {
+           [(set GPR:$Ra, (opNode Imm5:$imm5, GPR:$Ra))]> {
+  let ss = 0b01;
 }
 
 // a = b
 class Move_RR<bits<4> opcode, string instrAsm>
-  : InstRR<opcode, (outs GPR:$d), (ins GPR:$s),
-           instrAsm#"\t$d, $s",
-           [(set GPR:$d, GPR:$s)]> {
+  : InstRR<opcode, (outs GPR:$Ra), (ins GPR:$Rb),
+           instrAsm#"\t$Ra, $Rb",
+           [(set GPR:$Ra, GPR:$Rb)]> {
+  let ss = 0b01;
+  let isMoveReg = 1;
 }
 
 // a = b
 class Move_RI<bits<4> opcode, string instrAsm>
-  : InstRI<opcode, (outs GPR:$d), (ins imm5:$s),
-           instrAsm#"\t$d, $s",
-           [(set GPR:$d, imm5:$s)]> {
+  : InstRI<opcode, (outs GPR:$Ra), (ins Imm5:$imm5),
+           instrAsm#"\t$Ra, $imm5",
+           [(set GPR:$Ra, Imm5:$imm5)]> {
+  let ss = 0b01;
+  let isMoveImm = 1;
+}
+
+// a = *b
+class Load_RR<bits<4> opcode, string instrAsm>
+  : InstRR<opcode, (outs GPR:$Ra), (ins GPR:$Rb),
+           instrAsm#"\t$Ra, $Rb",
+           [(set GPR:$Ra, (load GPR:$Rb))]> {
+  let ss = 0b01;
+  let mayLoad = 1;
+}
+
+// a = *b
+class Load_RI<bits<4> opcode, string instrAsm>
+  : InstRI<opcode, (outs GPR:$Ra), (ins Imm5:$imm5),
+           instrAsm#"\t$Ra, $imm5",
+           [(set GPR:$Ra, (load Imm5:$imm5))]> {
+  let ss = 0b01;
+  let mayLoad = 1;
 }
 
 // -------------------------------------------------- //
@@ -98,8 +124,8 @@ def MOVZ_RI : Move_RI<0b1000, "movz">;
 def MOVS_RR : Move_RR<0b1001, "movs">;
 def MOVS_RI : Move_RI<0b1001, "movs">;
 
-def LOAD_RR : ArithLogic_RR<0b1010, "load", load>;
-def LOAD_RI : ArithLogic_RI<0b1010, "load", load>;
+def LOAD_RR : Load_RR<0b1010, "load">;
+def LOAD_RI : Load_RI<0b1010, "load">;
 
 def STORE_RR : ArithLogic_RR<0b1011, "store", store>;
 def STORE_RI : ArithLogic_RI<0b1011, "store", store>;

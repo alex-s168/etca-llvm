@@ -9,7 +9,6 @@
 class InstEtca<dag outs, dag ins, string asmstr, list<dag> pattern>
     : Instruction {
   field bits<16> Inst;
-  field bits<16> SoftFail = 0;
   let Size = 2;
 
   let Namespace = "Etca";
@@ -65,3 +64,20 @@ class InstBR<dag outs, dag ins, string asmstr, list<dag> pattern>
   let Inst{15-8} = rel{7-0};
 }
 
+class ImmAsmOperand<string name> : AsmOperandClass {
+  let Name = name;
+  let RenderMethod = "addImmOperands";
+  let DiagnosticType = !strconcat("Invalid", name);
+}
+
+class Immediate<ValueType vt, code pred, string asmop>
+  : Operand<vt>, ImmLeaf<vt, pred> {
+  let PrintMethod = "print"#asmop;
+  let ParserMatchClass = !cast<AsmOperandClass>(asmop);
+}
+
+def Imm5_AsmOperand : ImmAsmOperand<"Imm5">;
+def Imm5 : Immediate<i32, [{ return Imm >= -16 & Imm <= 15; }], "Imm5_AsmOperand"> {
+  let EncoderMethod = "getImm5OpValue";
+  let DecoderMethod = "decodeImm5Operand";
+}
