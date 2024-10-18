@@ -24,7 +24,7 @@
 using namespace llvm;
 
 EtcaFrameLowering::EtcaFrameLowering(const EtcaSubtarget &STI) 
-  : TargetFrameLowering(TargetFrameLowering::StackGrowsUp, Align(2), 0, Align(2)),
+  : TargetFrameLowering(TargetFrameLowering::StackGrowsUp, Align(4), 0, Align(2)),
     STI(STI) {}
 
 bool EtcaFrameLowering::hasFP(const MachineFunction &MF) const {

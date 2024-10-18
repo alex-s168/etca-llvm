@@ -212,14 +212,6 @@ void EtcaTargetLowering::LowerAsmOperandForConstraint(
 
 #include "EtcaGenCallingConv.inc"
 
-static unsigned NumFixedArgs;
-static bool CC_Etca32_VarArg(unsigned ValNo, MVT ValVT, MVT LocVT,
-                              CCValAssign::LocInfo LocInfo,
-                              ISD::ArgFlagsTy ArgFlags, CCState &State) {
-  assert(false);
-  return false;
-}
-
 bool EtcaTargetLowering::CanLowerReturn(
     CallingConv::ID CallConv, MachineFunction &MF, bool IsVarArg,
     const SmallVectorImpl<ISD::OutputArg> &Outs, LLVMContext &Context) const {

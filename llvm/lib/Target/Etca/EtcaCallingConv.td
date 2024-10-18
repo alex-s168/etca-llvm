@@ -22,11 +22,8 @@ def CC_Etca : CallingConv<[
 
   // Otherwise they are assigned to the stack in 2-byte aligned units.
 
-  CCIfType<[i8, i16],
-           CCAssignToStack<2, 2>>,
-
-  CCIfType<[i32],
-           CCAssignToStack<4, 2>>,
+  CCIfType<[i8, i16, i32],
+           CCAssignToStack<2, 4>>,
 ]>;
 
 def CSR: CalleeSavedRegs<(add S0, S1, BP, SP, S2, S3, S4)>;
