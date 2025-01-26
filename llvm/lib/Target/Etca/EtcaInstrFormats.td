@@ -77,7 +77,7 @@ class Immediate<ValueType vt, code pred, string asmop>
 }
 
 def Imm5_AsmOperand : ImmAsmOperand<"Imm5">;
-def Imm5 : Immediate<i32, [{ return Imm >= -16 & Imm <= 15; }], "Imm5_AsmOperand"> {
+def Imm5 : Immediate<i16, [{ return Imm >= -16 & Imm <= 15; }], "Imm5_AsmOperand"> {
   let EncoderMethod = "getImm5OpValue";
   let DecoderMethod = "decodeImm5Operand";
 }

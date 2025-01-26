@@ -22,8 +22,11 @@ add_llvm_target(EtcaCodeGen
   EtcaRegisterInfo.cpp
   EtcaSubtarget.cpp
   EtcaTargetMachine.cpp
+  EtcaAsmPrinter.cpp
 
   LINK_COMPONENTS
+  IPO
+  GlobalISel
   Analysis
   AsmPrinter
   CodeGen

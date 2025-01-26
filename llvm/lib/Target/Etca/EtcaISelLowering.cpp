@@ -50,7 +50,7 @@
 #include <cstdlib>
 #include <utility>
 
-#define DEBUG_TYPE "lanai-lower"
+#define DEBUG_TYPE "etca-lower"
 
 using namespace llvm;
 
@@ -223,5 +223,123 @@ const char *EtcaTargetLowering::getTargetNodeName(unsigned Opcode) const {
   default:
     return nullptr;
   }
+}
+
+SDValue EtcaTargetLowering::LowerFormalArguments(
+    SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
+    const SmallVectorImpl<ISD::InputArg> &Ins, const SDLoc &DL,
+    SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const {
+  MachineFunction &MF = DAG.getMachineFunction();
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+
+  // Used with vargs to acumulate store chains.
+  std::vector<SDValue> OutChains;
+
+  if (IsVarArg)
+    report_fatal_error("Var arg not supported by FormalArguments Lowering");
+
+  // Assign locations to all of the incoming arguments.
+  SmallVector<CCValAssign, 16> ArgLocs;
+  CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), ArgLocs,
+                 *DAG.getContext());
+
+  CCInfo.AnalyzeFormalArguments(Ins, CC_Etca);
+
+  for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
+    CCValAssign &VA = ArgLocs[i];
+    // Arguments stored on registers
+    if (VA.isRegLoc()) {
+      EVT RegVT = VA.getLocVT();
+      const TargetRegisterClass *RC;
+
+      if (RegVT == MVT::i32)
+        RC = &Etca::GPRRegClass; // TODO: maybe seperate reg class for args?
+      else
+        report_fatal_error("RegVT not supported by FormalArguments Lowering");
+
+      // Transform the arguments stored on
+      // physical registers into virtual ones
+      unsigned Register = MF.addLiveIn(VA.getLocReg(), RC);
+      SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Register, RegVT);
+
+      InVals.push_back(ArgValue);
+    } else {
+      assert(VA.isMemLoc());
+
+      EVT ValVT = VA.getValVT();
+
+      // The stack pointer offset is relative to the caller stack frame.
+      int FI = MFI.CreateFixedObject(ValVT.getStoreSize(), VA.getLocMemOffset(),
+                                     true);
+
+      if (Ins[VA.getValNo()].Flags.isByVal()) {
+        // Assume that in this case load operation is created
+        SDValue FIN = DAG.getFrameIndex(FI, MVT::i32);
+        InVals.push_back(FIN);
+      } else {
+        // Create load nodes to retrieve arguments from the stack
+        SDValue FIN =
+            DAG.getFrameIndex(FI, getFrameIndexTy(DAG.getDataLayout()));
+        InVals.push_back(DAG.getLoad(
+            ValVT, DL, Chain, FIN,
+            MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI)));
+      }
+    }
+  }
+
+  // All stores are grouped in one node to allow the matching between
+  // the size of Ins and InVals. This only happens when on varg functions
+  if (!OutChains.empty()) {
+    OutChains.push_back(Chain);
+    Chain = DAG.getNode(ISD::TokenFactor, DL, MVT::Other, OutChains);
+  }
+
+  return Chain;
+}
+
+SDValue
+EtcaTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
+                                bool IsVarArg,
+                                const SmallVectorImpl<ISD::OutputArg> &Outs,
+                                const SmallVectorImpl<SDValue> &OutVals,
+                                const SDLoc &DL, SelectionDAG &DAG) const {
+  if (IsVarArg)
+    report_fatal_error("VarArg not supported");
+
+  MachineFunction &MF = DAG.getMachineFunction();
+
+  // Assign locations to each returned value.
+  SmallVector<CCValAssign, 16> RetLocs;
+  CCState RetCCInfo(CallConv, IsVarArg, MF, RetLocs, *DAG.getContext());
+  RetCCInfo.AnalyzeReturn(Outs, CC_Etca);
+
+  SDValue Glue;
+  // Quick exit for void returns
+  if (RetLocs.empty())
+    return DAG.getNode(EtcaISD::RET, DL, MVT::Other, Chain);
+
+  // Copy the result values into the output registers.
+  SmallVector<SDValue, 4> RetOps;
+  RetOps.push_back(Chain);
+  for (unsigned I = 0, E = RetLocs.size(); I != E; ++I) {
+    CCValAssign &VA = RetLocs[I];
+    SDValue RetValue = OutVals[I];
+
+    // Make the return register live on exit.
+    assert(VA.isRegLoc() && "Can only return in registers!");
+
+    // Chain and glue the copies together.
+    unsigned Register = VA.getLocReg();
+    Chain = DAG.getCopyToReg(Chain, DL, Register, RetValue, Glue);
+    Glue = Chain.getValue(1);
+    RetOps.push_back(DAG.getRegister(Register, VA.getLocVT()));
+  }
+
+  // Update chain and glue.
+  RetOps[0] = Chain;
+  if (Glue.getNode())
+    RetOps.push_back(Glue);
+
+  return DAG.getNode(EtcaISD::RET, DL, MVT::Other, RetOps);
 }
 

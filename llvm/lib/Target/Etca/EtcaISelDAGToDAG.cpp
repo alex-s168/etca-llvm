@@ -64,7 +64,22 @@ FunctionPass *llvm::createEtcaISelDag(EtcaTargetMachine &TM,
 
 void EtcaDAGToDAGISel::Select(SDNode *Node) {
   SDLoc DL(Node);
-  EVT VT = Node->getValueType(0);
+  unsigned Opcode = Node->getOpcode();
+
+  if (Opcode == ISD::FrameIndex) {
+    SDLoc DL(Node);
+    SDValue Imm = CurDAG->getTargetConstant(0, DL, MVT::i16);
+    int FI = cast<FrameIndexSDNode>(Node)->getIndex();
+    EVT VT = Node->getValueType(0);
+    SDValue TFI = CurDAG->getTargetFrameIndex(FI, VT);
+    unsigned Opc = Etca::ADD_RI;
+    if (Node->hasOneUse()) {
+      CurDAG->SelectNodeTo(Node, Opc, VT, TFI, Imm);
+      return;
+    }
+    ReplaceNode(Node, CurDAG->getMachineNode(Opc, DL, VT, TFI, Imm));
+    return;
+  }
 
   SelectCode(Node);
 }
