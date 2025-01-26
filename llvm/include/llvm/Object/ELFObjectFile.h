@@ -1318,6 +1318,8 @@ StringRef ELFObjectFile<ELFT>::getFileFormatName() const {
       return "elf32-loongarch";
     case ELF::EM_XTENSA:
       return "elf32-xtensa";
+    case ELF::EM_ETCA:
+      return "elf32-etca";
     default:
       return "elf32-unknown";
     }
@@ -1450,6 +1452,9 @@ template <class ELFT> Triple::ArchType ELFObjectFile<ELFT>::getArch() const {
 
   case ELF::EM_XTENSA:
     return Triple::xtensa;
+
+  case ELF::EM_ETCA:
+    return Triple::etca;
 
   default:
     return Triple::UnknownArch;

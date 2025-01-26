@@ -321,7 +321,7 @@ enum {
   EM_VE = 251,            // NEC SX-Aurora VE
   EM_CSKY = 252,          // C-SKY 32-bit processor
   EM_LOONGARCH = 258,     // LoongArch
-  EM_ETCA = 259,          // ETC.A
+  EM_ETCA = 0xE7Ca,          // ETC.A
 };
 
 // Object file classes.
@@ -1042,7 +1042,6 @@ enum {
 
 // Etca specific e_flags
 enum : unsigned {
-  // Four-bit Xtensa machine type mask.
   EF_ETCA_MACH = 0x0000000f,
   // Various CPU types.
   EF_ETCA_MACH_NONE = 0x00000000, // A base Etca implementation
@@ -1186,6 +1185,7 @@ enum : unsigned {
   SHT_CSKY_ATTRIBUTES = 0x70000001U,
 
   SHT_HEXAGON_ATTRIBUTES = 0x70000003U,
+  SHT_ETCA_ATTRIBUTES = 0x70000003U,
 
   SHT_HIPROC = 0x7fffffff, // Highest processor arch-specific type.
   SHT_LOUSER = 0x80000000, // Lowest type reserved for applications.

@@ -36,13 +36,13 @@ bool EtcaFrameLowering::hasFP(const MachineFunction &MF) const {
 
 void EtcaFrameLowering::emitPrologue(MachineFunction &MF,
                                      MachineBasicBlock &MBB) const {
-  // noop for now
+  // TODO: emit  push bp; bp = sp
 }
 
 
 void EtcaFrameLowering::emitEpilogue(MachineFunction &MF,
                                      MachineBasicBlock &MBB) const {
-  // noop for now
+  // TODO emit  sp = bp; pop bp
 }
 
 
