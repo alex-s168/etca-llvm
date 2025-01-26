@@ -20,6 +20,8 @@ include "EtcaInstrFormats.td"
 // Instruction Patterns
 // -------------------------------------------------- //
 
+// TODO: they all affect flags!
+
 // a = a op b
 class ArithLogic_RR<bits<4> opcode, string instrAsm,
       SDPatternOperator opNode>
@@ -97,8 +99,14 @@ class Load_RI<bits<4> opcode, string instrAsm>
 }
 
 // -------------------------------------------------- //
-// ALU & Move Instructions
+// Instructions
 // -------------------------------------------------- //
+
+def JMP_REG : InstBR_Reg<(outs), (ins GPR:$reg), "jmp", []> {
+    let isBranch = 1;
+    let isTerminator = 1;
+    let cc = 0b1110;
+}
 
 def ADD_RR : ArithLogic_RR<0b0000, "add", add>;
 def ADD_RI : ArithLogic_RI<0b0000, "add", add>;

@@ -72,12 +72,16 @@ void EtcaDAGToDAGISel::Select(SDNode *Node) {
     int FI = cast<FrameIndexSDNode>(Node)->getIndex();
     EVT VT = Node->getValueType(0);
     SDValue TFI = CurDAG->getTargetFrameIndex(FI, VT);
-    unsigned Opc = Etca::ADD_RI;
-    if (Node->hasOneUse()) {
-      CurDAG->SelectNodeTo(Node, Opc, VT, TFI, Imm);
-      return;
-    }
-    ReplaceNode(Node, CurDAG->getMachineNode(Opc, DL, VT, TFI, Imm));
+    ReplaceNode(Node, CurDAG->getMachineNode(Etca::ADD_RI, DL, VT, TFI, Imm));
+    return;
+  }
+
+  if (Opcode == EtcaISD::RET) {
+    SDLoc DL(Node);
+    EVT VT = Node->getValueType(0);
+    ReplaceNode(Node, 
+            CurDAG->getMachineNode(Etca::JMP_REG, DL, VT,
+                CurDAG->getRegister(Etca::LN, MVT::i16)));
     return;
   }
 

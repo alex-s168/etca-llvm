@@ -53,7 +53,7 @@ class InstRR<bits<4> op, dag outs, dag ins, string asmstr,
 }
 
 // conditional relative jump
-class InstBR<dag outs, dag ins, string asmstr, list<dag> pattern>
+class InstBR_Rel<dag outs, dag ins, string asmstr, list<dag> pattern>
     : InstEtca<outs, ins, asmstr, pattern> {
   bits<9> rel;
   bits<4> cc;
@@ -62,6 +62,18 @@ class InstBR<dag outs, dag ins, string asmstr, list<dag> pattern>
   let Inst{3-3} = rel{8-8};
   let Inst{7-4} = cc;
   let Inst{15-8} = rel{7-0};
+}
+
+// conditional register jump
+class InstBR_Reg<dag outs, dag ins, string asmstr, list<dag> pattern>
+    : InstEtca<outs, ins, asmstr, pattern> {
+  bits<4> reg;
+  bits<4> cc;
+
+  let Inst{7-0} = 0b10101111;
+  let Inst{10-8} = reg{2-0};
+  let Inst{11} = 0;
+  let Inst{15-12} = cc;
 }
 
 class ImmAsmOperand<string name> : AsmOperandClass {

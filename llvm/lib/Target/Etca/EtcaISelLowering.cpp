@@ -21,6 +21,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/CodeGen/CallingConvLower.h"
+#include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
@@ -72,7 +73,7 @@ EtcaTargetLowering::EtcaTargetLowering(const TargetMachine &TM,
                                        const EtcaSubtarget &STI)
     : TargetLowering(TM) {
   // Set up the register classes.
-  addRegisterClass(MVT::i32, &Etca::GPRRegClass);
+  addRegisterClass(MVT::i16, &Etca::GPRRegClass);
 
   // Compute derived properties from the register classes
   TRI = STI.getRegisterInfo();
@@ -82,26 +83,10 @@ EtcaTargetLowering::EtcaTargetLowering(const TargetMachine &TM,
 
   setMinFunctionAlignment(Align(2));
 
-  setOperationAction(ISD::BR_CC, MVT::i32, Custom);
-  setOperationAction(ISD::BR_JT, MVT::Other, Expand);
-  setOperationAction(ISD::BRCOND, MVT::Other, Expand);
-  setOperationAction(ISD::SETCC, MVT::i32, Custom);
-  setOperationAction(ISD::SELECT, MVT::i32, Expand);
-  setOperationAction(ISD::SELECT_CC, MVT::i32, Custom);
+  setOperationAction(ISD::FrameIndex, MVT::Other, Custom);
 
-  setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
-  setOperationAction(ISD::BlockAddress, MVT::i32, Custom);
-  setOperationAction(ISD::JumpTable, MVT::i32, Custom);
-  setOperationAction(ISD::ConstantPool, MVT::i32, Custom);
-
-  setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i32, Custom);
   setOperationAction(ISD::STACKSAVE, MVT::Other, Expand);
   setOperationAction(ISD::STACKRESTORE, MVT::Other, Expand);
-
-  setOperationAction(ISD::VASTART, MVT::Other, Custom);
-  setOperationAction(ISD::VAARG, MVT::Other, Expand);
-  setOperationAction(ISD::VACOPY, MVT::Other, Expand);
-  setOperationAction(ISD::VAEND, MVT::Other, Expand);
 
   setOperationAction(ISD::SDIV, MVT::i32, Expand);
   setOperationAction(ISD::UDIV, MVT::i32, Expand);
@@ -110,22 +95,11 @@ EtcaTargetLowering::EtcaTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SREM, MVT::i32, Expand);
   setOperationAction(ISD::UREM, MVT::i32, Expand);
 
-  setOperationAction(ISD::MUL, MVT::i32, Custom);
+  setOperationAction(ISD::MUL, MVT::i32, Expand);
   setOperationAction(ISD::MULHU, MVT::i32, Expand);
   setOperationAction(ISD::MULHS, MVT::i32, Expand);
   setOperationAction(ISD::UMUL_LOHI, MVT::i32, Expand);
   setOperationAction(ISD::SMUL_LOHI, MVT::i32, Expand);
-
-  setOperationAction(ISD::ROTR, MVT::i32, Expand);
-  setOperationAction(ISD::ROTL, MVT::i32, Expand);
-  setOperationAction(ISD::SHL_PARTS, MVT::i32, Custom);
-  setOperationAction(ISD::SRL_PARTS, MVT::i32, Custom);
-  setOperationAction(ISD::SRA_PARTS, MVT::i32, Expand);
-
-  setOperationAction(ISD::BSWAP, MVT::i32, Expand);
-  setOperationAction(ISD::CTPOP, MVT::i32, Legal);
-  setOperationAction(ISD::CTLZ, MVT::i32, Legal);
-  setOperationAction(ISD::CTTZ, MVT::i32, Legal);
 
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1, Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8, Expand);

@@ -24,7 +24,7 @@ let Namespace = "Etca" in {
 }
 
 // Integer registers
-foreach i = 0-15 in {
+foreach i = 0-7 in {
   def R#i : EtcaReg<i, "r"#i>, DwarfRegNum<[i]>;
 }
 
@@ -39,6 +39,7 @@ let SubRegIndices = [sub_32] in {
   def SP : EtcaReg<6,  "sp", [R6]         >, DwarfRegAlias<R6 >;
   def LN : EtcaReg<7,  "ln", [R7]         >, DwarfRegAlias<R7 >;
 
+/*
   def T0 : EtcaReg<8,  "t0", [R8]         >, DwarfRegAlias<R8 >;
   def T1 : EtcaReg<9,  "t1", [R9]         >, DwarfRegAlias<R9 >;
   def T2 : EtcaReg<10, "t2", [R10]        >, DwarfRegAlias<R10>;
@@ -47,6 +48,7 @@ let SubRegIndices = [sub_32] in {
   def S2 : EtcaReg<13, "s2", [R13]        >, DwarfRegAlias<R13>;
   def S3 : EtcaReg<14, "s3", [R14]        >, DwarfRegAlias<R14>;
   def S4 : EtcaReg<15, "s4", [R15]        >, DwarfRegAlias<R15>;
+*/
 }
 
 // virtual flags register 
@@ -55,7 +57,7 @@ def FR : EtcaReg<16, "fr">;
 // Register classes.
 def GPR : RegisterClass<"Etca", [i16], 16,
     (add R0, R1, R2,  R3,  R4,  R5,  R6,  R7,
-         R8, R9, R10, R11, R12, R13, R14, R15,
+         /*R8, R9, R10, R11, R12, R13, R14, R15,*/
          // Non-allocatable regs: 
          FR
     )>;

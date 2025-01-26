@@ -26,4 +26,4 @@ def CC_Etca : CallingConv<[
            CCAssignToStack<2, 4>>,
 ]>;
 
-def CSR: CalleeSavedRegs<(add S0, S1, BP, SP, S2, S3, S4)>;
+def CSR: CalleeSavedRegs<(add S0, S1, BP, SP /*, S2, S3, S4*/)>;
