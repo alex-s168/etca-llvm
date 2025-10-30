@@ -1460,7 +1460,8 @@ template <class ELFT> Triple::ArchType ELFObjectFile<ELFT>::getArch() const {
     return Triple::xtensa;
 
   case ELF::EM_ETCA:
-    return Triple::etca;
+    // FIXME: CHECK ELF CPUID
+    return Triple::etca16;
 
   default:
     return Triple::UnknownArch;

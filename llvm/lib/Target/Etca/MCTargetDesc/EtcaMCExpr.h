@@ -14,7 +14,7 @@
 
 namespace llvm {
 
-class EtcaMCExpr : public MCTargetExpr {
+class EtcaMCExpr final : public MCTargetExpr {
 public:
   enum VariantKind { VK_Etca_None, VK_Etca_ABS_HI, VK_Etca_ABS_LO };
 
@@ -27,7 +27,7 @@ private:
 
 public:
   static const EtcaMCExpr *create(VariantKind Kind, const MCExpr *Expr,
-                                   MCContext &Ctx);
+                                  MCContext &Ctx);
 
   // Returns the kind of this expression.
   VariantKind getKind() const { return Kind; }
@@ -36,15 +36,15 @@ public:
   const MCExpr *getSubExpr() const { return Expr; }
 
   void printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const override;
-  bool evaluateAsRelocatableImpl(MCValue &Res, const MCAssembler *Asm,
-                                 const MCFixup *Fixup) const override;
+
   void visitUsedExpr(MCStreamer &Streamer) const override;
+
   MCFragment *findAssociatedFragment() const override {
     return getSubExpr()->findAssociatedFragment();
   }
 
-  // There are no TLS EtcaMCExprs at the moment.
-  void fixELFSymbolsInTLSFixups(MCAssembler & /*Asm*/) const override {}
+  bool evaluateAsRelocatableImpl(MCValue &Res,
+                                 const MCAssembler *Asm) const override;
 
   static bool classof(const MCExpr *E) {
     return E->getKind() == MCExpr::Target;

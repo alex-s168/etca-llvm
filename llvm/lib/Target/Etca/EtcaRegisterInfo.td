@@ -20,7 +20,8 @@ class EtcaReg<bits<5> num, string n, list<Register> subregs = [],
 }
 
 let Namespace = "Etca" in {
-  def sub_32 : SubRegIndex<32>;
+  // TODO: the fuck is this
+  def sub_16 : SubRegIndex<16>;
 }
 
 // Integer registers

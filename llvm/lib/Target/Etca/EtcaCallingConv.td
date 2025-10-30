@@ -14,15 +14,15 @@
 // Return Value Calling Conventions
 //===----------------------------------------------------------------------===//
 
-// Etca 32-bit C Calling convention.
+// Etca 16-bit C Calling convention.
 def CC_Etca : CallingConv<[
   // Put argument in registers if marked 'inreg' and not a vararg call.
-  CCIfNotVarArg<CCIfInReg<CCIfType<[i8, i16, i32],
+  CCIfNotVarArg<CCIfInReg<CCIfType<[i8, i16],
                                    CCAssignToReg<[A0, A1]>>>>,
 
   // Otherwise they are assigned to the stack in 2-byte aligned units.
 
-  CCIfType<[i8, i16, i32],
+  CCIfType<[i8, i16],
            CCAssignToStack<2, 4>>,
 ]>;
 

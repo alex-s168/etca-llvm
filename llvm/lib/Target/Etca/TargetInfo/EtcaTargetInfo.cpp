@@ -17,6 +17,10 @@ Target &llvm::getTheEtcaTarget() {
 }
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeEtcaTargetInfo() {
-  RegisterTarget<Triple::etca> X(getTheEtcaTarget(), "etca", "Etca",
-                                 "Etca");
+  RegisterTarget<Triple::etca16> X16(getTheEtcaTarget(), "etca", "Etca",
+                                     "Etca");
+  RegisterTarget<Triple::etca32> X32(getTheEtcaTarget(), "etca", "Etca",
+                                     "Etca");
+  RegisterTarget<Triple::etca64> X64(getTheEtcaTarget(), "etca", "Etca",
+                                     "Etca");
 }
