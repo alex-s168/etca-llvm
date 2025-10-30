@@ -47,6 +47,8 @@ typedef void (*sa_sigaction_t)(int, siginfo_t *, void *);
 
 namespace __sanitizer {
 
+[[maybe_unused]] static atomic_uint8_t signal_handler_is_from_sanitizer[64];
+
 u32 GetUid() {
   return getuid();
 }
@@ -210,6 +212,20 @@ void UnsetAlternateSignalStack() {
   UnmapOrDie(oldstack.ss_sp, oldstack.ss_size);
 }
 
+bool IsSignalHandlerFromSanitizer(int signum) {
+  return atomic_load(&signal_handler_is_from_sanitizer[signum],
+                     memory_order_relaxed);
+}
+
+bool SetSignalHandlerFromSanitizer(int signum, bool new_state) {
+  if (signum < 0 || static_cast<unsigned>(signum) >=
+                        ARRAY_SIZE(signal_handler_is_from_sanitizer))
+    return false;
+
+  return atomic_exchange(&signal_handler_is_from_sanitizer[signum], new_state,
+                         memory_order_relaxed);
+}
+
 static void MaybeInstallSigaction(int signum,
                                   SignalHandlerType handler) {
   if (GetHandleSignalMode(signum) == kHandleSignalNo) return;
@@ -223,6 +239,9 @@ static void MaybeInstallSigaction(int signum,
   if (common_flags()->use_sigaltstack) sigact.sa_flags |= SA_ONSTACK;
   CHECK_EQ(0, internal_sigaction(signum, &sigact, nullptr));
   VReport(1, "Installed the sigaction for signal %d\n", signum);
+
+  if (common_flags()->cloak_sanitizer_signal_handlers)
+    SetSignalHandlerFromSanitizer(signum, true);
 }
 
 void InstallDeadlySignalHandlers(SignalHandlerType handler) {
@@ -321,6 +340,50 @@ bool IsAccessibleMemoryRange(uptr beg, uptr size) {
     }
     size -= w;
     beg += w;
+  }
+
+  return true;
+}
+
+bool TryMemCpy(void *dest, const void *src, uptr n) {
+  if (!n)
+    return true;
+  int fds[2];
+  CHECK_EQ(0, pipe(fds));
+
+  auto cleanup = at_scope_exit([&]() {
+    internal_close(fds[0]);
+    internal_close(fds[1]);
+  });
+
+  SetNonBlock(fds[0]);
+  SetNonBlock(fds[1]);
+
+  char *d = static_cast<char *>(dest);
+  const char *s = static_cast<const char *>(src);
+
+  while (n) {
+    int e;
+    uptr w = internal_write(fds[1], s, n);
+    if (internal_iserror(w, &e)) {
+      if (e == EINTR)
+        continue;
+      CHECK_EQ(EFAULT, e);
+      return false;
+    }
+    s += w;
+    n -= w;
+
+    while (w) {
+      uptr r = internal_read(fds[0], d, w);
+      if (internal_iserror(r, &e)) {
+        CHECK_EQ(EINTR, e);
+        continue;
+      }
+
+      d += r;
+      w -= r;
+    }
   }
 
   return true;
@@ -499,7 +562,11 @@ pid_t StartSubprocess(const char *program, const char *const argv[],
       internal_close(stderr_fd);
     }
 
+#  if SANITIZER_FREEBSD
+    internal_close_range(3, ~static_cast<fd_t>(0), 0);
+#  else
     for (int fd = sysconf(_SC_OPEN_MAX); fd > 2; fd--) internal_close(fd);
+#  endif
 
     internal_execve(program, const_cast<char **>(&argv[0]),
                     const_cast<char *const *>(envp));

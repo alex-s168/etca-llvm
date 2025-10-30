@@ -44,6 +44,22 @@ include(CompilerRTUtils)
 include(CMakeDependentOption)
 include(GetDarwinLinkerVersion)
 
+include(CheckCXXCompilerFlag)
+
+# Check if we can compile with --no-default-config, or if that omits a config
+# file that is essential for the toolchain to work properly.
+#
+# Using CMAKE_REQUIRED_FLAGS to make sure the flag is used both for compilation
+# and for linking.
+#
+# Doing this test early on, to see if the flag works on the toolchain
+# out of the box. Later on, we end up adding -nostdlib and similar flags
+# to all test compiles, which easily can give false positives on this test.
+set(OLD_CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS}")
+set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} --no-default-config")
+check_cxx_compiler_flag("" COMPILER_RT_HAS_NO_DEFAULT_CONFIG_FLAG)
+set(CMAKE_REQUIRED_FLAGS "${OLD_CMAKE_REQUIRED_FLAGS}")
+
 option(COMPILER_RT_BUILD_BUILTINS "Build builtins" ON)
 mark_as_advanced(COMPILER_RT_BUILD_BUILTINS)
 option(COMPILER_RT_DISABLE_AARCH64_FMV "Disable AArch64 Function Multi Versioning support" OFF)
@@ -67,6 +83,8 @@ mark_as_advanced(COMPILER_RT_BUILD_ORC)
 option(COMPILER_RT_BUILD_GWP_ASAN "Build GWP-ASan, and link it into SCUDO" ON)
 mark_as_advanced(COMPILER_RT_BUILD_GWP_ASAN)
 option(COMPILER_RT_ENABLE_CET "Build Compiler RT with CET enabled" OFF)
+option(COMPILER_RT_ASAN_UNIT_TESTS_USE_HOST_RUNTIME "Build asan unit tests without depending upon a just-built asan runtime" OFF)
+mark_as_advanced(COMPILER_RT_ASAN_UNIT_TESTS_USE_HOST_RUNTIME)
 
 option(COMPILER_RT_SCUDO_STANDALONE_SYSROOT_PATH "Set custom sysroot for building SCUDO standalone" OFF)
 mark_as_advanced(COMPILER_RT_SCUDO_STANDALONE_SYSROOT_PATH)
@@ -205,7 +223,7 @@ macro(handle_default_cxx_lib var)
     set(${var}_LIBNAME "${CMAKE_MATCH_1}")
     set(${var}_SYSTEM 1)
   elseif (${var} STREQUAL "default")
-    if (APPLE OR CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+    if (APPLE OR CMAKE_SYSTEM_NAME MATCHES "FreeBSD" OR CMAKE_SYSTEM_NAME MATCHES "OpenBSD")
       set(${var}_LIBNAME "libc++")
       set(${var}_SYSTEM 1)
     elseif (FUCHSIA)
@@ -297,7 +315,7 @@ include(config-ix)
 # Setup Compiler Flags
 #================================
 
-# fcf-protection is a gcc/clang option for CET support on Linux platforms.
+# fcf-protection is a gcc/clang option for CET support on some ELF platforms.
 # We need to handle MSVC CET option on Windows platforms.
 if (NOT MSVC)
   if (COMPILER_RT_ENABLE_CET AND NOT COMPILER_RT_HAS_FCF_PROTECTION_FLAG)
@@ -553,6 +571,10 @@ append_list_if(COMPILER_RT_HAS_LIBC c SANITIZER_COMMON_LINK_LIBS)
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Fuchsia")
   list(APPEND SANITIZER_COMMON_LINK_LIBS zircon)
 endif()
+if("${CMAKE_SYSTEM_NAME}" STREQUAL "Haiku")
+  list(APPEND SANITIZER_COMMON_LINK_LIBS root)
+  list(APPEND SANITIZER_COMMON_LINK_LIBS bsd)
+endif()
 
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Fuchsia")
   set(SANITIZER_NO_UNDEFINED_SYMBOLS_DEFAULT ON)
@@ -752,7 +774,7 @@ if (CMAKE_LINKER MATCHES "link.exe$")
   # it, but CMake doesn't seem to have a way to set linker flags for
   # individual static libraries, so we enable the suppression flag for
   # the whole compiler-rt project.
-  set(CMAKE_STATIC_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS} /IGNORE:4221")
+  set(CMAKE_STATIC_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS} ${CMAKE_CXX_LINKER_WRAPPER_FLAG}/IGNORE:4221")
 endif()
 
 add_subdirectory(include)
@@ -813,6 +835,13 @@ pythonize_bool(COMPILER_RT_TEST_USE_LLD)
 
 option(COMPILER_RT_ENABLE_INTERNAL_SYMBOLIZER "Build Compiler RT linked with in LLVM symbolizer" OFF)
 mark_as_advanced(COMPILER_RT_ENABLE_INTERNAL_SYMBOLIZER)
+
+option(SANITIZER_DISABLE_SYMBOLIZER_PATH_SEARCH "Disable searching for external symbolizer in $PATH" OFF)
+mark_as_advanced(SANITIZER_DISABLE_SYMBOLIZER_PATH_SEARCH)
+
+if (SANITIZER_DISABLE_SYMBOLIZER_PATH_SEARCH)
+  add_compile_definitions(SANITIZER_DISABLE_SYMBOLIZER_PATH_SEARCH)
+endif()
 
 add_subdirectory(lib)
 

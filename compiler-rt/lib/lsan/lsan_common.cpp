@@ -124,7 +124,8 @@ static const char kStdSuppressions[] =
 #  endif
     // TLS leak in some glibc versions, described in
     // https://sourceware.org/bugzilla/show_bug.cgi?id=12650.
-    "leak:*tls_get_addr*\n";
+    "leak:*tls_get_addr*\n"
+    "leak:*dlerror*\n";
 
 void InitializeSuppressions() {
   CHECK_EQ(nullptr, suppression_ctx);
@@ -288,23 +289,54 @@ static inline bool MaybeUserPointer(uptr p) {
 #  endif
 }
 
+namespace {
+struct DirectMemoryAccessor {
+  void Init(uptr begin, uptr end) {};
+  void *LoadPtr(uptr p) const { return *reinterpret_cast<void **>(p); }
+};
+
+struct CopyMemoryAccessor {
+  void Init(uptr begin, uptr end) {
+    this->begin = begin;
+    buffer.clear();
+    buffer.resize(end - begin);
+    MemCpyAccessible(buffer.data(), reinterpret_cast<void *>(begin),
+                     buffer.size());
+  };
+
+  void *LoadPtr(uptr p) const {
+    uptr offset = p - begin;
+    CHECK_LE(offset + sizeof(void *), reinterpret_cast<uptr>(buffer.size()));
+    return *reinterpret_cast<void **>(offset +
+                                      reinterpret_cast<uptr>(buffer.data()));
+  }
+
+ private:
+  uptr begin;
+  InternalMmapVector<char> buffer;
+};
+}  // namespace
+
 // Scans the memory range, looking for byte patterns that point into allocator
 // chunks. Marks those chunks with |tag| and adds them to |frontier|.
 // There are two usage modes for this function: finding reachable chunks
 // (|tag| = kReachable) and finding indirectly leaked chunks
 // (|tag| = kIndirectlyLeaked). In the second case, there's no flood fill,
 // so |frontier| = 0.
-void ScanRangeForPointers(uptr begin, uptr end, Frontier *frontier,
-                          const char *region_type, ChunkTag tag) {
+template <class Accessor>
+void ScanForPointers(uptr begin, uptr end, Frontier *frontier,
+                     const char *region_type, ChunkTag tag,
+                     Accessor &accessor) {
   CHECK(tag == kReachable || tag == kIndirectlyLeaked);
   const uptr alignment = flags()->pointer_alignment();
   LOG_POINTERS("Scanning %s range %p-%p.\n", region_type, (void *)begin,
                (void *)end);
+  accessor.Init(begin, end);
   uptr pp = begin;
   if (pp % alignment)
     pp = pp + alignment - pp % alignment;
   for (; pp + sizeof(void *) <= end; pp += alignment) {
-    void *p = *reinterpret_cast<void **>(pp);
+    void *p = accessor.LoadPtr(pp);
 #  if SANITIZER_APPLE
     p = TransformPointer(p);
 #  endif
@@ -339,6 +371,12 @@ void ScanRangeForPointers(uptr begin, uptr end, Frontier *frontier,
   }
 }
 
+void ScanRangeForPointers(uptr begin, uptr end, Frontier *frontier,
+                          const char *region_type, ChunkTag tag) {
+  DirectMemoryAccessor accessor;
+  ScanForPointers(begin, end, frontier, region_type, tag, accessor);
+}
+
 // Scans a global range for pointers
 void ScanGlobalRange(uptr begin, uptr end, Frontier *frontier) {
   uptr allocator_begin = 0, allocator_end = 0;
@@ -356,18 +394,25 @@ void ScanGlobalRange(uptr begin, uptr end, Frontier *frontier) {
   }
 }
 
+template <class Accessor>
+void ScanRanges(const InternalMmapVector<Range> &ranges, Frontier *frontier,
+                const char *region_type, Accessor &accessor) {
+  for (uptr i = 0; i < ranges.size(); i++) {
+    ScanForPointers(ranges[i].begin, ranges[i].end, frontier, region_type,
+                    kReachable, accessor);
+  }
+}
+
 void ScanExtraStackRanges(const InternalMmapVector<Range> &ranges,
                           Frontier *frontier) {
-  for (uptr i = 0; i < ranges.size(); i++) {
-    ScanRangeForPointers(ranges[i].begin, ranges[i].end, frontier, "FAKE STACK",
-                         kReachable);
-  }
+  DirectMemoryAccessor accessor;
+  ScanRanges(ranges, frontier, "FAKE STACK", accessor);
 }
 
 #  if SANITIZER_FUCHSIA
 
 // Fuchsia handles all threads together with its own callback.
-static void ProcessThreads(SuspendedThreadsList const &, Frontier *, tid_t,
+static void ProcessThreads(SuspendedThreadsList const &, Frontier *, ThreadID,
                            uptr) {}
 
 #  else
@@ -399,10 +444,11 @@ static void ProcessThreadRegistry(Frontier *frontier) {
 }
 
 // Scans thread data (stacks and TLS) for heap pointers.
-static void ProcessThread(tid_t os_id, uptr sp,
+template <class Accessor>
+static void ProcessThread(ThreadID os_id, uptr sp,
                           const InternalMmapVector<uptr> &registers,
                           InternalMmapVector<Range> &extra_ranges,
-                          Frontier *frontier) {
+                          Frontier *frontier, Accessor &accessor) {
   // `extra_ranges` is outside of the function and the loop to reused mapped
   // memory.
   CHECK(extra_ranges.empty());
@@ -426,8 +472,8 @@ static void ProcessThread(tid_t os_id, uptr sp,
     uptr registers_begin = reinterpret_cast<uptr>(registers.data());
     uptr registers_end =
         reinterpret_cast<uptr>(registers.data() + registers.size());
-    ScanRangeForPointers(registers_begin, registers_end, frontier, "REGISTERS",
-                         kReachable);
+    ScanForPointers(registers_begin, registers_end, frontier, "REGISTERS",
+                    kReachable, accessor);
   }
 
   if (flags()->use_stacks) {
@@ -451,9 +497,10 @@ static void ProcessThread(tid_t os_id, uptr sp,
       // Shrink the stack range to ignore out-of-scope values.
       stack_begin = sp;
     }
-    ScanRangeForPointers(stack_begin, stack_end, frontier, "STACK", kReachable);
+    ScanForPointers(stack_begin, stack_end, frontier, "STACK", kReachable,
+                    accessor);
     GetThreadExtraStackRangesLocked(os_id, &extra_ranges);
-    ScanExtraStackRanges(extra_ranges, frontier);
+    ScanRanges(extra_ranges, frontier, "FAKE STACK", accessor);
   }
 
   if (flags()->use_tls) {
@@ -463,23 +510,26 @@ static void ProcessThread(tid_t os_id, uptr sp,
       // otherwise, only scan the non-overlapping portions
       if (cache_begin == cache_end || tls_end < cache_begin ||
           tls_begin > cache_end) {
-        ScanRangeForPointers(tls_begin, tls_end, frontier, "TLS", kReachable);
+        ScanForPointers(tls_begin, tls_end, frontier, "TLS", kReachable,
+                        accessor);
       } else {
         if (tls_begin < cache_begin)
-          ScanRangeForPointers(tls_begin, cache_begin, frontier, "TLS",
-                               kReachable);
+          ScanForPointers(tls_begin, cache_begin, frontier, "TLS", kReachable,
+                          accessor);
         if (tls_end > cache_end)
-          ScanRangeForPointers(cache_end, tls_end, frontier, "TLS", kReachable);
+          ScanForPointers(cache_end, tls_end, frontier, "TLS", kReachable,
+                          accessor);
       }
     }
 #    if SANITIZER_ANDROID
+    extra_ranges.clear();
     auto *cb = +[](void *dtls_begin, void *dtls_end, uptr /*dso_idd*/,
                    void *arg) -> void {
-      ScanRangeForPointers(
-          reinterpret_cast<uptr>(dtls_begin), reinterpret_cast<uptr>(dtls_end),
-          reinterpret_cast<Frontier *>(arg), "DTLS", kReachable);
+      reinterpret_cast<InternalMmapVector<Range> *>(arg)->push_back(
+          {reinterpret_cast<uptr>(dtls_begin),
+           reinterpret_cast<uptr>(dtls_end)});
     };
-
+    ScanRanges(extra_ranges, frontier, "DTLS", accessor);
     // FIXME: There might be a race-condition here (and in Bionic) if the
     // thread is suspended in the middle of updating its DTLS. IOWs, we
     // could scan already freed memory. (probably fine for now)
@@ -492,8 +542,8 @@ static void ProcessThread(tid_t os_id, uptr sp,
         if (dtls_beg < dtls_end) {
           LOG_THREADS("DTLS %d at %p-%p.\n", id, (void *)dtls_beg,
                       (void *)dtls_end);
-          ScanRangeForPointers(dtls_beg, dtls_end, frontier, "DTLS",
-                               kReachable);
+          ScanForPointers(dtls_beg, dtls_end, frontier, "DTLS", kReachable,
+                          accessor);
         }
       });
     } else {
@@ -506,20 +556,21 @@ static void ProcessThread(tid_t os_id, uptr sp,
 }
 
 static void ProcessThreads(SuspendedThreadsList const &suspended_threads,
-                           Frontier *frontier, tid_t caller_tid,
+                           Frontier *frontier, ThreadID caller_tid,
                            uptr caller_sp) {
+  InternalMmapVector<ThreadID> done_threads;
   InternalMmapVector<uptr> registers;
   InternalMmapVector<Range> extra_ranges;
   for (uptr i = 0; i < suspended_threads.ThreadCount(); i++) {
     registers.clear();
     extra_ranges.clear();
 
-    const tid_t os_id = suspended_threads.GetThreadID(i);
+    const ThreadID os_id = suspended_threads.GetThreadID(i);
     uptr sp = 0;
     PtraceRegistersStatus have_registers =
         suspended_threads.GetRegistersAndSP(i, &registers, &sp);
     if (have_registers != REGISTERS_AVAILABLE) {
-      Report("Unable to get registers from thread %llu.\n", os_id);
+      VReport(1, "Unable to get registers from thread %llu.\n", os_id);
       // If unable to get SP, consider the entire stack to be reachable unless
       // GetRegistersAndSP failed with ESRCH.
       if (have_registers == REGISTERS_UNAVAILABLE_FATAL)
@@ -530,7 +581,27 @@ static void ProcessThreads(SuspendedThreadsList const &suspended_threads,
     if (os_id == caller_tid)
       sp = caller_sp;
 
-    ProcessThread(os_id, sp, registers, extra_ranges, frontier);
+    DirectMemoryAccessor accessor;
+    ProcessThread(os_id, sp, registers, extra_ranges, frontier, accessor);
+    if (flags()->use_detached)
+      done_threads.push_back(os_id);
+  }
+
+  if (flags()->use_detached) {
+    CopyMemoryAccessor accessor;
+    InternalMmapVector<ThreadID> known_threads;
+    GetRunningThreadsLocked(&known_threads);
+    Sort(done_threads.data(), done_threads.size());
+    for (ThreadID os_id : known_threads) {
+      registers.clear();
+      extra_ranges.clear();
+
+      uptr i = InternalLowerBound(done_threads, os_id);
+      if (i >= done_threads.size() || done_threads[i] != os_id) {
+        uptr sp = (os_id == caller_tid) ? caller_sp : 0;
+        ProcessThread(os_id, sp, registers, extra_ranges, frontier, accessor);
+      }
+    }
   }
 
   // Add pointers reachable from ThreadContexts
@@ -641,7 +712,7 @@ static void CollectIgnoredCb(uptr chunk, void *arg) {
 
 // Sets the appropriate tag on each chunk.
 static void ClassifyAllChunks(SuspendedThreadsList const &suspended_threads,
-                              Frontier *frontier, tid_t caller_tid,
+                              Frontier *frontier, ThreadID caller_tid,
                               uptr caller_sp) {
   const InternalMmapVector<u32> &suppressed_stacks =
       GetSuppressionContext()->GetSortedSuppressedStacks();
@@ -719,13 +790,13 @@ static bool ReportUnsuspendedThreads(const SuspendedThreadsList &) {
 
 static bool ReportUnsuspendedThreads(
     const SuspendedThreadsList &suspended_threads) {
-  InternalMmapVector<tid_t> threads(suspended_threads.ThreadCount());
+  InternalMmapVector<ThreadID> threads(suspended_threads.ThreadCount());
   for (uptr i = 0; i < suspended_threads.ThreadCount(); ++i)
     threads[i] = suspended_threads.GetThreadID(i);
 
   Sort(threads.data(), threads.size());
 
-  InternalMmapVector<tid_t> known_threads;
+  InternalMmapVector<ThreadID> known_threads;
   GetRunningThreadsLocked(&known_threads);
 
   bool succeded = true;
@@ -735,7 +806,7 @@ static bool ReportUnsuspendedThreads(
       succeded = false;
       Report(
           "Running thread %zu was not suspended. False leaks are possible.\n",
-          os_id);
+          (usize)os_id);
     }
   }
   return succeded;
