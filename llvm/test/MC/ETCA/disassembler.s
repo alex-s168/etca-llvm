@@ -1,0 +1,188 @@
+# RUN: llvm-mc -arch=etca --disassemble < %s | llvm-mc -arch=etca --show-encoding | FileCheck %s
+# Also test directly with --disassemble
+# RUN: llvm-mc -arch=etca --disassemble < %s | FileCheck --check-prefix=DIS %s
+
+# Test all major instruction formats via disassembly of raw hex bytes.
+# Format: each line is raw instruction bytes, disassembled.
+
+# Byte RR: add %r0h, %r1h → [0x00,0x04]
+0x00 0x04
+# CHECK: add %r0h, %r1h            ; encoding: [0x00,0x04]
+# DIS: add %r0h, %r1h
+
+# Byte RR: or %r6h, %r7h → [0x04,0xdc]
+0x04 0xdc
+# CHECK: or %r6h, %r7h             ; encoding: [0x04,0xdc]
+# DIS: or %r6h, %r7h
+
+# Byte CMP: cmp %r0h, %r1h → [0x03,0x04]
+0x03 0x04
+# CHECK: cmp %r0h, %r1h            ; encoding: [0x03,0x04]
+# DIS: cmp %r0h, %r1h
+
+# Byte LOAD: load %r0h, %r1h → [0x0a,0x04]
+0x0a 0x04
+# CHECK: load %r0h, %r1h           ; encoding: [0x0a,0x04]
+# DIS: load %r0h, %r1h
+
+# Byte STORE: store %r2h, %r3h → [0x0b,0x4c]
+0x0b 0x4c
+# CHECK: store %r2h, %r3h          ; encoding: [0x0b,0x4c]
+# DIS: store %r2h, %r3h
+
+# Byte RI: add %r0h, 31 → [0x40,0x1f]
+0x40 0x1f
+# CHECK: add %r0h, 31              ; encoding: [0x40,0x1f]
+# DIS: add %r0h, 31
+
+# Byte RI: cmp %r3h, 0 → [0x43,0x60]
+0x43 0x60
+# CHECK: cmp %r3h, 0               ; encoding: [0x43,0x60]
+# DIS: cmp %r3h, 0
+
+# Byte RI: movz %r0h, 10 → [0x48,0x0a]
+0x48 0x0a
+# CHECK: movz %r0h, 10             ; encoding: [0x48,0x0a]
+# DIS: movz %r0h, 10
+
+# RR: add %r0, %r1 → [0x10,0x04]
+0x10 0x04
+# CHECK: add %r0, %r1              ; encoding: [0x10,0x04]
+# DIS: add %r0, %r1
+
+# RR: sub %r3, %r5 → [0x11,0x74]
+0x11 0x74
+# CHECK: sub %r3, %r5              ; encoding: [0x11,0x74]
+# DIS: sub %r3, %r5
+
+# RR: rsub %r7, %r0 → [0x12,0xe0]
+0x12 0xe0
+# CHECK: rsub %r7, %r0             ; encoding: [0x12,0xe0]
+
+# RR: or %r5, %r2 → [0x14,0xa8]
+0x14 0xa8
+# CHECK: or %r5, %r2               ; encoding: [0x14,0xa8]
+
+# RR: xor %r6, %r4 → [0x15,0xd0]
+0x15 0xd0
+# CHECK: xor %r6, %r4              ; encoding: [0x15,0xd0]
+
+# RR: and %r1, %r7 → [0x16,0x3c]
+0x16 0x3c
+# CHECK: and %r1, %r7              ; encoding: [0x16,0x3c]
+
+# RR: movz %r0, %r7 → [0x18,0x1c]
+0x18 0x1c
+# CHECK: movz %r0, %r7             ; encoding: [0x18,0x1c]
+
+# RR: movs %r6, %r1 → [0x19,0xc4]
+0x19 0xc4
+# CHECK: movs %r6, %r1             ; encoding: [0x19,0xc4]
+
+# 32-bit RR: add %r0d, %r1d → [0x20,0x04]
+0x20 0x04
+# CHECK: add %r0d, %r1d            ; encoding: [0x20,0x04]
+
+# 64-bit RR: add %r0q, %r1q → [0x30,0x04]
+0x30 0x04
+# CHECK: add %r0q, %r1q            ; encoding: [0x30,0x04]
+
+# RI: add %r0, 5 → [0x50,0x05]
+0x50 0x05
+# CHECK: add %r0, 5                ; encoding: [0x50,0x05]
+
+# RI: sub %r5, 3 → [0x51,0xa3]
+0x51 0xa3
+# CHECK: sub %r5, 3                ; encoding: [0x51,0xa3]
+
+# RI: movz %r0, 31 → [0x58,0x1f]
+0x58 0x1f
+# CHECK: movz %r0, 31              ; encoding: [0x58,0x1f]
+
+# RI: slo %r1, 7 → [0x5c,0x27]
+0x5c 0x27
+# CHECK: slo %r1, 7                ; encoding: [0x5c,0x27]
+
+# RI: cmp %r0, 5 → [0x53,0x05]
+0x53 0x05
+# CHECK: cmp %r0, 5                ; encoding: [0x53,0x05]
+
+# RI: test %r0, 7 → [0x57,0x07]
+0x57 0x07
+# CHECK: test %r0, 7               ; encoding: [0x57,0x07]
+
+# RI: readcr %r0, 3 → [0x5e,0x03]
+0x5e 0x03
+# CHECK: readcr %r0, 3             ; encoding: [0x5e,0x03]
+
+# RI: writecr %r0, 7 → [0x5f,0x07]
+0x5f 0x07
+# CHECK: writecr %r0, 7            ; encoding: [0x5f,0x07]
+
+# LOAD: load %r0, %r1 → [0x1a,0x04]
+0x1a 0x04
+# CHECK: load %r0, %r1             ; encoding: [0x1a,0x04]
+
+# STORE: store %r7, %r2 → [0x1b,0xe8]
+0x1b 0xe8
+# CHECK: store %r7, %r2            ; encoding: [0x1b,0xe8]
+
+# CMP: cmp %r6, %r3 → [0x13,0xcc]
+0x13 0xcc
+# CHECK: cmp %r6, %r3              ; encoding: [0x13,0xcc]
+
+# TEST: test %r7, %r0 → [0x17,0xe0]
+0x17 0xe0
+# CHECK: test %r7, %r0             ; encoding: [0x17,0xe0]
+
+# Branch: br 0 → [0x8e,0x00]
+0x8e 0x00
+# CHECK: br 0                      ; encoding: [0x8e,0x00]
+
+# Branch: beq 2 → [0x80,0x01]
+0x80 0x01
+# CHECK: beq 2                     ; encoding: [0x80,0x01]
+
+# Branch: bne 4 → [0x81,0x02]
+0x81 0x02
+# CHECK: bne 4                     ; encoding: [0x81,0x02]
+
+# Branch: bgtu 4 → [0x89,0x02]
+0x89 0x02
+# CHECK: bgtu 4                    ; encoding: [0x89,0x02]
+
+# Branch: br -2 → [0x9e,0xff]
+0x9e 0xff
+# CHECK: br -2                     ; encoding: [0x9e,0xff]
+
+# SAF PUSH: push %r3 → [0x1d,0xcc]
+0x1d 0xcc
+# CHECK: push %r3                  ; encoding: [0x1d,0xcc]
+
+# SAF POP: pop %r0 → [0x1c,0x18]
+0x1c 0x18
+# CHECK: pop %r0                   ; encoding: [0x1c,0x18]
+
+# SAF PUSHI: push 31 → [0x5d,0xdf]
+0x5d 0xdf
+# CHECK: push 31                   ; encoding: [0x5d,0xdf]
+
+# SAF JMPR: jmpr %r7 → [0xaf,0xee]
+0xaf 0xee
+# CHECK: jmpr %r7                  ; encoding: [0xaf,0xee]
+
+# SAF CALLR: callr %r0 → [0xaf,0x1e]
+0xaf 0x1e
+# CHECK: callr %r0                 ; encoding: [0xaf,0x1e]
+
+# NOP → [0x8f,0x00]
+0x8f 0x00
+# CHECK: nop                       ; encoding: [0x8f,0x00]
+
+# SAF CALL: call 0 → [0xb0,0x00]
+0xb0 0x00
+# CHECK: call 0                    ; encoding: [0xb0,0x00]
+
+# SAF CALL: call 8 → [0xb0,0x04]
+0xb0 0x04
+# CHECK: call 8                    ; encoding: [0xb0,0x04]

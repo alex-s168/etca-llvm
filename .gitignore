@@ -6,6 +6,11 @@
 # as most of those are useless.
 #==============================================================================#
 
+etca/etca-binutils-gdb/
+etca/etca-capstone/
+etca/etca-spec/
+etca/etca-vnd-extensions/
+
 #==============================================================================#
 # File extensions to be ignored anywhere in the tree.
 #==============================================================================#
@@ -60,7 +65,6 @@ autoconf/autom4te.cache
 .claude/
 /GEMINI.md
 .gemini/
-AGENTS.md
 .codex/
 # Cursor specific files
 .cursor

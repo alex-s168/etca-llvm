@@ -150,6 +150,8 @@ StringRef Triple::getArchTypeName(ArchType Kind) {
     return "xcore";
   case xtensa:
     return "xtensa";
+  case etca:
+    return "etca";
   }
 
   llvm_unreachable("Invalid ArchType!");
@@ -351,6 +353,8 @@ StringRef Triple::getArchTypePrefix(ArchType Kind) {
 
   case xtensa:
     return "xtensa";
+  case etca:
+    return "etca";
   }
 }
 
@@ -725,6 +729,7 @@ Triple::ArchType Triple::getArchTypeForLLVMName(StringRef Name) {
       .Case("loongarch32", loongarch32)
       .Case("loongarch64", loongarch64)
       .Case("dxil", dxil)
+      .Case("etca", etca)
       .Case("xtensa", xtensa)
       .Default(UnknownArch);
 }
@@ -878,6 +883,7 @@ Triple::ArchType Triple::parseArch(StringRef ArchName) {
                   "dxilv1.4", "dxilv1.5", "dxilv1.6", "dxilv1.7", "dxilv1.8",
                   "dxilv1.9"},
                  Triple::dxil)
+          .Case("etca", Triple::etca)
           .Case("xtensa", Triple::xtensa)
           .Default(Triple::UnknownArch);
 
@@ -1273,6 +1279,8 @@ static Triple::ObjectFormatType getDefaultFormat(const Triple &T) {
 
   case Triple::dxil:
     return Triple::DXContainer;
+  case Triple::etca:
+    return Triple::ELF;
   }
   llvm_unreachable("unknown architecture");
 }

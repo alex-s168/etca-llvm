@@ -176,6 +176,13 @@ StringRef llvm::object::getELFRelocationTypeName(uint32_t Machine,
       break;
     }
     break;
+  case ELF::EM_ETCA:
+    switch (Type) {
+#include "llvm/BinaryFormat/ELFRelocs/ETCA.def"
+    default:
+      break;
+    }
+    break;
   case ELF::EM_XTENSA:
     switch (Type) {
 #include "llvm/BinaryFormat/ELFRelocs/Xtensa.def"

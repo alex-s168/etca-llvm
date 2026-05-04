@@ -1,0 +1,158 @@
+; RUN: llc -march=etca -mcpu=generic < %s | FileCheck %s
+
+;; ===========================================================================
+;; ETCA SAF extension codegen tests
+;; ===========================================================================
+
+declare void @callee()
+declare void @foo()
+declare void @bar()
+
+define void @caller() {
+; CHECK-LABEL: caller:
+; CHECK:       call callee
+; CHECK:       jmpr %r7
+  call void @callee()
+  ret void
+}
+
+define i16 @recursion(i16 %n) {
+; CHECK-LABEL: recursion:
+; CHECK:       movz %r2, 0
+; CHECK:       movz %r1, 1
+; CHECK:       cmp %r0, %r2
+; CHECK:       beq
+; CHECK:       br
+; CHECK:       sub %r1, %r0
+; CHECK:       movz %r2, %r0
+; CHECK:       movz %r0, %r1
+; CHECK:       call recursion
+; CHECK:       add %r0, %r2
+; CHECK:       jmpr %r7
+; CHECK:       movz %r0, %r1
+; CHECK:       jmpr %r7
+  %1 = icmp eq i16 %n, 0
+  br i1 %1, label %base, label %recurse
+
+recurse:
+  %n1 = sub i16 %n, 1
+  %r = call i16 @recursion(i16 %n1)
+  %sum = add i16 %r, %n
+  ret i16 %sum
+
+base:
+  ret i16 1
+}
+
+define i16 @fib(i16 %n) {
+; CHECK-LABEL: fib:
+; CHECK:       sub %r6, 2
+; CHECK:       store %r3, %r5
+; CHECK:       movz %r1, 2
+; CHECK:       cmp %r0, %r1
+; CHECK:       bltu
+; CHECK:       br
+; CHECK:       call fib
+; CHECK:       call fib
+; CHECK:       add %r0, %r2
+; CHECK:       jmpr %r7
+  %1 = icmp ult i16 %n, 2
+  br i1 %1, label %return, label %recurse
+
+recurse:
+  %n1 = sub i16 %n, 1
+  %f1 = call i16 @fib(i16 %n1)
+  %n2 = sub i16 %n, 2
+  %f2 = call i16 @fib(i16 %n2)
+  %r = add i16 %f1, %f2
+  ret i16 %r
+
+return:
+  ret i16 %n
+}
+
+define void @multi_call() {
+; CHECK-LABEL: multi_call:
+; CHECK:       call foo
+; CHECK:       call bar
+; CHECK:       jmpr %r7
+  call void @foo()
+  call void @bar()
+  ret void
+}
+
+define i16 @branch_eq(i16 %a, i16 %b) {
+; CHECK-LABEL: branch_eq:
+; CHECK:       sub %r6, 2
+; CHECK:       store %r3, %r5
+; CHECK:       movz %r2, 1
+; CHECK:       movz %r3, 0
+; CHECK:       cmp %r0, %r1
+; CHECK:       beq
+; CHECK-NOT:   cmp
+; CHECK:       jmpr %r7
+  %cmp = icmp eq i16 %a, %b
+  %res = select i1 %cmp, i16 1, i16 0
+  ret i16 %res
+}
+
+define i16 @branch_slt(i16 %a, i16 %b) {
+; CHECK-LABEL: branch_slt:
+; CHECK:       cmp %r0, %r1
+; CHECK:       blt
+; CHECK-NOT:   cmp
+; CHECK:       jmpr %r7
+  %cmp = icmp slt i16 %a, %b
+  %res = select i1 %cmp, i16 1, i16 0
+  ret i16 %res
+}
+
+define i16 @branch_ult(i16 %a, i16 %b) {
+; CHECK-LABEL: branch_ult:
+; CHECK:       cmp %r0, %r1
+; CHECK:       bltu
+; CHECK-NOT:   cmp
+; CHECK:       jmpr %r7
+  %cmp = icmp ult i16 %a, %b
+  %res = select i1 %cmp, i16 1, i16 0
+  ret i16 %res
+}
+
+define i16 @branch_sgt(i16 %a, i16 %b) {
+; CHECK-LABEL: branch_sgt:
+; CHECK:       cmp %r0, %r1
+; CHECK:       bgt
+; CHECK-NOT:   cmp
+; CHECK:       jmpr %r7
+  %cmp = icmp sgt i16 %a, %b
+  %res = select i1 %cmp, i16 1, i16 0
+  ret i16 %res
+}
+
+define i16 @loop(i16 %limit) {
+; CHECK-LABEL: loop:
+; CHECK:       sub %r6, 4
+; CHECK:       store %r3, %r5
+; CHECK:       store %r4, %r5
+; CHECK:       movz %r2, 1
+; CHECK:       movs %r3, 31
+; CHECK:       movz %r4, %r2
+; CHECK:       add %r3, %r4
+; CHECK:       add %r4, %r2
+; CHECK:       cmp %r3, %r0
+; CHECK:       blt
+; CHECK:       movz %r0, %r1
+; CHECK:       jmpr %r7
+  br label %loop
+
+loop:
+  %i = phi i16 [0, %0], [%next, %loop]
+  %sum = phi i16 [65535, %0], [%sum2, %loop]
+  %next = add i16 %i, 1
+  %sum2 = add i16 %sum, %next
+  %cond = icmp slt i16 %sum2, %limit
+  br i1 %cond, label %loop, label %exit
+
+exit:
+  ret i16 %sum
+}

@@ -1461,6 +1461,8 @@ template <class ELFT> Triple::ArchType ELFObjectFile<ELFT>::getArch() const {
       report_fatal_error("Invalid ELFCLASS!");
     }
 
+  case ELF::EM_ETCA:
+    return Triple::etca;
   case ELF::EM_XTENSA:
     return Triple::xtensa;
 
