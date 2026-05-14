@@ -166,9 +166,9 @@ Key design: Three tiers of type legality:
 - **Tier 2 (computation)**: Conditioned on HasDW (s32) / HasQW (s64)
 - **Tier 3 (narrow helpers)**: Always legal, types match the narrow computation types plus s1 carry
 
-### 2. Redundant bridging COPYs after extension
-`G_ZEXT`/`G_SEXT` emit a two-step sequence (narrow MOVZ + COPY). When the source and destination share the same register number (e.g., `MOVZ16 %r0, %r0d` + `COPY %r0d, %r0`), a redundant MOVZ32 is emitted.
-**Impact**: Cosmetic — correct but may have a redundant instruction. Future peephole optimisation could eliminate it.
+### 2. Redundant bridging COPYs after extension ✅ FIXED
+`G_ZEXT`/`G_SEXT` emit a two-step sequence (narrow MOVZ + COPY). When the source and destination share the same register number (e.g., `MOVZ16 %r0, %r0d` + `COPY %r0d, %r0`), `copyPhysReg()` now detects that both registers map to the same underlying ETCa register number and skips the copy as a no-op.
+**Impact**: Eliminated — only the correct narrow MOVZ/MOVS instruction remains.
 
 ### 3. MC tests: byte roundtrip ✅ FIXED
 The InstPrinter now prints `%rNh` suffix for byte-width register operands. Full roundtrip is verified:
@@ -181,7 +181,7 @@ The InstPrinter now prints `%rNh` suffix for byte-width register operands. Full 
 ### Tests
 - [x] Legalizer subtarget-aware (HasDW/HasQW gate computation ops)
 - [x] Multi-width tests split by CPU capability (16/32/64 bit)
-- [ ] Explicit FileCheck RUN lines for all 5 CPU models in CodeGen tests
+- [x] Explicit FileCheck RUN lines for all 5 CPU models in CodeGen tests
 - [ ] ELF object verification (EM_ETCA, section headers, relocations)
 - [ ] Integration tests (Fibonacci, memcpy, recursive factorial)
 - [ ] LLVM test suite integration

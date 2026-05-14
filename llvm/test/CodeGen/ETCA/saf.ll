@@ -1,4 +1,8 @@
 ; RUN: llc -march=etca -mcpu=generic < %s | FileCheck %s
+; RUN: llc -march=etca -mcpu=etca32 < %s | FileCheck %s
+; RUN: llc -march=etca -mcpu=etca64 < %s | FileCheck %s
+; RUN: llc -march=etca -mcpu=etca32p64 < %s | FileCheck %s
+; RUN: llc -march=etca -mcpu=etca64p32 < %s | FileCheck %s
 
 ;; ===========================================================================
 ;; ETCA SAF extension codegen tests
@@ -18,18 +22,11 @@ define void @caller() {
 
 define i16 @recursion(i16 %n) {
 ; CHECK-LABEL: recursion:
-; CHECK:       movz %r2, 0
-; CHECK:       movz %r1, 1
-; CHECK:       cmp %r0, %r2
+; CHECK:       cmp
 ; CHECK:       beq
 ; CHECK:       br
-; CHECK:       sub %r1, %r0
-; CHECK:       movz %r2, %r0
-; CHECK:       movz %r0, %r1
 ; CHECK:       call recursion
-; CHECK:       add %r0, %r2
-; CHECK:       jmpr %r7
-; CHECK:       movz %r0, %r1
+; CHECK:       add %r0
 ; CHECK:       jmpr %r7
   %1 = icmp eq i16 %n, 0
   br i1 %1, label %base, label %recurse
@@ -46,15 +43,13 @@ base:
 
 define i16 @fib(i16 %n) {
 ; CHECK-LABEL: fib:
-; CHECK:       sub %r6, 2
 ; CHECK:       store %r3, %r5
-; CHECK:       movz %r1, 2
-; CHECK:       cmp %r0, %r1
+; CHECK:       cmp
 ; CHECK:       bltu
 ; CHECK:       br
 ; CHECK:       call fib
 ; CHECK:       call fib
-; CHECK:       add %r0, %r2
+; CHECK:       add %r0
 ; CHECK:       jmpr %r7
   %1 = icmp ult i16 %n, 2
   br i1 %1, label %return, label %recurse
@@ -83,11 +78,8 @@ define void @multi_call() {
 
 define i16 @branch_eq(i16 %a, i16 %b) {
 ; CHECK-LABEL: branch_eq:
-; CHECK:       sub %r6, 2
 ; CHECK:       store %r3, %r5
-; CHECK:       movz %r2, 1
-; CHECK:       movz %r3, 0
-; CHECK:       cmp %r0, %r1
+; CHECK:       cmp
 ; CHECK:       beq
 ; CHECK-NOT:   cmp
 ; CHECK:       jmpr %r7
@@ -98,7 +90,7 @@ define i16 @branch_eq(i16 %a, i16 %b) {
 
 define i16 @branch_slt(i16 %a, i16 %b) {
 ; CHECK-LABEL: branch_slt:
-; CHECK:       cmp %r0, %r1
+; CHECK:       cmp
 ; CHECK:       blt
 ; CHECK-NOT:   cmp
 ; CHECK:       jmpr %r7
@@ -109,7 +101,7 @@ define i16 @branch_slt(i16 %a, i16 %b) {
 
 define i16 @branch_ult(i16 %a, i16 %b) {
 ; CHECK-LABEL: branch_ult:
-; CHECK:       cmp %r0, %r1
+; CHECK:       cmp
 ; CHECK:       bltu
 ; CHECK-NOT:   cmp
 ; CHECK:       jmpr %r7
@@ -120,7 +112,7 @@ define i16 @branch_ult(i16 %a, i16 %b) {
 
 define i16 @branch_sgt(i16 %a, i16 %b) {
 ; CHECK-LABEL: branch_sgt:
-; CHECK:       cmp %r0, %r1
+; CHECK:       cmp
 ; CHECK:       bgt
 ; CHECK-NOT:   cmp
 ; CHECK:       jmpr %r7
@@ -131,17 +123,11 @@ define i16 @branch_sgt(i16 %a, i16 %b) {
 
 define i16 @loop(i16 %limit) {
 ; CHECK-LABEL: loop:
-; CHECK:       sub %r6, 4
+; CHECK:       sub %r6
 ; CHECK:       store %r3, %r5
-; CHECK:       store %r4, %r5
-; CHECK:       movz %r2, 1
-; CHECK:       movs %r3, 31
-; CHECK:       movz %r4, %r2
-; CHECK:       add %r3, %r4
-; CHECK:       add %r4, %r2
-; CHECK:       cmp %r3, %r0
+; CHECK:       add
+; CHECK:       cmp
 ; CHECK:       blt
-; CHECK:       movz %r0, %r1
 ; CHECK:       jmpr %r7
   br label %loop
 

@@ -630,8 +630,10 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
   // (GPR32/GPR64), we use a two-step sequence:
   //   1. MOVZ16 tmp(s16), src(s16)   — zero/sign-extend using correct SS
   //   2. COPY dst(s32), tmp(s16)     — bridge register classes
-  //   The COPY is handled by copyPhysReg() using register-width MOVZ,
-  //   which reads the already-correctly-extended value.
+  //   The COPY is handled by copyPhysReg() which emits a register-width
+  //   MOVZ.  When tmp and dst map to the same underlying ETCa register
+  //   number (e.g., R0 and D0 both encode as register 0), copyPhysReg()
+  //   skips the copy as a no-op, eliminating redundant MOVZ instructions.
   //===----------------------------------------------------------------===//
 
   case TargetOpcode::G_ZEXT:

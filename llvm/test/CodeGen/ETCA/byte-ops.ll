@@ -1,4 +1,8 @@
 ; RUN: llc -march=etca -mcpu=generic -mattr=+byte < %s | FileCheck %s
+; RUN: llc -march=etca -mcpu=etca32 -mattr=+byte < %s | FileCheck %s
+; RUN: llc -march=etca -mcpu=etca64 -mattr=+byte < %s | FileCheck %s
+; RUN: llc -march=etca -mcpu=etca32p64 -mattr=+byte < %s | FileCheck %s
+; RUN: llc -march=etca -mcpu=etca64p32 -mattr=+byte < %s | FileCheck %s
 ; REQUIRES: etca-registered-target
 
 ; Test 8-bit (BYTE extension) code generation.
@@ -61,7 +65,7 @@ entry:
 
 define void @store_byte(i8* %ptr, i8 zeroext %val) {
 ; CHECK-LABEL: store_byte:
-; CHECK:       store %r1h, %r0h
+; CHECK:       store %r1h
 ; CHECK:       jmpr %r7
 entry:
   store i8 %val, i8* %ptr

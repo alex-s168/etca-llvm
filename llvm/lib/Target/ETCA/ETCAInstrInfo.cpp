@@ -93,6 +93,18 @@ void ETCAInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                 const DebugLoc &DL, Register DestReg,
                                 Register SrcReg, bool KillSrc,
                                 bool RenamableDest, bool RenamableSrc) const {
+  // If both registers map to the same underlying ETCa register number
+  // (e.g., R0 and D0 both encode as register 0), the copy is a no-op.
+  // MOVZ16/MOVS16/MOVZ32/MOVS32 all use 3-bit register fields in the
+  // encoding, and R0, D0, Q0 all share the same encoding (0).
+  if (DestReg != SrcReg) {
+    const TargetRegisterInfo &TRI = getRegisterInfo();
+    unsigned DestEnc = TRI.getEncodingValue(DestReg);
+    unsigned SrcEnc = TRI.getEncodingValue(SrcReg);
+    if ((DestEnc & 0x7) == (SrcEnc & 0x7))
+      return; // Same physical register — copy is a no-op.
+  }
+
   // Determine the appropriate MOVZ based on the register class.
   unsigned RegWidth = ST.getRegWidth();
   unsigned Opc;
