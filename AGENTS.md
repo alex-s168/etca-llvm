@@ -58,6 +58,8 @@ Applies to all SS values: SS=00 (byte), SS=01 (word/16-bit), SS=10 (dword/32-bit
 - **No SDAG fallback!** The target machine pipeline is `IRTranslator → Legalizer → RegBankSelect → InstructionSelect`.
 - `ETCATargetMachine` uses `addGIselPasses()` with no SDAG pass.
 - The TableGen `CMakeLists.txt` does **not** use `-gen-dag-isel`; it does use `-gen-global-isel`.
+- All SDAG lowering hooks (LowerOperation, LowerFormalArguments, LowerReturn, LowerCall, ReplaceNodeResults) have been **removed** from `ETCATargetLowering`. The class now only retains the constructor (register classes + operation action setup) and `isLegalAddressingMode`.
+- `ETCADAGToDAGISel.cpp` has been **deleted** entirely. The `ETCAISD::NodeType` and `ETCAISD::CondCode` enums from `ETCAISelLowering.h` have also been removed — they contained incorrect condition code values that could mislead future contributors.
 
 ### AsmBackend location
 The real `AsmBackend` is in `MCTargetDesc/ETCAMCTargetDesc.cpp`. `MCTargetDesc/ETCAAsmBackend.cpp` is an unused duplicate — do not modify.

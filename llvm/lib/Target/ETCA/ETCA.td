@@ -13,13 +13,6 @@
 include "llvm/Target/Target.td"
 
 //===----------------------------------------------------------------------===//
-// ETCA-specific SDNodes (used for lowering glue/flag results)
-//===----------------------------------------------------------------------===//
-
-def SDT_ETCACmp : SDTypeProfile<0, 2, [SDTCisSameAs<0, 1>, SDTCisVT<0, i16>]>;
-def ETCAcmp : SDNode<"ETCAISD::CMP", SDT_ETCACmp, [SDNPOutGlue]>;
-
-//===----------------------------------------------------------------------===//
 // Subtarget Features
 //===----------------------------------------------------------------------===//
 

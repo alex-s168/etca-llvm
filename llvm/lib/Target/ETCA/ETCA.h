@@ -22,13 +22,6 @@ class ETCATargetMachine;
 class FunctionPass;
 class PassRegistry;
 
-void initializeETCAAsmPrinterPass(PassRegistry &);
-
-/// Create the ETCA DAG-to-DAG instruction selector pass.
-/// NOTE: This is only for development/testing. The primary path is GISel.
-FunctionPass *createETCAISelDag(ETCATargetMachine &TM,
-                                CodeGenOptLevel OptLevel);
-
 /// Initialize the ETCA SELECT_Pseudo expansion pass.
 void initializeETCASelectExpandPass(PassRegistry &);
 
