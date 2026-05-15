@@ -256,7 +256,7 @@ class ETCAAsmParser : public MCTargetAsmParser {
   unsigned CurrentInstrWidth = 0;
 
   // Opcode lookup tables.
-  struct RR_RI_Entry {
+  struct RrRiEntry {
     const char *Mnemonic;
     unsigned Opcode8RR;
     unsigned Opcode16RR;
@@ -267,7 +267,7 @@ class ETCAAsmParser : public MCTargetAsmParser {
     unsigned Opcode32RI;
     unsigned Opcode64RI;
   };
-  static const RR_RI_Entry ALUOps[];
+  static const RrRiEntry ALUOps[];
 
   struct BranchEntry {
     const char *Mnemonic;
@@ -332,10 +332,10 @@ private:
   static const FixedEntry *lookupFixed(StringRef Mnemonic);
 
   /// Look up an ALU opcode entry by mnemonic.
-  static const RR_RI_Entry *lookupALU(StringRef Mnemonic);
+  static const RrRiEntry *lookupALU(StringRef Mnemonic);
 
   /// Select width-specific opcode for an ALU operation.
-  static unsigned selectWidth(const RR_RI_Entry &E, bool IsRR, unsigned Width);
+  static unsigned selectWidth(const RrRiEntry &E, bool IsRR, unsigned Width);
 };
 
 } // end anonymous namespace
@@ -346,7 +346,7 @@ private:
 
 // ALU operations: mnemonic → {8RR, 16RR, 32RR, 64RR, 8RI, 16RI, 32RI, 64RI}
 // Entries with 0 mean "not available in this width/form".
-const ETCAAsmParser::RR_RI_Entry ETCAAsmParser::ALUOps[] = {
+const ETCAAsmParser::RrRiEntry ETCAAsmParser::ALUOps[] = {
     {"add", ETCA::ADD8, ETCA::ADD16, ETCA::ADD32, ETCA::ADD64, ETCA::ADDI8,
      ETCA::ADDI16, ETCA::ADDI32, ETCA::ADDI64},
     {"sub", ETCA::SUB8, ETCA::SUB16, ETCA::SUB32, ETCA::SUB64, ETCA::SUBI8,
@@ -431,7 +431,7 @@ ETCAAsmParser::lookupFixed(StringRef Mnemonic) {
   return nullptr;
 }
 
-const ETCAAsmParser::RR_RI_Entry *ETCAAsmParser::lookupALU(StringRef Mnemonic) {
+const ETCAAsmParser::RrRiEntry *ETCAAsmParser::lookupALU(StringRef Mnemonic) {
   // Case-insensitive compare
   for (const auto &E : ALUOps) {
     if (Mnemonic.equals_insensitive(E.Mnemonic))
@@ -440,7 +440,7 @@ const ETCAAsmParser::RR_RI_Entry *ETCAAsmParser::lookupALU(StringRef Mnemonic) {
   return nullptr;
 }
 
-unsigned ETCAAsmParser::selectWidth(const RR_RI_Entry &E, bool IsRR,
+unsigned ETCAAsmParser::selectWidth(const RrRiEntry &E, bool IsRR,
                                     unsigned Width) {
   switch (Width) {
   case 64:
@@ -1169,7 +1169,7 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   }
 
   // ---- ALU instructions (RR or RI, width-polymorphic) ----
-  const RR_RI_Entry *AE = lookupALU(Mnemonic);
+  const RrRiEntry *AE = lookupALU(Mnemonic);
   if (AE) {
     if (NumOps != 2)
       return Error(IDLoc, "instruction expects 2 operands (dst, src2 or imm)");

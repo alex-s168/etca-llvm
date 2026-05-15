@@ -36,14 +36,14 @@ enum NodeType : unsigned {
 enum CondCode : unsigned {
   COND_EQ = 0,   // Equal / Zero (Z)
   COND_NE = 1,   // Not Equal / Not Zero (~Z)
-  COND_LT = 2,   // Less Than / Negative (N)
-  COND_GE = 3,   // Greater or Equal / Not Negative (~N)
   COND_ULT = 4,  // Unsigned Less Than / Carry (C)
   COND_UGE = 5,  // Unsigned Greater or Equal / No Carry (~C)
-  COND_LE = 10,  // Less or Equal (N != V)
-  COND_GT = 11,  // Greater (N == V)
-  COND_ULE = 12, // Unsigned Less or Equal (C | Z)
-  COND_UGT = 13, // Unsigned Greater (~(C | Z))
+  COND_ULE = 8,  // Unsigned Less or Equal (C | Z)
+  COND_UGT = 9,  // Unsigned Greater (~(C | Z))
+  COND_LT = 10,  // Less Than (N != V)
+  COND_GE = 11,  // Greater or Equal (N == V)
+  COND_LE = 12,  // Less or Equal (Z | (N != V))
+  COND_GT = 13   // Greater (~Z & (N == V))
 };
 } // namespace ETCAISD
 

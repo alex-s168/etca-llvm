@@ -354,14 +354,14 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1, hasSideEffects = 0,
   }
   def BEQ  : EInstBranch<0b0000, "beq $target", []>;
   def BNE  : EInstBranch<0b0001, "bne $target", []>;
-  def BLT  : EInstBranch<0b0010, "blt $target", []>;
-  def BGE  : EInstBranch<0b0011, "bge $target", []>;
   def BLTU : EInstBranch<0b0100, "bltu $target", []>;
   def BGEU : EInstBranch<0b0101, "bgeu $target", []>;
-  def BLE  : EInstBranch<0b1010, "ble $target", []>;
-  def BGT  : EInstBranch<0b1011, "bgt $target", []>;
-  def BLEU : EInstBranch<0b1100, "bleu $target", []>;
-  def BGTU : EInstBranch<0b1101, "bgtu $target", []>;
+  def BLEU : EInstBranch<0b1000, "bleu $target", []>;
+  def BGTU : EInstBranch<0b1001, "bgtu $target", []>;
+  def BLT  : EInstBranch<0b1010, "blt $target", []>;
+  def BGE  : EInstBranch<0b1011, "bge $target", []>;
+  def BLE  : EInstBranch<0b1100, "ble $target", []>;
+  def BGT  : EInstBranch<0b1101, "bgt $target", []>;
 }
 
 //===----------------------------------------------------------------------===//

@@ -148,6 +148,7 @@ bool ETCACallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
           RegBytes, Align(RegBytes));
       MIRBuilder.buildLoad(VReg, AddrReg, *MMO);
     }
+
     ++Idx;
   }
   return true;
