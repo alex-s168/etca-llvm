@@ -21,7 +21,8 @@ class Triple;
 
 class ETCAMCAsmInfo : public MCAsmInfoELF {
 public:
-  explicit ETCAMCAsmInfo(const Triple &TT, const MCTargetOptions &Options);
+  explicit ETCAMCAsmInfo(const Triple &TT, const MCTargetOptions &Options,
+                         unsigned PtrSize = 16);
 };
 
 } // namespace llvm

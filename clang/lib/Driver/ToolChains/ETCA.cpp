@@ -21,6 +21,7 @@
 #include "clang/Driver/Driver.h"
 #include "clang/Driver/InputInfo.h"
 #include "clang/Options/Options.h"
+#include "clang/Driver/Types.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
@@ -85,6 +86,39 @@ void ETCAToolChain::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
   llvm::sys::path::append(Dir, getTripleString(), "include");
   if (llvm::sys::fs::is_directory(Dir))
     addSystemInclude(DriverArgs, CC1Args, Dir);
+}
+
+std::string ETCAToolChain::ComputeEffectiveClangTriple(
+    const ArgList &Args, types::ID InputType) const {
+  // Start with the base triple (e.g., "etca-unknown-elf").
+  std::string TripleStr = getTripleString().str();
+
+  // Determine if a CPU was specified that changes the pointer width.
+  // We encode the pointer size in the OS field via a numeric suffix:
+  //   etca-unknown-elf    → 16-bit pointer (default)
+  //   etca-unknown-elf32  → 32-bit pointer
+  //   etca-unknown-elf64  → 64-bit pointer
+  //
+  // The LLVM MC layer (ETCAMCAsmInfo factory) reads this suffix to set
+  // CodePointerSize and CalleeSaveStackSlotSize correctly.
+  std::string CPU = getCPUName(getDriver(), Args, getTriple());
+  unsigned PtrSize = 16;
+
+  if (CPU == "etca32" || CPU == "etca64p32")
+    PtrSize = 32;
+  else if (CPU == "etca32p64" || CPU == "etca64")
+    PtrSize = 64;
+  // else: CPU == "generic" or unknown → 16-bit (default)
+
+  // If the pointer size doesn't match the default (16-bit), append the
+  // size to the OS name. The base triple is e.g. "etca-unknown-elf".
+  if (PtrSize != 16) {
+    // Rebuild triple string: "etca-unknown-elf" + "32" or "64"
+    TripleStr = (getArchName().str() + "-unknown-elf" +
+                 (PtrSize == 32 ? "32" : "64"));
+  }
+
+  return TripleStr;
 }
 
 void ETCAToolChain::addClangTargetOptions(

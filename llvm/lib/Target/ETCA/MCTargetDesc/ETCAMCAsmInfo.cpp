@@ -13,12 +13,16 @@ using namespace llvm;
 
 void anchor() {}
 
-ETCAMCAsmInfo::ETCAMCAsmInfo(const Triple &TT, const MCTargetOptions &Options)
+ETCAMCAsmInfo::ETCAMCAsmInfo(const Triple &TT, const MCTargetOptions &Options,
+                               unsigned PtrSize)
     : MCAsmInfoELF(Options) {
-  // Default to 16-bit pointers (base ISA).
-  // The subtarget can override these values at runtime.
-  CodePointerSize = 2;
-  CalleeSaveStackSlotSize = 2;
+  // Pointer size is determined by the caller (see createETCAMCAsmInfo).
+  // The triple OS name suffix encodes the desired pointer size:
+  //   etca-unknown-elf    → 16-bit (default, base ISA)
+  //   etca-unknown-elf32  → 32-bit (DWAS extension)
+  //   etca-unknown-elf64  → 64-bit (QWAS extension)
+  CodePointerSize = PtrSize / 8;
+  CalleeSaveStackSlotSize = PtrSize / 8;
   MinInstAlignment = 2;
   MaxInstLength = 2;
 

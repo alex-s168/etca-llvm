@@ -13,6 +13,9 @@
 #include "clang/Driver/InputInfo.h"
 #include "clang/Driver/Tool.h"
 #include "clang/Driver/ToolChain.h"
+#include "clang/Driver/Types.h"
+#include "llvm/Option/ArgList.h"
+#include "llvm/TargetParser/Triple.h"
 
 namespace clang {
 namespace driver {
@@ -44,6 +47,10 @@ public:
   }
 
   bool HasNativeLLVMSupport() const override { return true; }
+
+  std::string ComputeEffectiveClangTriple(
+      const llvm::opt::ArgList &Args,
+      types::ID InputType = types::TY_INVALID) const override;
 
 protected:
   Tool *buildLinker() const override;

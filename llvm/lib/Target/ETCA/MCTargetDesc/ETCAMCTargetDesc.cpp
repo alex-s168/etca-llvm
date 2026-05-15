@@ -169,7 +169,24 @@ static MCSubtargetInfo *createETCAMCSubtargetInfo(const Triple &TT,
 
 static MCAsmInfo *createETCAMCAsmInfo(const MCRegisterInfo &, const Triple &TT,
                                       const MCTargetOptions &Options) {
-  return new ETCAMCAsmInfo(TT, Options);
+  // Determine pointer size from the triple's OS name suffix:
+  //   etca-unknown-elf    → 16-bit (base ISA, default)
+  //   etca-unknown-elf32  → 32-bit (DWAS extension)
+  //   etca-unknown-elf64  → 64-bit (QWAS extension)
+  //
+  // This is the mechanism by which the MC layer learns the pointer width,
+  // since MCAsmInfo is created before MCSubtargetInfo is available and
+  // ETCa uses a single Triple::etca architecture for all pointer sizes.
+  // The object format is correctly set to ELF via getDefaultFormat()
+  // regardless of the OS suffix.
+  unsigned PtrSize = 16;
+  StringRef OSName = TT.getOSName();
+  if (OSName == "elf32")
+    PtrSize = 32;
+  else if (OSName == "elf64")
+    PtrSize = 64;
+
+  return new ETCAMCAsmInfo(TT, Options, PtrSize);
 }
 
 //===----------------------------------------------------------------------===//
