@@ -22,12 +22,28 @@
 //===----------------------------------------------------------------------===//
 
 //===----------------------------------------------------------------------===//
+// CCIfSubtarget — match if the current subtarget has a feature F.
+// This follows the same pattern as AArch64, PowerPC, Mips, etc.
+//===----------------------------------------------------------------------===//
+
+class CCIfSubtarget<string F, CCAction A>
+    : CCIf<!strconcat("State.getMachineFunction()"
+                      ".getSubtarget<ETCASubtarget>().",
+                     F),
+          A>;
+
+//===----------------------------------------------------------------------===//
 // Calling convention for formal arguments and call operands
 //===----------------------------------------------------------------------===//
 
 def CC_ETCA : CallingConv<[
-  // Promote i8/i16 to i32 when word size >= 32
-  CCIfType<[i8, i16], CCPromoteToType<i32>>,
+  // Promote i8/i16 to word size based on subtarget:
+  //   64-bit word (HasQW): promote to i64
+  //   32-bit word (HasDW): promote to i32
+  //   16-bit word (neither): promote i8 to i16
+  CCIfType<[i8, i16], CCIfSubtarget<"hasQW()", CCPromoteToType<i64>>>,
+  CCIfType<[i8, i16], CCIfSubtarget<"hasDW()", CCPromoteToType<i32>>>,
+  CCIfType<[i8], CCPromoteToType<i16>>,
 
   // First 4 arguments in registers r0-r3
   CCIfType<[i16], CCAssignToReg<[R0, R1, R2, R3]>>,
@@ -45,8 +61,10 @@ def CC_ETCA : CallingConv<[
 //===----------------------------------------------------------------------===//
 
 def RetCC_ETCA : CallingConv<[
-  // Promote i8/i16 returns to i32 when word size >= 32
-  CCIfType<[i8, i16], CCPromoteToType<i32>>,
+  // Promote i8/i16 returns to word size (same logic as CC_ETCA)
+  CCIfType<[i8, i16], CCIfSubtarget<"hasQW()", CCPromoteToType<i64>>>,
+  CCIfType<[i8, i16], CCIfSubtarget<"hasDW()", CCPromoteToType<i32>>>,
+  CCIfType<[i8], CCPromoteToType<i16>>,
 
   // Return values in r0 or r0-r1 pair
   CCIfType<[i16], CCAssignToReg<[R0]>>,
