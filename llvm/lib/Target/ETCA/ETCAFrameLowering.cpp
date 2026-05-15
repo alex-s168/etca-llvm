@@ -71,14 +71,41 @@ void ETCAFrameLowering::emitPrologue(MachineFunction &MF,
   // 1. push r5
   BuildMI(MBB, MBBI, DL, TII.get(PUSH)).addReg(R5);
 
+  unsigned RegWidth = ST.getRegWidth();
+  unsigned MovOpc;
+  switch (RegWidth) {
+  case 64:
+    MovOpc = MOVZ64;
+    break;
+  case 32:
+    MovOpc = MOVZ32;
+    break;
+  default:
+    MovOpc = MOVZ16;
+    break;
+  }
+
+  unsigned SubOpc;
+  switch (RegWidth) {
+  case 64:
+    SubOpc = SUBI64;
+    break;
+  case 32:
+    SubOpc = SUBI32;
+    break;
+  default:
+    SubOpc = SUBI16;
+    break;
+  }
+
   // 2. mov r5, r6 (copy sp to bp) — RR format (non-tied): [dst, src]
-  BuildMI(MBB, MBBI, DL, TII.get(MOVZ16), R5).addReg(R6);
+  BuildMI(MBB, MBBI, DL, TII.get(MovOpc), R5).addReg(R6);
 
   // 3. Allocate stack for locals
   int StackSize = MFI.getStackSize();
   if (StackSize > 0) {
     // sub r6, StackSize — RI format: [dst, src1(tied), imm]
-    BuildMI(MBB, MBBI, DL, TII.get(SUBI16), R6).addReg(R6).addImm(StackSize);
+    BuildMI(MBB, MBBI, DL, TII.get(SubOpc), R6).addReg(R6).addImm(StackSize);
   }
 }
 
@@ -96,8 +123,22 @@ void ETCAFrameLowering::emitEpilogue(MachineFunction &MF,
   //   mov r6, r5       ; sp = bp
   //   pop r5           ; restore old bp
 
+  unsigned RegWidth = ST.getRegWidth();
+  unsigned MovOpc;
+  switch (RegWidth) {
+  case 64:
+    MovOpc = MOVZ64;
+    break;
+  case 32:
+    MovOpc = MOVZ32;
+    break;
+  default:
+    MovOpc = MOVZ16;
+    break;
+  }
+
   // 1. mov r6, r5 — RR format (non-tied): [dst, src]
-  BuildMI(MBB, MBBI, DL, TII.get(MOVZ16), R6).addReg(R5);
+  BuildMI(MBB, MBBI, DL, TII.get(MovOpc), R6).addReg(R5);
 
   // 2. pop r5
   BuildMI(MBB, MBBI, DL, TII.get(POP), R5);
