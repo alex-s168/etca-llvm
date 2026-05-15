@@ -50,10 +50,10 @@ define ptr @astrcpy(ptr %dest, ptr %src) {
 ; GEN-LABEL: astrcpy:
 ; GEN:       push %r5
 ; GEN:       movz %r5, %r6
-;; Prologue: allocate stack frame, spill callee-saves, set up stack slots
+;; Prologue: allocate stack frame, push callee-saves, set up stack slots
+; GEN:       push %r3
+; GEN:       push %r4
 ; GEN:       sub %r6,
-; GEN:       store %r{{[0-9]+}}, %r{{[0-9]+}}
-; GEN:       store %r{{[0-9]+}}, %r{{[0-9]+}}
 ;; Loop header — load src pointer and byte
 ; GEN:       load %r{{[0-9]+}}, %r{{[0-9]+}}
 ; GEN-NEXT:  load %r{{[0-9]+}}h
@@ -75,10 +75,10 @@ define ptr @astrcpy(ptr %dest, ptr %src) {
 ; DW-LABEL: astrcpy:
 ; DW:       push %r5
 ; DW:       movz %r5, %r6
-;; Prologue: allocate stack frame, spill callee-saves
+;; Prologue: allocate stack frame, push callee-saves
+; DW:       push %r3
+; DW:       push %r4
 ; DW:       sub %r6,
-; DW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
-; DW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
 ;; Setup zero constant (byte null terminator)
 ; DW:       movz %r{{[0-9]+}}h, 0
 ;; Loop header — load src pointer, load byte
@@ -103,10 +103,10 @@ define ptr @astrcpy(ptr %dest, ptr %src) {
 ; QW-LABEL: astrcpy:
 ; QW:       push %r5
 ; QW:       movz %r5, %r6
-;; Prologue: allocate stack frame, spill callee-saves
+;; Prologue: allocate stack frame, push callee-saves
+; QW:       push %r3
+; QW:       push %r4
 ; QW:       sub %r6,
-; QW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
-; QW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
 ;; Setup zero constant (byte null terminator)
 ; QW:       movz %r{{[0-9]+}}h, 0
 ;; Loop header — load src pointer, load byte

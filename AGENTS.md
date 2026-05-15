@@ -210,6 +210,32 @@ The InstPrinter now prints `%rNh` suffix for byte-width register operands. Full 
   - `roundtrip-all.s` + `.dis`: byte instructions in comprehensive roundtrip
   - `byte.s`: encoding verification (show-encoding)
 
+### 4. CSR save/restore via PUSH/POP ✅ FIXED (2026-05-15)
+CSR save/restore now uses the native PUSH/POP instructions instead of the
+default per-register `storeRegToStackSlot`/`loadRegFromStackSlot` path.
+
+**Changes made**:
+  - Added multi-width `PUSH32`/`PUSH64` and `POP32`/`POP64` instruction
+    variants with correct SS bits (SS=10 for 32-bit/4-byte, SS=11 for
+    64-bit/8-byte stack increment).
+  - Overrode `spillCalleeSavedRegisters`/`restoreCalleeSavedRegisters`
+    in `ETCAFrameLowering` to suppress the default store-based save/restore.
+  - `emitPrologue` now emits PUSH instructions for each callee-saved
+    register (excluding r5=reserved bp and r6=sp) after `push r5; movz r5, r6`
+    and before the stack allocation (`sub r6, N`). The sub amount is
+    reduced by the CSR push size to avoid double allocation.
+  - `emitEpilogue` emits POP instructions (in reverse push order) after
+    `movz r6, r5` and before `pop r5`.
+  - Added `getFrameIndexInstrOffset` override to `ETCARegisterInfo`
+    returning 0 (ETCa LOAD/STORE have no immediate offset field).
+  - Updated `stack-frame.ll`, `strcpy-opt1.ll`, and
+    `strcpy-clang-opt1.ll` tests for new codegen patterns.
+
+**Impact**: CSR saves go from 3+ instructions (MOVZ+ADDI+STORE, ~6 bytes)
+to a single PUSH instruction (2 bytes). Same for restore. Code size
+reduction is significant for leaf functions with callee-saved register use.
+
+
 ## TODO — Extension Improvements
 
 ### Tests

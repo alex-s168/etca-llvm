@@ -94,12 +94,36 @@ void ETCAFrameLowering::emitPrologue(MachineFunction &MF,
   // SAF prologue:
   //   push r5          ; save old base pointer
   //   mov r5, r6       ; bp = sp
-  //   sub r6, N        ; allocate N bytes for locals (if N > 0)
+  //   push rN          ; save callee-saved registers (via PUSH)
+  //   sub r6, N        ; allocate remaining N bytes for locals
+  //
+  // With this layout, sp = bp - StackSize after the sub (where StackSize
+  // includes CSR slot sizes from assignCalleeSavedSpillSlots).  The PUSH
+  // instructions decrement sp for the CSR registers and store them into
+  // what will become the bottom of the allocated frame.
 
   unsigned RegWidth = ST.getRegWidth();
+  unsigned SlotSize = RegWidth / 8;
 
-  // 1. push r5
-  BuildMI(MBB, MBBI, DL, TII.get(PUSH)).addReg(R5);
+  // 1. push r5 (save old base pointer / frame link)
+  unsigned PushOpc;
+  unsigned PopOpc;
+  switch (RegWidth) {
+  case 64:
+    PushOpc = PUSH64;
+    PopOpc = POP64;
+    break;
+  case 32:
+    PushOpc = PUSH32;
+    PopOpc = POP32;
+    break;
+  default:
+    PushOpc = PUSH;
+    PopOpc = POP;
+    break;
+  }
+  BuildMI(MBB, MBBI, DL, TII.get(PushOpc)).addReg(R5);
+
   unsigned MovOpc;
   switch (RegWidth) {
   case 64:
@@ -129,11 +153,27 @@ void ETCAFrameLowering::emitPrologue(MachineFunction &MF,
   // 2. mov r5, r6 (copy sp to bp) — RR format (non-tied): [dst, src]
   BuildMI(MBB, MBBI, DL, TII.get(MovOpc), R5).addReg(R6);
 
-  // 3. Allocate stack for locals
+  // 3. Push callee-saved registers using PUSH (avoids verbose MOVZ+ADDI+STORE)
+  unsigned CSRPushSize = 0;
+  for (auto &CS : MFI.getCalleeSavedInfo()) {
+    // R5 (bp) was already pushed in step 1; R6 (sp) is never saved.
+    if (CS.getReg() == ETCA::R5 || CS.getReg() == ETCA::R6)
+      continue;
+    BuildMI(MBB, MBBI, DL, TII.get(PushOpc)).addReg(CS.getReg());
+    CSRPushSize += SlotSize;
+  }
+
+  // 4. Allocate remaining stack (locals, other spills).  The CSR slots
+  //    created by assignCalleeSavedSpillSlots are accounted for in
+  //    StackSize, but since the PUSH instructions already allocated that
+  //    space, we subtract CSRPushSize from the alloc amount here.
   int StackSize = MFI.getStackSize();
-  if (StackSize > 0) {
-    // sub r6, StackSize — RI format: [dst, src1(tied), imm]
-    BuildMI(MBB, MBBI, DL, TII.get(SubOpc), R6).addReg(R6).addImm(StackSize);
+  int AdjustedStackSize = StackSize - static_cast<int>(CSRPushSize);
+  if (AdjustedStackSize > 0) {
+    // sub r6, AdjustedStackSize — RI format: [dst, src1(tied), imm]
+    BuildMI(MBB, MBBI, DL, TII.get(SubOpc), R6)
+        .addReg(R6)
+        .addImm(AdjustedStackSize);
   }
 }
 
@@ -147,14 +187,36 @@ void ETCAFrameLowering::emitEpilogue(MachineFunction &MF,
     return;
 
   MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
+  MachineFrameInfo &MFI = MF.getFrameInfo();
   const TargetInstrInfo &TII = *ST.getInstrInfo();
   DebugLoc DL = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
 
   // SAF epilogue (insert before the return instruction):
   //   mov r6, r5       ; sp = bp
-  //   pop r5           ; restore old bp
+  //   sub r6, N        ; adjust sp down to reach pushed CSRs
+  //   pop rN           ; restore callee-saved registers
+  //   pop r5           ; restore old base pointer
 
   unsigned RegWidth = ST.getRegWidth();
+  unsigned SlotSize = RegWidth / 8;
+
+  unsigned PushOpc;
+  unsigned PopOpc;
+  switch (RegWidth) {
+  case 64:
+    PushOpc = PUSH64;
+    PopOpc = POP64;
+    break;
+  case 32:
+    PushOpc = PUSH32;
+    PopOpc = POP32;
+    break;
+  default:
+    PushOpc = PUSH;
+    PopOpc = POP;
+    break;
+  }
+
   unsigned MovOpc;
   switch (RegWidth) {
   case 64:
@@ -168,11 +230,50 @@ void ETCAFrameLowering::emitEpilogue(MachineFunction &MF,
     break;
   }
 
-  // 1. mov r6, r5 — RR format (non-tied): [dst, src]
+  unsigned SubOpc;
+  switch (RegWidth) {
+  case 64:
+    SubOpc = SUBI64;
+    break;
+  case 32:
+    SubOpc = SUBI32;
+    break;
+  default:
+    SubOpc = SUBI16;
+    break;
+  }
+
+  // 1. mov r6, r5 (sp = bp) — undo the local/spill allocation
   BuildMI(MBB, MBBI, DL, TII.get(MovOpc), R6).addReg(R5);
 
-  // 2. pop r5
-  BuildMI(MBB, MBBI, DL, TII.get(POP), R5);
+  // 2. Adjust sp down to reach the pushed CSRs.
+  unsigned CSRPushSize = 0;
+  for (auto &CS : MFI.getCalleeSavedInfo()) {
+    if (CS.getReg() == ETCA::R5 || CS.getReg() == ETCA::R6)
+      continue;
+    CSRPushSize += SlotSize;
+  }
+  if (CSRPushSize > 0) {
+    int64_t Remaining = CSRPushSize;
+    while (Remaining > 0) {
+      int64_t Step = std::min<int64_t>(Remaining, 15);
+      BuildMI(MBB, MBBI, DL, TII.get(SubOpc), R6)
+          .addReg(R6)
+          .addImm(Step);
+      Remaining -= Step;
+    }
+  }
+
+  // 3. Pop callee-saved registers (reverse of push order)
+  const auto &CSI = MFI.getCalleeSavedInfo();
+  for (auto It = CSI.rbegin(); It != CSI.rend(); ++It) {
+    if (It->getReg() == ETCA::R5 || It->getReg() == ETCA::R6)
+      continue;
+    BuildMI(MBB, MBBI, DL, TII.get(PopOpc), It->getReg());
+  }
+
+  // 4. pop r5 (restore old base pointer)
+  BuildMI(MBB, MBBI, DL, TII.get(PopOpc), R5);
 }
 
 StackOffset

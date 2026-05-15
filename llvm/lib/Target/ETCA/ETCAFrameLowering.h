@@ -54,6 +54,26 @@ public:
   assignCalleeSavedSpillSlots(MachineFunction &MF,
                               const TargetRegisterInfo *TRI,
                               std::vector<CalleeSavedInfo> &CSI) const override;
+
+  /// Save callee-saved registers using PUSH instead of per-register
+  /// store-to-stack-slot.  Returns true (handled); the actual PUSH
+  /// instructions are emitted in emitPrologue.
+  bool spillCalleeSavedRegisters(
+      MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
+      ArrayRef<CalleeSavedInfo> CSI,
+      const TargetRegisterInfo *TRI) const override {
+    return true;
+  }
+
+  /// Restore callee-saved registers using POP instead of per-register
+  /// load-from-stack-slot.  Returns true (handled); the actual POP
+  /// instructions are emitted in emitEpilogue.
+  bool restoreCalleeSavedRegisters(
+      MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
+      MutableArrayRef<CalleeSavedInfo> CSI,
+      const TargetRegisterInfo *TRI) const override {
+    return true;
+  }
 };
 
 } // namespace llvm

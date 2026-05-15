@@ -55,46 +55,67 @@ define i16 @spill_cs(i16 %v1, i16 %v2, i16 %v3, i16 %v4) {
 ; GN-LABEL: spill_cs:
 ; GN:       push %r5
 ; GN-NEXT:  movz %r5, %r6
-; GN:       sub %r6, 2
-; Spill at bp-2 (within [bp-2, bp-0])
-; GN:       store %r4,
+; GN:       push %r4
 ; GN:       call callee
+; GN:       movz %r6, %r5
+; GN:       sub %r6, 2
+; GN:       pop %r4
+; GN:       pop %r5
 ; GN:       jmpr %r7
 ;
 ; EW-LABEL: spill_cs:
 ; EW:       push %r5
 ; EW-NEXT:  movz %r5, %r6
-; EW:       sub %r6, 8
-; EW:       store %r3,
-; EW:       store %r4,
+; EW:       push %r3
+; EW-NEXT:  push %r4
 ; EW:       call callee
+; EW:       movz %r6, %r5
+; EW:       sub %r6, 8
+; EW:       pop %r4
+; EW:       pop %r3
+; EW:       pop %r5
 ; EW:       jmpr %r7
 ;
 ; QW-LABEL: spill_cs:
 ; QW:       push %r5
 ; QW-NEXT:  movz %r5, %r6
-; QW:       sub %r6, 16
-; QW:       store %r3,
-; QW:       store %r4,
+; QW:       push %r3
+; QW-NEXT:  push %r4
 ; QW:       call callee
+; QW:       movz %r6, %r5
+; QW:       sub %r6, 15
+; QW:       sub %r6, 1
+; QW:       pop %r4
+; QW:       pop %r3
+; QW:       pop %r5
 ; QW:       jmpr %r7
 ;
 ; P64-LABEL: spill_cs:
 ; P64:       push %r5
 ; P64-NEXT:  movz %r5, %r6
-; P64:       sub %r6, 16
-; P64:       store %r3,
-; P64:       store %r4,
+; P64:       push %r3
+; P64-NEXT:  push %r4
 ; P64:       call callee
+; P64:       movz %r6, %r5
+; P64:       sub %r6, 15
+; P64:       sub %r6, 1
+; P64:       pop %r4
+; P64:       pop %r3
+; P64:       pop %r5
 ; P64:       jmpr %r7
 ;
 ; W64-LABEL: spill_cs:
 ; W64:       push %r5
 ; W64-NEXT:  movz %r5, %r6
-; W64:       sub %r6, 16
-; W64:       store %r3,
-; W64:       store %r4,
+; W64:       push %r3
+; W64-NEXT:  push %r4
 ; W64:       call callee
+; W64:       movz %r6, %r5
+; W64:       sub %r6, 15
+; W64:       sub %r6, 1
+; W64:       pop %r4
+; W64:       pop %r3
+; W64:       pop %r5
 ; W64:       jmpr %r7
   call void @callee()
   %s1 = add i16 %v1, %v2

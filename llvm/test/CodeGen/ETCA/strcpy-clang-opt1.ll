@@ -38,22 +38,21 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; GEN-LABEL: mystrcpy:
 ; GEN:       push %r5
 ; GEN:       movz %r5, %r6
-; GEN:       sub %r6, 4
-;; Prologue: spill callee-saves
-; GEN:       store %r3, %r{{[0-9]+}}
-; GEN:       store %r4, %r{{[0-9]+}}
+; GEN:       push %r3
+; GEN:       push %r4
 ; GEN:       movz %r2h, 0
 ; GEN:       movz %r{{[0-9]+}}, 0
-;; Loop body: dest + index, load byte from src, store to dest, inc
-; GEN:       add %r{{[0-9]+}}, %r{{[0-9]+}}
-; GEN:       load %r{{[0-9]+}}h
-; GEN:       store %r{{[0-9]+}}h
+;; Loop body: index-based load byte from src, store to dest, inc
+; GEN:       add %r3, %r7
+; GEN:       add %r4, %r7
+; GEN:       load %r3h, %r3h
+; GEN:       store %r3h, %r4h
+; GEN:       add %r7, 1
 ;; Check for null terminator
-; GEN:       cmp %r{{[0-9]+}}, %r2
+; GEN:       cmp %r3, %r2
 ; GEN:       beq
 ; GEN:       br
-;; Return: reload original dest ptr and return
-; GEN:       load %r{{[0-9]+}}, %r{{[0-9]+}}
+;; Return: r0 (dest) still holds original value, no reload needed
 ; GEN:       jmpr %r7
 ;
 ;; --- 32-bit pointer CPUs (etca32, etca64p32) ---
@@ -61,19 +60,17 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; DW-LABEL: mystrcpy:
 ; DW:       push %r5
 ; DW:       movz %r5, %r6
-; DW:       sub %r6,
-; DW:       movz %r{{[0-9]+}}, %r5
-; DW:       store %r3, %r{{[0-9]+}}
+; DW:       push %r3
 ; DW:       movz %r2h, 0
 ;; Loop: load byte from src, store to dest, increment both pointers
-; DW:       load %r{{[0-9]+}}h, %r{{[0-9]+}}h
-; DW:       store %r{{[0-9]+}}h, %r{{[0-9]+}}h
-; DW:       add %r{{[0-9]+}}, 1
-; DW:       add %r{{[0-9]+}}, 1
-; DW:       cmp %r{{[0-9]+}}, %r2
+; DW:       load %r3h, %r1h
+; DW:       store %r3h, %r7h
+; DW:       add %r1, 1
+; DW:       add %r7, 1
+; DW:       cmp %r3, %r2
 ; DW-NEXT:  beq
 ; DW-NEXT:  br
-;; Return
+;; Return: epilogue + jmpr
 ; DW:       jmpr %r7
 ;
 ;; --- 64-bit pointer CPUs (etca64, etca32p64) ---
@@ -81,15 +78,13 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; QW-LABEL: mystrcpy:
 ; QW:       push %r5
 ; QW:       movz %r5, %r6
-; QW:       sub %r6,
-; QW:       movz %r{{[0-9]+}}, %r5
-; QW:       store %r3, %r{{[0-9]+}}
+; QW:       push %r3
 ; QW:       movz %r2h, 0
 ;; Loop: load byte from src, store to dest, increment both pointers
-; QW:       load %r{{[0-9]+}}h, %r{{[0-9]+}}h
-; QW:       store %r{{[0-9]+}}h, %r{{[0-9]+}}h
-; QW:       add %r{{[0-9]+}}, 1
-; QW:       add %r{{[0-9]+}}, 1
+; QW:       load %r3h, %r1h
+; QW:       store %r3h, %r7h
+; QW:       add %r1, 1
+; QW:       add %r7, 1
 ; QW:       cmp %r{{[0-9]+}}, %r2
 ; QW-NEXT:  beq
 ; QW-NEXT:  br

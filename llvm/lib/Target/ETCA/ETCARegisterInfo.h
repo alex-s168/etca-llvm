@@ -48,6 +48,15 @@ public:
 
   bool requiresRegisterScavenging(const MachineFunction &MF) const override;
 
+  /// ETCa LOAD/STORE instructions have no immediate offset field — they
+  /// use a pure register for the address.  Return 0 to indicate no offset
+  /// is folded into the instruction itself, so the LocalStackSlotAllocation
+  /// pass will not attempt offset folding.
+  int64_t getFrameIndexInstrOffset(const MachineInstr *MI,
+                                    int Idx) const override {
+    return 0;
+  }
+
   const uint32_t *getCallPreservedMask(const MachineFunction &MF,
                                        CallingConv::ID CC) const override;
 

@@ -284,9 +284,15 @@ let isCommutable = 1, hasSideEffects = 0, mayLoad = 0, mayStore = 0,
 
 let Predicates = [HasSAF], hasSideEffects = 1, mayLoad = 1, mayStore = 1 in {
   // POP register — loads from [sp], increments sp (r6)
-  def POP   : EInstPOP16<"pop $dst", []>;
+  def POP   : EInstPOP16<"pop $dst", []>;   // SS=01, 2-byte increment
+  def POP32 : EInstPOP<0b10, (outs GPR32:$dst), (ins), "pop $dst", []>;  // SS=10, 4-byte
+  def POP64 : EInstPOP<0b11, (outs GPR64:$dst), (ins), "pop $dst", []>;  // SS=11, 8-byte
+
   // PUSH register — decrements sp (r6), stores to [sp]
-  def PUSH  : EInstPUSHR16<"push $src", []>;
+  def PUSH  : EInstPUSHR16<"push $src", []>;   // SS=01, 2-byte
+  def PUSH32: EInstPUSHR<0b10, (outs), (ins GPR32:$src), "push $src", []>;  // SS=10, 4-byte
+  def PUSH64: EInstPUSHR<0b11, (outs), (ins GPR64:$src), "push $src", []>;  // SS=11, 8-byte
+
   // PUSH immediate
   def PUSHI : EInstPUSHI16<"push $imm", []>;
 }
