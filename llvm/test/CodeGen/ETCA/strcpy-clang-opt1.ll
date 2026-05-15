@@ -38,13 +38,11 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; GEN-LABEL: mystrcpy:
 ; GEN:       push %r5
 ; GEN:       movz %r5, %r6
-; GEN:       sub %r6, 6
-;; Prologue: spill callee-saves and arguments (using scratch regs)
+; GEN:       sub %r6, 4
+;; Prologue: spill callee-saves
 ; GEN:       store %r3, %r{{[0-9]+}}
 ; GEN:       store %r4, %r{{[0-9]+}}
-; GEN:       store %r0, %r{{[0-9]+}}
 ; GEN:       movz %r2h, 0
-; GEN:       movz %r{{[0-9]+}}, 1
 ; GEN:       movz %r{{[0-9]+}}, 0
 ;; Loop body: dest + index, load byte from src, store to dest, inc
 ; GEN:       add %r{{[0-9]+}}, %r{{[0-9]+}}
@@ -55,8 +53,7 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; GEN:       beq
 ; GEN:       br
 ;; Return: reload original dest ptr and return
-; GEN:       movz %r0, %r5
-; GEN:       load %r0, %r0
+; GEN:       load %r{{[0-9]+}}, %r{{[0-9]+}}
 ; GEN:       jmpr %r7
 ;
 ;; --- 32-bit pointer CPUs (etca32, etca64p32) ---
@@ -67,15 +64,12 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; DW:       sub %r6,
 ; DW:       movz %r{{[0-9]+}}, %r5
 ; DW:       store %r3, %r{{[0-9]+}}
-; DW:       movz %r{{[0-9]+}}, %r5
-; DW:       store %r4, %r{{[0-9]+}}
 ; DW:       movz %r2h, 0
-; DW:       movz %r{{[0-9]+}}d, 1
 ;; Loop: load byte from src, store to dest, increment both pointers
 ; DW:       load %r{{[0-9]+}}h, %r{{[0-9]+}}h
 ; DW:       store %r{{[0-9]+}}h, %r{{[0-9]+}}h
-; DW:       add %r{{[0-9]+}}, %r{{[0-9]+}}d
-; DW:       add %r{{[0-9]+}}, %r{{[0-9]+}}d
+; DW:       add %r{{[0-9]+}}, 1
+; DW:       add %r{{[0-9]+}}, 1
 ; DW:       cmp %r{{[0-9]+}}, %r2
 ; DW-NEXT:  beq
 ; DW-NEXT:  br
@@ -90,15 +84,12 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; QW:       sub %r6,
 ; QW:       movz %r{{[0-9]+}}, %r5
 ; QW:       store %r3, %r{{[0-9]+}}
-; QW:       movz %r{{[0-9]+}}, %r5
-; QW:       store %r4, %r{{[0-9]+}}
 ; QW:       movz %r2h, 0
-; QW:       movz %r{{[0-9]+}}q, 1
 ;; Loop: load byte from src, store to dest, increment both pointers
 ; QW:       load %r{{[0-9]+}}h, %r{{[0-9]+}}h
 ; QW:       store %r{{[0-9]+}}h, %r{{[0-9]+}}h
-; QW:       add %r{{[0-9]+}}, %r{{[0-9]+}}q
-; QW:       add %r{{[0-9]+}}, %r{{[0-9]+}}q
+; QW:       add %r{{[0-9]+}}, 1
+; QW:       add %r{{[0-9]+}}, 1
 ; QW:       cmp %r{{[0-9]+}}, %r2
 ; QW-NEXT:  beq
 ; QW-NEXT:  br

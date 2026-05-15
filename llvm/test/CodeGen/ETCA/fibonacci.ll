@@ -12,8 +12,7 @@
 
 define i16 @fib(i16 %n) {
 ; CHECK-LABEL: fib:
-; CHECK:       movz %r{{[0-9]+}}, %r5
-; CHECK:       store %r3, %r{{[0-9]+}}
+; CHECK:       movz %r5, %r6
 ; CHECK:       cmp
 ; CHECK:       bltu
 ; CHECK:       br

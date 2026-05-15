@@ -77,8 +77,7 @@ define i16 @pass_through(i16 %x) {
 
 define i16 @add_const(i16 %x) {
 ; CHECK-LABEL: add_const:
-; CHECK:       movz %r1, 5
-; CHECK:       add %r0, %r1
+; CHECK:       add %r0, 5
 ; CHECK:       jmpr %r7
   %r = add i16 %x, 5
   ret i16 %r
@@ -99,8 +98,7 @@ define i16 @and_const(i16 %x) {
 
 define i16 @add_zero(i16 %x) {
 ; CHECK-LABEL: add_zero:
-; CHECK:       movz %r1, 0
-; CHECK:       add %r0, %r1
+; CHECK:       add %r0, 0
 ; CHECK:       jmpr %r7
   %r = add i16 %x, 0
   ret i16 %r

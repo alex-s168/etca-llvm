@@ -320,6 +320,55 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     LLT DstTy = MRI->getType(Dst);
     const TargetRegisterClass *RC = getRCForType(DstTy);
     unsigned Size = DstTy.getSizeInBits();
+
+    // For ADD and SUB, check if Src2 is a small constant that fits in
+    // the RI immediate range ([-16, 15] for 16-bit, [-16, 15] for 32/64).
+    // If so, use ADDI/SUBI to avoid allocating a register for the
+    // constant and thus avoid unnecessary callee-saved-register spills.
+    bool UseImmForm = false;
+    int64_t ImmVal = 0;
+    if (MI.getOpcode() == TargetOpcode::G_ADD ||
+        MI.getOpcode() == TargetOpcode::G_SUB) {
+      if (auto *DefMI = MRI->getVRegDef(Src2)) {
+        if (DefMI->getOpcode() == TargetOpcode::G_CONSTANT) {
+          ImmVal = DefMI->getOperand(1).getCImm()->getSExtValue();
+          // ETCa RI range: [-16, 15] for all word sizes.
+          if (ImmVal >= -16 && ImmVal <= 15)
+            UseImmForm = true;
+        }
+      }
+    }
+
+    if (UseImmForm) {
+      // Use ADDI/SUBI (register-immediate form).
+      // ADDI dst, src, imm → dst = src + imm
+      // SUBI dst, src, imm → dst = src - imm
+      unsigned ImmOpc;
+      bool IsSub = (MI.getOpcode() == TargetOpcode::G_SUB);
+      switch (Size) {
+      case 64:
+        ImmOpc = IsSub ? ETCA::SUBI64 : ETCA::ADDI64;
+        break;
+      case 32:
+        ImmOpc = IsSub ? ETCA::SUBI32 : ETCA::ADDI32;
+        break;
+      case 8:
+        ImmOpc = IsSub ? ETCA::SUBI8 : ETCA::ADDI8;
+        break;
+      default:
+        ImmOpc = IsSub ? ETCA::SUBI16 : ETCA::ADDI16;
+        break;
+      }
+      // ADDI/SUBI dst, src, imm — not tied (no COPY needed).
+      BuildMI(MBB, MI, MIMD, TII.get(ImmOpc), Dst)
+          .addReg(Src1)
+          .addImm(ImmVal);
+      if (!constrainReg(Dst, DstTy, RBI, *MRI))
+        return false;
+      MI.eraseFromParent();
+      return true;
+    }
+
     unsigned ETCaOpc = getETCAAluOpcode(MI.getOpcode(), Size);
 
     // Copy Src1 to a temp (no tied-def since COPY is generic).
@@ -653,7 +702,40 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     const TargetRegisterClass *RC = getRCForType(DstTy);
     unsigned Size = DstTy.getSizeInBits();
 
-    // Same two-address SSA approach as G_ADD.
+    // Check if Src2 is a small constant that fits in RI range.
+    // Using ADDI avoids allocating a register for the constant.
+    if (auto *DefMI = MRI->getVRegDef(Src2)) {
+      if (DefMI->getOpcode() == TargetOpcode::G_CONSTANT) {
+        int64_t ImmVal = DefMI->getOperand(1).getCImm()->getSExtValue();
+        if (ImmVal >= -16 && ImmVal <= 15) {
+          unsigned AddiOpc;
+          switch (Size) {
+          case 64:
+            AddiOpc = ETCA::ADDI64;
+            break;
+          case 32:
+            AddiOpc = ETCA::ADDI32;
+            break;
+          case 8:
+            AddiOpc = ETCA::ADDI8;
+            break;
+          default:
+            AddiOpc = ETCA::ADDI16;
+            break;
+          }
+          // ADDI dst, src, imm — not tied, no COPY needed.
+          BuildMI(MBB, MI, MIMD, TII.get(AddiOpc), Dst)
+              .addReg(Src1)
+              .addImm(ImmVal);
+          if (!constrainReg(Dst, DstTy, RBI, *MRI))
+            return false;
+          MI.eraseFromParent();
+          return true;
+        }
+      }
+    }
+
+    // Fall back to RR form.
     Register Tmp = MRI->createVirtualRegister(RC);
     BuildMI(MBB, MI, MIMD, TII.get(TargetOpcode::COPY), Tmp).addReg(Src1);
     if (!constrainReg(Tmp, DstTy, RBI, *MRI))

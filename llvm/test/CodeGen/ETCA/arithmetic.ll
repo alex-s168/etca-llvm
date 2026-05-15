@@ -34,8 +34,7 @@ define i16 @add_rr(i16 %a, i16 %b) {
 
 define i16 @add_ri_small(i16 %a) {
 ; CHECK-LABEL: add_ri_small:
-; CHECK:       movz %r1, 10
-; CHECK:       add %r0, %r1
+; CHECK:       add %r0, 10
 ; CHECK:       jmpr %r7
   %r = add i16 %a, 10
   ret i16 %r
@@ -70,8 +69,7 @@ define i16 @sub_rr(i16 %a, i16 %b) {
 
 define i16 @sub_ri_small(i16 %a) {
 ; CHECK-LABEL: sub_ri_small:
-; CHECK:       movz %r1, 1
-; CHECK:       sub %r0, %r1
+; CHECK:       sub %r0, 1
 ; CHECK:       jmpr %r7
   %r = sub i16 %a, 1
   ret i16 %r

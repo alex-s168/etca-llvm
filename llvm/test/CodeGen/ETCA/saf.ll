@@ -43,8 +43,7 @@ base:
 
 define i16 @fib(i16 %n) {
 ; CHECK-LABEL: fib:
-; CHECK:       movz %r{{[0-9]+}}, %r5
-; CHECK:       store %r3, %r{{[0-9]+}}
+; CHECK:       movz %r5, %r6
 ; CHECK:       cmp
 ; CHECK:       bltu
 ; CHECK:       br
@@ -124,9 +123,7 @@ define i16 @branch_sgt(i16 %a, i16 %b) {
 
 define i16 @loop(i16 %limit) {
 ; CHECK-LABEL: loop:
-; CHECK:       sub %r6
-; CHECK:       movz %r{{[0-9]+}}, %r5
-; CHECK:       store %r3, %r{{[0-9]+}}
+; CHECK:       movz %r5, %r6
 ; CHECK:       add
 ; CHECK:       cmp
 ; CHECK:       blt

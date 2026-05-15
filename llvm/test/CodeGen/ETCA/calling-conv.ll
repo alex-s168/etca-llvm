@@ -137,7 +137,7 @@ define i16 @simple_recursion(i16 %n) {
 ; CHECK:       cmp %r0, %r1
 ; CHECK:       beq
 ; CHECK:       br
-; CHECK:       sub %r0, %r1
+; CHECK:       sub %r0, 1
 ; CHECK:       call simple_recursion
 ; CHECK:       jmpr %r7
   %cmp = icmp eq i16 %n, 0
@@ -158,7 +158,7 @@ define i16 @odd(i16 %n) {
 ; CHECK-LABEL: odd:
 ; CHECK:       cmp %r0, %r1
 ; CHECK:       beq
-; CHECK:       sub %r0, %r1
+; CHECK:       sub %r0, 1
 ; CHECK:       call even
 ; CHECK:       jmpr %r7
   %cmp = icmp eq i16 %n, 0

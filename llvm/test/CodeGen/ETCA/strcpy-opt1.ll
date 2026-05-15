@@ -65,9 +65,9 @@ define ptr @astrcpy(ptr %dest, ptr %src) {
 ; GEN:       load %r{{[0-9]+}}h
 ; GEN:       store %r{{[0-9]+}}h
 ;; Increment both pointers
-; GEN:       add %r{{[0-9]+}}, %r{{[0-9]+}}
+; GEN:       add %r{{[0-9]+}}, 1
 ; GEN:       store %r{{[0-9]+}}, %r{{[0-9]+}}
-; GEN:       add %r{{[0-9]+}}, %r{{[0-9]+}}
+; GEN:       add %r{{[0-9]+}}, 1
 ; GEN:       store %r{{[0-9]+}}, %r{{[0-9]+}}
 ;; Return original dest pointer
 ; GEN:       jmpr %r7
@@ -92,10 +92,10 @@ define ptr @astrcpy(ptr %dest, ptr %src) {
 ; DW:       load %r{{[0-9]+}}h
 ; DW:       store %r{{[0-9]+}}h
 ;; Increment src pointer
-; DW:       add %r{{[0-9]+}}, %r{{[0-9]+}}
+; DW:       add %r{{[0-9]+}}, 1
 ; DW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
 ;; Increment dst pointer
-; DW:       add %r{{[0-9]+}}, %r{{[0-9]+}}
+; DW:       add %r{{[0-9]+}}, 1
 ; DW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
 ;; Return
 ; DW:       jmpr %r7
@@ -120,10 +120,10 @@ define ptr @astrcpy(ptr %dest, ptr %src) {
 ; QW:       load %r{{[0-9]+}}h
 ; QW:       store %r{{[0-9]+}}h
 ;; Increment src pointer
-; QW:       add %r{{[0-9]+}}, %r{{[0-9]+}}
+; QW:       add %r{{[0-9]+}}, 1
 ; QW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
 ;; Increment dst pointer
-; QW:       add %r{{[0-9]+}}, %r{{[0-9]+}}
+; QW:       add %r{{[0-9]+}}, 1
 ; QW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
 ;; Return
 ; QW:       jmpr %r7

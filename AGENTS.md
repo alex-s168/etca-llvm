@@ -67,6 +67,25 @@ The real `AsmBackend` is in `MCTargetDesc/ETCAMCTargetDesc.cpp`. `MCTargetDesc/E
 ### CMP-RI disassembler conflict
 TableGen `-gen-disassembler` fails because CMP-RI and TEST-RI encodings overlap with other RR instructions. The disassembler is **manually implemented** in `Disassembler/ETCADisassembler.cpp`.
 
+### Frame layout fix (2026-05-15)
+`getFrameIndexReference` in `ETCAFrameLowering.cpp` was returning `Offset = ObjectOffset - StackSize` for non-fixed objects, which placed all spill slots and local variables **below sp** (outside the allocated frame memory).  The fix changes the formula to `Offset = ObjectOffset` — PEI already assigns `ObjectOffset` values (-2, -4, -6, ...) that directly map to the desired bp-relative offsets, and the `sub r6, StackSize` in the prologue allocates the exact amount needed.
+
+**Before** (spills go below sp, corrupting memory):
+```
+  sub r6, 8          ; sp = bp - 8
+  store r3, r5-14    ; r3 at bp-14 — 6 bytes below sp!
+  store r4, r5-16    ; r4 at bp-16 — 8 bytes below sp!
+```
+
+**After** (all spills within the allocated frame):
+```
+  sub r6, 8          ; sp = bp - 8
+  store r3, r5-6     ; r3 at bp-6 — within [bp-8, bp-0] ✓
+  store r4, r5-8     ; r4 at bp-8 (= sp) ✓
+```
+
+Test: `llvm/test/CodeGen/ETCA/stack-frame.ll` verifies this on all 5 CPU models.
+
 ### NOP encoding: 0x008F
 All NOP emission paths use `0x008F` ([0x8F, 0x00] LE) — the canonical 2-byte base-ISA NOP per binutils `etca_build_nop`:
 - `ETCAInstrInfo.td: NOP Inst{15-0}` = `0x008F`
