@@ -78,7 +78,6 @@ define void @multi_call() {
 
 define i16 @branch_eq(i16 %a, i16 %b) {
 ; CHECK-LABEL: branch_eq:
-; CHECK:       movz %r5, %r6
 ; CHECK:       cmp
 ; CHECK:       beq
 ; CHECK-NOT:   cmp
@@ -123,7 +122,6 @@ define i16 @branch_sgt(i16 %a, i16 %b) {
 
 define i16 @loop(i16 %limit) {
 ; CHECK-LABEL: loop:
-; CHECK:       movz %r5, %r6
 ; CHECK:       add
 ; CHECK:       cmp
 ; CHECK:       blt

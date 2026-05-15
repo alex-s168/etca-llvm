@@ -47,15 +47,43 @@ using namespace llvm;
 using namespace ETCA;
 
 bool ETCAFrameLowering::hasFPImpl(const MachineFunction &MF) const {
-  // With SAF, we use r5 (bp) as the frame pointer.
   const auto &ST = MF.getSubtarget<ETCASubtarget>();
-  return ST.hasSAF();
+  if (!ST.hasSAF())
+    return false;
+
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+
+  // Respect user request (-fno-omit-frame-pointer / frame-pointer=all).
+  // This is the standard hook that every target calls first.
+  if (MF.getTarget().Options.DisableFramePointerElim(MF))
+    return true;
+
+  // Frame pointer is required when the function actually needs stack
+  // access that can't be sp-relative:
+  //   1. Variable-sized stack objects (alloca/VLA)
+  //   2. Frame address has been taken (e.g., by builtin frame address)
+  //   3. The function has calls (needed for unwind/debug info)
+  //   4. The stack has been adjusted (callee-saved spills, locals)
+  if (MFI.hasVarSizedObjects())
+    return true;
+  if (MFI.isFrameAddressTaken())
+    return true;
+  if (MFI.hasCalls())
+    return true;
+  if (MFI.getStackSize() > 0)
+    return true;
+
+  // Leaf functions with no stack accesses don't need a frame pointer.
+  return false;
 }
 
 void ETCAFrameLowering::emitPrologue(MachineFunction &MF,
                                      MachineBasicBlock &MBB) const {
   const auto &ST = MF.getSubtarget<ETCASubtarget>();
   if (!ST.hasSAF())
+    return;
+  // Skip frame setup if the function doesn't need a frame pointer.
+  if (!hasFP(MF))
     return;
 
   MachineBasicBlock::iterator MBBI = MBB.begin();
@@ -113,6 +141,9 @@ void ETCAFrameLowering::emitEpilogue(MachineFunction &MF,
                                      MachineBasicBlock &MBB) const {
   const auto &ST = MF.getSubtarget<ETCASubtarget>();
   if (!ST.hasSAF())
+    return;
+  // Skip frame teardown if the function doesn't need a frame pointer.
+  if (!hasFP(MF))
     return;
 
   MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();

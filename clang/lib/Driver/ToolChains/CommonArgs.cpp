@@ -98,6 +98,7 @@ static bool useFramePointerForTargetByDefault(const llvm::opt::ArgList &Args,
   case llvm::Triple::amdgcn:
   case llvm::Triple::r600:
   case llvm::Triple::csky:
+  case llvm::Triple::etca:
   case llvm::Triple::loongarch32:
   case llvm::Triple::loongarch64:
   case llvm::Triple::m68k:

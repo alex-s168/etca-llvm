@@ -24,8 +24,6 @@
 ;; --- 1. No stack frame (leaf, no spills) ---
 define i16 @no_frame(i16 %a) {
 ; CHK-LABEL: no_frame:
-; CHK:       push %r5
-; CHK-NEXT:  movz %r5, %r6
 ; CHK:       jmpr %r7
   ret i16 %a
 }
