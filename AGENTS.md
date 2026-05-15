@@ -187,11 +187,16 @@ The InstPrinter now prints `%rNh` suffix for byte-width register operands. Full 
 - [ ] LLVM test suite integration
 
 ### Clang & Tools
-- [ ] clang driver support (`etca-unknown-elf` target triple)
+- [x] clang driver support (`etca-unknown-elf` target triple, `-mcpu=` for 5 CPU models, proper DataLayout, preprocessor defines `__etca__`/`__ETCA__`, C++ name mangling, all word/address width combos supported)
 - [ ] clang intrinsics for ETCa-specific operations (READCR, WRITECR, etc.)
 - [ ] compiler-rt builtins (soft-float, div/mod, etc.)
 - [ ] lld linker support (ETCA ELF linking)
 - [ ] Assembly syntax tests cross-checked vs etca binutils output
+
+### Driver Implementation Details
+- `clang/lib/Basic/Targets/ETCA.{h,cpp}` — TargetInfo: dynamic type sizes via `setCPU()`, 5 CPU models (generic/etca32/etca32p64/etca64p32/etca64), LP-like C type model, GCC register names and aliases for inline asm, preprocessor defines (`__etca__`, `__ETCA__`, `__ETCA_GENERIC__`, `__ETCA32__`, etc., `__ETCA_WORD_SIZE__`, `__ETCA_PTR_SIZE__`, extension detection macros)
+- `clang/lib/Driver/ToolChains/ETCA.{h,cpp}` — ToolChain: `Generic_ELF`-based, GCC installation discovery, ELF linker (cta-elf-ld), bare-metal defaults
+- Registered in `Driver.cpp`, `Targets.cpp`, `Clang.cpp` (isSignedCharDefault), `CommonArgs.cpp` (getCPUName with `-mcpu=` mapping)
 
 ### Spec Conformance Audit
 - [ ] Re-check instruction encodings against `etca-spec/base-isa.md` (SS bits, CCCC opcodes, condition codes)

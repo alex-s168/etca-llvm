@@ -746,6 +746,10 @@ std::string tools::getCPUName(const Driver &D, const ArgList &Args,
     return arm::getARMTargetCPU(MCPU, MArch, T);
   }
 
+  case llvm::Triple::etca:
+    if (const Arg *A = Args.getLastArg(options::OPT_mcpu_EQ))
+      return A->getValue();
+    return "generic";
   case llvm::Triple::avr:
     if (const Arg *A = Args.getLastArg(options::OPT_mmcu_EQ))
       return A->getValue();

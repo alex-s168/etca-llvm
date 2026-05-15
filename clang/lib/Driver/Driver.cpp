@@ -14,6 +14,7 @@
 #include "ToolChains/Arch/RISCV.h"
 #include "ToolChains/BareMetal.h"
 #include "ToolChains/CSKYToolChain.h"
+#include "ToolChains/ETCA.h"
 #include "ToolChains/Clang.h"
 #include "ToolChains/CrossWindows.h"
 #include "ToolChains/Cuda.h"
@@ -7229,6 +7230,9 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
       case llvm::Triple::wasm32:
       case llvm::Triple::wasm64:
         TC = std::make_unique<toolchains::WebAssembly>(*this, Target, Args);
+        break;
+      case llvm::Triple::etca:
+        TC = std::make_unique<toolchains::ETCAToolChain>(*this, Target, Args);
         break;
       case llvm::Triple::avr:
         TC = std::make_unique<toolchains::AVRToolChain>(*this, Target, Args);
