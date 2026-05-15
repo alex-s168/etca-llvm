@@ -34,14 +34,14 @@ enum NodeType : unsigned {
 // Condition codes for ETCA branch instructions.
 // These map directly to the 4-bit condition field in the branch encoding.
 enum CondCode : unsigned {
-  COND_EQ  = 0,  // Equal / Zero (Z)
-  COND_NE  = 1,  // Not Equal / Not Zero (~Z)
-  COND_LT  = 2,  // Less Than / Negative (N)
-  COND_GE  = 3,  // Greater or Equal / Not Negative (~N)
+  COND_EQ = 0,   // Equal / Zero (Z)
+  COND_NE = 1,   // Not Equal / Not Zero (~Z)
+  COND_LT = 2,   // Less Than / Negative (N)
+  COND_GE = 3,   // Greater or Equal / Not Negative (~N)
   COND_ULT = 4,  // Unsigned Less Than / Carry (C)
   COND_UGE = 5,  // Unsigned Greater or Equal / No Carry (~C)
-  COND_LE  = 10, // Less or Equal (N != V)
-  COND_GT  = 11, // Greater (N == V)
+  COND_LE = 10,  // Less or Equal (N != V)
+  COND_GT = 11,  // Greater (N == V)
   COND_ULE = 12, // Unsigned Less or Equal (C | Z)
   COND_UGT = 13, // Unsigned Greater (~(C | Z))
 };
@@ -75,11 +75,9 @@ public:
                                const SDLoc &DL, SelectionDAG &DAG,
                                SmallVectorImpl<SDValue> &InVals) const override;
 
-  SDValue LowerReturn(SDValue Chain, CallingConv::ID CallConv,
-                      bool isVarArg,
+  SDValue LowerReturn(SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
                       const SmallVectorImpl<ISD::OutputArg> &Outs,
-                      const SmallVectorImpl<SDValue> &OutVals,
-                      const SDLoc &DL,
+                      const SmallVectorImpl<SDValue> &OutVals, const SDLoc &DL,
                       SelectionDAG &DAG) const override;
 
   SDValue LowerCall(TargetLowering::CallLoweringInfo &CLI,
@@ -87,7 +85,8 @@ public:
 
   /// isLegalAddressingMode - Return true if the addressing mode is legal.
   bool isLegalAddressingMode(const DataLayout &DL, const AddrMode &AM, Type *Ty,
-                             unsigned AS, Instruction *I = nullptr) const override;
+                             unsigned AS,
+                             Instruction *I = nullptr) const override;
 
 private:
   const ETCASubtarget &STI;

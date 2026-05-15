@@ -90,18 +90,42 @@ bool ETCASelectExpand::runOnMachineFunction(MachineFunction &MF) {
     // Determine branch instruction.
     unsigned BrOpc;
     switch (Pred) {
-    case 0:  BrOpc = ETCA::BNE;  break;
-    case 1:  BrOpc = ETCA::BEQ;  break;
-    case 2:  BrOpc = ETCA::BNE;  break;
-    case 3:  BrOpc = ETCA::BGTU; break;
-    case 4:  BrOpc = ETCA::BGEU; break;
-    case 5:  BrOpc = ETCA::BLTU; break;
-    case 6:  BrOpc = ETCA::BLEU; break;
-    case 7:  BrOpc = ETCA::BGT;  break;
-    case 8:  BrOpc = ETCA::BGE;  break;
-    case 9:  BrOpc = ETCA::BLT;  break;
-    case 10: BrOpc = ETCA::BLE;  break;
-    default: BrOpc = ETCA::BNE;  break;
+    case 0:
+      BrOpc = ETCA::BNE;
+      break;
+    case 1:
+      BrOpc = ETCA::BEQ;
+      break;
+    case 2:
+      BrOpc = ETCA::BNE;
+      break;
+    case 3:
+      BrOpc = ETCA::BGTU;
+      break;
+    case 4:
+      BrOpc = ETCA::BGEU;
+      break;
+    case 5:
+      BrOpc = ETCA::BLTU;
+      break;
+    case 6:
+      BrOpc = ETCA::BLEU;
+      break;
+    case 7:
+      BrOpc = ETCA::BGT;
+      break;
+    case 8:
+      BrOpc = ETCA::BGE;
+      break;
+    case 9:
+      BrOpc = ETCA::BLT;
+      break;
+    case 10:
+      BrOpc = ETCA::BLE;
+      break;
+    default:
+      BrOpc = ETCA::BNE;
+      break;
     }
 
     // Split MBB after SELECT_Pseudo.
@@ -109,8 +133,8 @@ bool ETCASelectExpand::runOnMachineFunction(MachineFunction &MF) {
     MF.insert(std::next(MBB.getIterator()), MBBCont);
 
     // Move instructions after SELECT_Pseudo to MBBCont.
-    MBBCont->splice(MBBCont->end(), &MBB,
-                    std::next(MI->getIterator()), MBB.end());
+    MBBCont->splice(MBBCont->end(), &MBB, std::next(MI->getIterator()),
+                    MBB.end());
     MBBCont->transferSuccessorsAndUpdatePHIs(&MBB);
 
     // Create TrueBB and FalseBB between MBB and MBBCont.

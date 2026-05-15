@@ -20,12 +20,12 @@
 // Two tiers of type legality:
 //
 // Tier 1 — Data-flow ops (G_ZEXT, G_SEXT, G_TRUNC, G_MERGE_VALUES,
-//          G_UNMERGE_VALUES, G_CONSTANT, G_LOAD, G_STORE, G_PHI, G_IMPLICIT_DEF,
-//          G_FRAME_INDEX, G_GLOBAL_VALUE, G_PTR_ADD):
-//          s32 and s64 are ALWAYS legal because the instruction selector handles
-//          these manually (e.g., G_ZEXT uses MOVZ at source width + COPY bridge).
-//          Making these illegal would cause the legalizer to create G_MERGE_VALUES
-//          of illegal result types, leading to infinite regress.
+//          G_UNMERGE_VALUES, G_CONSTANT, G_LOAD, G_STORE, G_PHI,
+//          G_IMPLICIT_DEF, G_FRAME_INDEX, G_GLOBAL_VALUE, G_PTR_ADD): s32 and
+//          s64 are ALWAYS legal because the instruction selector handles these
+//          manually (e.g., G_ZEXT uses MOVZ at source width + COPY bridge).
+//          Making these illegal would cause the legalizer to create
+//          G_MERGE_VALUES of illegal result types, leading to infinite regress.
 //
 // Tier 2 — Computation ops (G_ADD, G_SUB, G_AND, G_OR, G_XOR, G_SHL, G_ICMP,
 //          G_SELECT):
@@ -58,15 +58,15 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
 
   unsigned PS = ST.getPtrSize();
   bool HasByte = ST.hasByte();
-  bool HasDW   = ST.hasDW();
-  bool HasQW   = ST.hasQW();
+  bool HasDW = ST.hasDW();
+  bool HasQW = ST.hasQW();
 
-  const LLT s1  = LLT::scalar(1);
-  const LLT s8  = LLT::scalar(8);
+  const LLT s1 = LLT::scalar(1);
+  const LLT s8 = LLT::scalar(8);
   const LLT s16 = LLT::scalar(16);
   const LLT s32 = LLT::scalar(32);
   const LLT s64 = LLT::scalar(64);
-  const LLT p0  = LLT::pointer(0, PS);
+  const LLT p0 = LLT::pointer(0, PS);
 
   // Minimum legal scalar — i8 if BYTE extension, otherwise i16.
   LLT MinLegal = HasByte ? s8 : s16;
@@ -100,8 +100,8 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   // Arithmetic and logical operations — TIER 2 (subtarget-gated)
   //===----------------------------------------------------------------===//
 
-  auto &ArithActions = getActionDefinitionsBuilder(
-      {G_ADD, G_SUB, G_AND, G_OR, G_XOR, G_SHL});
+  auto &ArithActions =
+      getActionDefinitionsBuilder({G_ADD, G_SUB, G_AND, G_OR, G_XOR, G_SHL});
   computeTypes(ArithActions);
   ArithActions.widenScalarToNextPow2(0, MinLegal.getSizeInBits());
   ArithActions.clampScalar(0, MinLegal, MaxComp);
@@ -182,11 +182,9 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   dataFlowTypes(ImpDefActions);
   ImpDefActions.clampScalar(0, MinLegal, s64);
 
-  getActionDefinitionsBuilder(G_FRAME_INDEX)
-      .legalFor({p0});
+  getActionDefinitionsBuilder(G_FRAME_INDEX).legalFor({p0});
 
-  getActionDefinitionsBuilder(G_GLOBAL_VALUE)
-      .legalFor({p0});
+  getActionDefinitionsBuilder(G_GLOBAL_VALUE).legalFor({p0});
 
   //===----------------------------------------------------------------===//
   // Pointer arithmetic — TIER 1 (data-flow)

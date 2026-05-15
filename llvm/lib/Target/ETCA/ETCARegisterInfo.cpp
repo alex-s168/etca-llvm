@@ -36,9 +36,12 @@ const TargetRegisterClass *
 ETCARegisterInfo::getPointerRegClass(unsigned Kind) const {
   // Return the register class matching the pointer size.
   switch (ST.getPtrSize()) {
-  case 32: return &GPR32RegClass;
-  case 64: return &GPR64RegClass;
-  default: return &GPRRegClass; // 16-bit
+  case 32:
+    return &GPR32RegClass;
+  case 64:
+    return &GPR64RegClass;
+  default:
+    return &GPRRegClass; // 16-bit
   }
 }
 
@@ -47,16 +50,13 @@ ETCARegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   // SAF ABI: r3(s0), r4(s1), r5(bp), r6(sp) are callee-saved.
   // Without SAF, nothing is callee-saved (can't have function calls).
   if (ST.hasSAF()) {
-    static const MCPhysReg CalleeSavedRegs[] = {
-      ETCA::R3, ETCA::R4, ETCA::R5, ETCA::R6, 0
-    };
+    static const MCPhysReg CalleeSavedRegs[] = {ETCA::R3, ETCA::R4, ETCA::R5,
+                                                ETCA::R6, 0};
     return CalleeSavedRegs;
   }
   static const MCPhysReg NoCalleeSaved[] = {0};
   return NoCalleeSaved;
 }
-
-
 
 BitVector ETCARegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   BitVector Reserved(getNumRegs());
@@ -77,9 +77,9 @@ BitVector ETCARegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   return Reserved;
 }
 
-bool ETCARegisterInfo::eliminateFrameIndex(
-    MachineBasicBlock::iterator II, int SPAdj, unsigned FIOperandNum,
-    RegScavenger *RS) const {
+bool ETCARegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
+                                           int SPAdj, unsigned FIOperandNum,
+                                           RegScavenger *RS) const {
   MachineInstr &MI = *II;
   MachineBasicBlock &MBB = *MI.getParent();
   MachineFunction &MF = *MBB.getParent();
@@ -87,8 +87,7 @@ bool ETCARegisterInfo::eliminateFrameIndex(
 
   int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
   Register FrameReg;
-  StackOffset Offset =
-      TFI->getFrameIndexReference(MF, FrameIndex, FrameReg);
+  StackOffset Offset = TFI->getFrameIndexReference(MF, FrameIndex, FrameReg);
 
   // Replace the frame index operand with FrameReg + offset.
   // For LOAD/STORE, the address must be in a register.
@@ -117,8 +116,9 @@ bool ETCARegisterInfo::eliminateFrameIndex(
   return false;
 }
 
-const uint32_t *ETCARegisterInfo::getCallPreservedMask(
-    const MachineFunction &MF, CallingConv::ID CC) const {
+const uint32_t *
+ETCARegisterInfo::getCallPreservedMask(const MachineFunction &MF,
+                                       CallingConv::ID CC) const {
   // SAF ABI: R3(s0), R4(s1), R5(bp), R6(sp) are callee-saved.
   // The CSR_ETCA_RegMask is auto-generated from the CalleeSavedRegs definition
   // in ETCACallingConv.td.

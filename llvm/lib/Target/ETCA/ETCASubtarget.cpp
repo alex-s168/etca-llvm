@@ -11,9 +11,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "ETCASubtarget.h"
+#include "ETCAISelLowering.h"
 #include "ETCAInstrInfo.h"
 #include "ETCARegisterInfo.h"
-#include "ETCAISelLowering.h"
 #include "GISel/ETCAInstructionSelector.h"
 #include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/IR/DataLayout.h"
@@ -29,12 +29,12 @@ using namespace llvm;
 #include "ETCAGenSubtargetInfo.inc"
 
 std::string ETCASubtarget::buildDataLayoutString(unsigned WordSize,
-                                                  unsigned PtrSize) {
+                                                 unsigned PtrSize) {
   // Format: "e-m:e-p:PS:PS-i8:8-i16:16-i32:32-i64:64-a:0-n8:16"
   // where PS is the pointer size.
-  // For 16-bit word size, i32 and i64 are not natively aligned (they are 16-bit).
-  // For 32-bit word size, i64 is not natively aligned.
-  // For 64-bit word size, everything is natively aligned.
+  // For 16-bit word size, i32 and i64 are not natively aligned (they are
+  // 16-bit). For 32-bit word size, i64 is not natively aligned. For 64-bit word
+  // size, everything is natively aligned.
   //
   // Key: i32:WS means i32 is WS-bit aligned in memory (where WS = WordSize).
   // The pointer size determines p:PS:PS.
@@ -42,7 +42,7 @@ std::string ETCASubtarget::buildDataLayoutString(unsigned WordSize,
   std::string Ret;
   raw_string_ostream OS(Ret);
 
-  OS << "e-m:e"                          // little-endian, ELF mangling
+  OS << "e-m:e"                             // little-endian, ELF mangling
      << "-p:" << PtrSize << ":" << PtrSize; // pointer size & ABI alignment
 
   // Integer alignments: i8 always byte-aligned, i16 at 16-bit aligns,
@@ -65,8 +65,8 @@ std::string ETCASubtarget::buildDataLayoutString(unsigned WordSize,
   else
     OS << "-i64:16"; // i64 is 16-bit aligned on 16-bit machines
 
-  OS << "-a:0"          // aggregate alignment 0 = use natural alignment
-     << "-n8:16"        // native integer widths: 8, 16 bits
+  OS << "-a:0"            // aggregate alignment 0 = use natural alignment
+     << "-n8:16"          // native integer widths: 8, 16 bits
      << "-S" << WordSize; // stack alignment = register width (in bits)
 
   return Ret;
@@ -76,40 +76,39 @@ void ETCASubtarget::buildDLString() {
   DLString = buildDataLayoutString(WordSize, PtrSize);
 }
 
-void ETCASubtarget::initLibcallLoweringInfo(
-    LibcallLoweringInfo &Info) const {
+void ETCASubtarget::initLibcallLoweringInfo(LibcallLoweringInfo &Info) const {
   // Register standard compiler-rt libcall implementations for integer
   // MUL, DIV, and REM operations that are not natively supported.
   //
   // The default RuntimeLibcallsInfo does not set ANY implementations as
   // available for unrecognized target triples (like ETCA's custom triple).
   // Each target must register its own available implementations.
-  
+
   // Integer arithmetic libcalls
   const struct {
     const RTLIB::Libcall Op;
     const RTLIB::LibcallImpl Impl;
   } IntLibcalls[] = {
-    {RTLIB::MUL_I8,  RTLIB::impl___mulqi3},
-    {RTLIB::MUL_I16, RTLIB::impl___mulhi3},
-    {RTLIB::MUL_I32, RTLIB::impl___mulsi3},
-    {RTLIB::MUL_I64, RTLIB::impl___muldi3},
-    {RTLIB::SDIV_I8,  RTLIB::impl___divqi3},
-    {RTLIB::SDIV_I16, RTLIB::impl___divhi3},
-    {RTLIB::SDIV_I32, RTLIB::impl___divsi3},
-    {RTLIB::SDIV_I64, RTLIB::impl___divdi3},
-    {RTLIB::UDIV_I8,  RTLIB::impl___udivqi3},
-    {RTLIB::UDIV_I16, RTLIB::impl___udivhi3},
-    {RTLIB::UDIV_I32, RTLIB::impl___udivsi3},
-    {RTLIB::UDIV_I64, RTLIB::impl___udivdi3},
-    {RTLIB::SREM_I8,  RTLIB::impl___modqi3},
-    {RTLIB::SREM_I16, RTLIB::impl___modhi3},
-    {RTLIB::SREM_I32, RTLIB::impl___modsi3},
-    {RTLIB::SREM_I64, RTLIB::impl___moddi3},
-    {RTLIB::UREM_I8,  RTLIB::impl___umodqi3},
-    {RTLIB::UREM_I16, RTLIB::impl___umodhi3},
-    {RTLIB::UREM_I32, RTLIB::impl___umodsi3},
-    {RTLIB::UREM_I64, RTLIB::impl___umoddi3},
+      {RTLIB::MUL_I8, RTLIB::impl___mulqi3},
+      {RTLIB::MUL_I16, RTLIB::impl___mulhi3},
+      {RTLIB::MUL_I32, RTLIB::impl___mulsi3},
+      {RTLIB::MUL_I64, RTLIB::impl___muldi3},
+      {RTLIB::SDIV_I8, RTLIB::impl___divqi3},
+      {RTLIB::SDIV_I16, RTLIB::impl___divhi3},
+      {RTLIB::SDIV_I32, RTLIB::impl___divsi3},
+      {RTLIB::SDIV_I64, RTLIB::impl___divdi3},
+      {RTLIB::UDIV_I8, RTLIB::impl___udivqi3},
+      {RTLIB::UDIV_I16, RTLIB::impl___udivhi3},
+      {RTLIB::UDIV_I32, RTLIB::impl___udivsi3},
+      {RTLIB::UDIV_I64, RTLIB::impl___udivdi3},
+      {RTLIB::SREM_I8, RTLIB::impl___modqi3},
+      {RTLIB::SREM_I16, RTLIB::impl___modhi3},
+      {RTLIB::SREM_I32, RTLIB::impl___modsi3},
+      {RTLIB::SREM_I64, RTLIB::impl___moddi3},
+      {RTLIB::UREM_I8, RTLIB::impl___umodqi3},
+      {RTLIB::UREM_I16, RTLIB::impl___umodhi3},
+      {RTLIB::UREM_I32, RTLIB::impl___umodsi3},
+      {RTLIB::UREM_I64, RTLIB::impl___umoddi3},
   };
   for (const auto &LC : IntLibcalls)
     Info.setLibcallImpl(LC.Op, LC.Impl);
@@ -120,8 +119,7 @@ ETCASubtarget::ETCASubtarget(const Triple &TargetTriple, StringRef Cpu,
                              const TargetOptions &Options,
                              std::optional<CodeModel::Model> CodeModel,
                              std::optional<CodeGenOptLevel> OptLevel)
-    : ETCAGenSubtargetInfo(TargetTriple, Cpu, Cpu, FeatureString),
-      TM(TM) {
+    : ETCAGenSubtargetInfo(TargetTriple, Cpu, Cpu, FeatureString), TM(TM) {
   ParseSubtargetFeatures(Cpu, Cpu, FeatureString);
   // Now WordSize is known; construct FrameLowering with correct alignment.
   FrameLowering = std::make_unique<ETCAFrameLowering>(Align(WordSize / 8));
@@ -152,8 +150,7 @@ const TargetLowering *ETCASubtarget::getTargetLowering() const {
 
 const CallLowering *ETCASubtarget::getCallLowering() const {
   if (!CallLoweringInfo)
-    CallLoweringInfo =
-        std::make_unique<ETCACallLowering>(getTargetLowering());
+    CallLoweringInfo = std::make_unique<ETCACallLowering>(getTargetLowering());
   return CallLoweringInfo.get();
 }
 
@@ -171,16 +168,19 @@ const RegisterBankInfo *ETCASubtarget::getRegBankInfo() const {
 
 InstructionSelector *ETCASubtarget::getInstructionSelector() const {
   if (!InstSelector)
-    InstSelector = std::make_unique<ETCAInstructionSelector>(
-        TM, *this, *getRegBankInfo());
+    InstSelector =
+        std::make_unique<ETCAInstructionSelector>(TM, *this, *getRegBankInfo());
   return InstSelector.get();
 }
 
 const TargetRegisterClass *ETCASubtarget::getGPRRegClass() const {
   switch (WordSize) {
-  case 32: return &ETCA::GPR32RegClass;
-  case 64: return &ETCA::GPR64RegClass;
-  default: return &ETCA::GPRRegClass;
+  case 32:
+    return &ETCA::GPR32RegClass;
+  case 64:
+    return &ETCA::GPR64RegClass;
+  default:
+    return &ETCA::GPRRegClass;
   }
 }
 // DEBUG

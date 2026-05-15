@@ -19,12 +19,12 @@
 #include "ETCA.h"
 #include "TargetInfo/ETCATargetInfo.h"
 #include "llvm/CodeGen/GlobalISel/IRTranslator.h"
-#include "llvm/InitializePasses.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelect.h"
 #include "llvm/CodeGen/GlobalISel/Legalizer.h"
 #include "llvm/CodeGen/GlobalISel/RegBankSelect.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Target/TargetOptions.h"
@@ -50,32 +50,33 @@ static std::string computeDataLayout(StringRef CPU) {
   unsigned PtrSize = 16;
 
   if (CPU == "etca32") {
-    WordSize = 32; PtrSize = 32;
+    WordSize = 32;
+    PtrSize = 32;
   } else if (CPU == "etca32p64") {
-    WordSize = 32; PtrSize = 64;
+    WordSize = 32;
+    PtrSize = 64;
   } else if (CPU == "etca64p32") {
-    WordSize = 64; PtrSize = 32;
+    WordSize = 64;
+    PtrSize = 32;
   } else if (CPU == "etca64") {
-    WordSize = 64; PtrSize = 64;
+    WordSize = 64;
+    PtrSize = 64;
   }
 
   return ETCASubtarget::buildDataLayoutString(WordSize, PtrSize);
 }
 
 ETCATargetMachine::ETCATargetMachine(const Target &TheTarget,
-                                     const Triple &TargetTriple,
-                                     StringRef Cpu, StringRef FeatureString,
+                                     const Triple &TargetTriple, StringRef Cpu,
+                                     StringRef FeatureString,
                                      const TargetOptions &Options,
                                      std::optional<Reloc::Model> RM,
                                      std::optional<CodeModel::Model> CodeModel,
                                      CodeGenOptLevel OptLevel, bool JIT)
-    : CodeGenTargetMachineImpl(TheTarget,
-                               computeDataLayout(Cpu),
-                               TargetTriple, Cpu, FeatureString, Options,
-                               getEffectiveRelocModel(RM),
-                               getEffectiveCodeModel(CodeModel,
-                                                     CodeModel::Small),
-                               OptLevel),
+    : CodeGenTargetMachineImpl(
+          TheTarget, computeDataLayout(Cpu), TargetTriple, Cpu, FeatureString,
+          Options, getEffectiveRelocModel(RM),
+          getEffectiveCodeModel(CodeModel, CodeModel::Small), OptLevel),
       Subtarget(TargetTriple, Cpu, FeatureString, *this, Options, CodeModel,
                 OptLevel) {
   initAsmInfo();
@@ -90,11 +91,10 @@ public:
       : TargetPassConfig(TM, PM) {}
 
   /// GlobalISel-only: no SDAG.
-  bool addInstSelector() override {
-    return false;
-  }
+  bool addInstSelector() override { return false; }
 
-  /// Add GISel passes: IRTranslator → Legalizer → RegBankSelect → InstructionSelect
+  /// Add GISel passes: IRTranslator → Legalizer → RegBankSelect →
+  /// InstructionSelect
   bool addIRTranslator() override {
     addPass(new IRTranslator(getOptLevel()));
     return false;

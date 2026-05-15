@@ -32,8 +32,8 @@ class ETCASubtarget;
 class ETCAFrameLowering : public TargetFrameLowering {
 public:
   explicit ETCAFrameLowering(Align StackAlign)
-      : TargetFrameLowering(TargetFrameLowering::StackGrowsDown,
-                            StackAlign, 0) {}
+      : TargetFrameLowering(TargetFrameLowering::StackGrowsDown, StackAlign,
+                            0) {}
 
   /// Whether the function needs a frame pointer.
   /// With SAF, we use r5 (bp) as the frame pointer.
@@ -50,10 +50,10 @@ public:
                                      Register &FrameReg) const override;
 
   /// Assign fixed slot indices for callee-saved registers.
-  bool assignCalleeSavedSpillSlots(
-      MachineFunction &MF,
-      const TargetRegisterInfo *TRI,
-      std::vector<CalleeSavedInfo> &CSI) const override;
+  bool
+  assignCalleeSavedSpillSlots(MachineFunction &MF,
+                              const TargetRegisterInfo *TRI,
+                              std::vector<CalleeSavedInfo> &CSI) const override;
 };
 
 } // namespace llvm

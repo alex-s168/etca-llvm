@@ -27,16 +27,13 @@ class MCSubtargetInfo;
 class MCTargetOptions;
 class Target;
 
-MCCodeEmitter *createETCAMCCodeEmitter(const MCInstrInfo &MCII,
-                                       MCContext &Ctx);
+MCCodeEmitter *createETCAMCCodeEmitter(const MCInstrInfo &MCII, MCContext &Ctx);
 
-MCAsmBackend *createETCAAsmBackend(const Target &T,
-                                   const MCSubtargetInfo &STI,
+MCAsmBackend *createETCAAsmBackend(const Target &T, const MCSubtargetInfo &STI,
                                    const MCRegisterInfo &MRI,
                                    const MCTargetOptions &Options);
 
-std::unique_ptr<MCObjectTargetWriter>
-createETCAELFObjectWriter(uint8_t OSABI);
+std::unique_ptr<MCObjectTargetWriter> createETCAELFObjectWriter(uint8_t OSABI);
 
 } // namespace llvm
 

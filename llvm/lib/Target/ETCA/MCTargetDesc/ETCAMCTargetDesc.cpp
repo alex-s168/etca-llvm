@@ -7,8 +7,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "ETCAMCTargetDesc.h"
-#include "ETCAMCAsmInfo.h"
 #include "ETCAFixupKinds.h"
+#include "ETCAMCAsmInfo.h"
 #include "TargetInfo/ETCATargetInfo.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCCodeEmitter.h"
@@ -17,20 +17,20 @@
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCInstPrinter.h"
-#include "llvm/MC/MCObjectWriter.h"
-#include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCInstrInfo.h"
+#include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCTargetOptions.h"
-#include "llvm/TargetParser/SubtargetFeature.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/FormattedStream.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/TargetParser/SubtargetFeature.h"
 #include "llvm/TargetParser/Triple.h"
 
 using namespace llvm;
@@ -74,10 +74,10 @@ public:
 #include "ETCAGenAsmWriter.inc"
 
 static MCInstPrinter *createETCAMCInstPrinter(const Triple &T,
-                                               unsigned SyntaxVariant,
-                                               const MCAsmInfo &MAI,
-                                               const MCInstrInfo &MII,
-                                               const MCRegisterInfo &MRI) {
+                                              unsigned SyntaxVariant,
+                                              const MCAsmInfo &MAI,
+                                              const MCInstrInfo &MII,
+                                              const MCRegisterInfo &MRI) {
   if (SyntaxVariant == 0)
     return new ETCAInstPrinter(MAI, MII, MRI);
   return nullptr;
@@ -95,15 +95,28 @@ static MCInstPrinter *createETCAMCInstPrinter(const Triple &T,
 // Return true if the opcode is an 8-bit (byte-width) variant.
 static bool isByteOpcode(unsigned Opcode) {
   switch (Opcode) {
-  case ETCA::ADD8:    case ETCA::SUB8:    case ETCA::RSUB8:
-  case ETCA::OR8:     case ETCA::XOR8:    case ETCA::AND8:
-  case ETCA::MOVZ8:   case ETCA::MOVS8:
-  case ETCA::CMP8:    case ETCA::TEST8:
-  case ETCA::ADDI8:   case ETCA::SUBI8:   case ETCA::RSUBI8:
-  case ETCA::CMPI8:   case ETCA::ORI8:    case ETCA::XORI8:
-  case ETCA::ANDI8:   case ETCA::TESTI8:
-  case ETCA::MOVZI8:  case ETCA::MOVSI8:
-  case ETCA::LOAD8:   case ETCA::STORE8:
+  case ETCA::ADD8:
+  case ETCA::SUB8:
+  case ETCA::RSUB8:
+  case ETCA::OR8:
+  case ETCA::XOR8:
+  case ETCA::AND8:
+  case ETCA::MOVZ8:
+  case ETCA::MOVS8:
+  case ETCA::CMP8:
+  case ETCA::TEST8:
+  case ETCA::ADDI8:
+  case ETCA::SUBI8:
+  case ETCA::RSUBI8:
+  case ETCA::CMPI8:
+  case ETCA::ORI8:
+  case ETCA::XORI8:
+  case ETCA::ANDI8:
+  case ETCA::TESTI8:
+  case ETCA::MOVZI8:
+  case ETCA::MOVSI8:
+  case ETCA::LOAD8:
+  case ETCA::STORE8:
     return true;
   default:
     return false;
@@ -149,13 +162,12 @@ static MCRegisterInfo *createETCAMCRegisterInfo(const Triple &TT) {
   return X;
 }
 
-static MCSubtargetInfo *
-createETCAMCSubtargetInfo(const Triple &TT, StringRef CPU, StringRef FS) {
+static MCSubtargetInfo *createETCAMCSubtargetInfo(const Triple &TT,
+                                                  StringRef CPU, StringRef FS) {
   return createETCAMCSubtargetInfoImpl(TT, CPU, CPU, FS);
 }
 
-static MCAsmInfo *createETCAMCAsmInfo(const MCRegisterInfo &,
-                                      const Triple &TT,
+static MCAsmInfo *createETCAMCAsmInfo(const MCRegisterInfo &, const Triple &TT,
                                       const MCTargetOptions &Options) {
   return new ETCAMCAsmInfo(TT, Options);
 }
@@ -172,9 +184,10 @@ static MCAsmInfo *createETCAMCAsmInfo(const MCRegisterInfo &,
 //
 //===----------------------------------------------------------------------===//
 
-// NOTE: We do NOT include ETCAGenMCCodeEmitter.inc because the TableGen-generated
-// encoder uses incorrect bit shifts that don't match ETCAInstrFormats.td.
-// Instead, we use the fully manual encoder in the ETCAMCCodeEmitter class below.
+// NOTE: We do NOT include ETCAGenMCCodeEmitter.inc because the
+// TableGen-generated encoder uses incorrect bit shifts that don't match
+// ETCAInstrFormats.td. Instead, we use the fully manual encoder in the
+// ETCAMCCodeEmitter class below.
 
 namespace {
 
@@ -182,8 +195,9 @@ class ETCAMCCodeEmitter : public MCCodeEmitter {
   const MCInstrInfo &MCII;
 
 public:
-  ETCAMCCodeEmitter(const MCInstrInfo &MII, MCContext &Ctx)
-      : MCII(MII) { (void)MCII; }
+  ETCAMCCodeEmitter(const MCInstrInfo &MII, MCContext &Ctx) : MCII(MII) {
+    (void)MCII;
+  }
 
   void encodeInstruction(const MCInst &MI, SmallVectorImpl<char> &CB,
                          SmallVectorImpl<MCFixup> &Fixups,
@@ -212,7 +226,7 @@ private:
 } // namespace
 
 unsigned ETCAMCCodeEmitter::getRegisterOpValue(const MCInst &MI,
-                                                unsigned OpNo) const {
+                                               unsigned OpNo) const {
   const MCOperand &MO = MI.getOperand(OpNo);
   assert(MO.isReg() && "Expected register operand");
   // Register encoding: extract the 3-bit index (0-7) for each register class.
@@ -227,8 +241,8 @@ unsigned ETCAMCCodeEmitter::getRegisterOpValue(const MCInst &MI,
 }
 
 unsigned ETCAMCCodeEmitter::getImmOpValue(const MCInst &MI, unsigned OpNo,
-                                           SmallVectorImpl<MCFixup> &Fixups,
-                                           MCFixupKind FixupKind) const {
+                                          SmallVectorImpl<MCFixup> &Fixups,
+                                          MCFixupKind FixupKind) const {
   const MCOperand &MO = MI.getOperand(OpNo);
   if (MO.isImm())
     return static_cast<unsigned>(MO.getImm());
@@ -239,9 +253,9 @@ unsigned ETCAMCCodeEmitter::getImmOpValue(const MCInst &MI, unsigned OpNo,
   return 0;
 }
 
-unsigned ETCAMCCodeEmitter::encodeBranchTarget(
-    const MCInst &MI, unsigned OpNo,
-    SmallVectorImpl<MCFixup> &Fixups) const {
+unsigned
+ETCAMCCodeEmitter::encodeBranchTarget(const MCInst &MI, unsigned OpNo,
+                                      SmallVectorImpl<MCFixup> &Fixups) const {
   const MCOperand &MO = MI.getOperand(OpNo);
   if (MO.isImm()) {
     // Immediate branch displacement already resolved.
@@ -257,16 +271,16 @@ unsigned ETCAMCCodeEmitter::encodeBranchTarget(
     // PC-relative: fixup Value will be target_addr - source_addr (bytes).
     // The applyFixup converts it to instruction displacement.
     Fixups.push_back(MCFixup::create(0, MO.getExpr(),
-                                      MCFixupKind(ETCA::fixup_ETCA_BASE_JMP),
-                                      /*PCRel=*/true));
+                                     MCFixupKind(ETCA::fixup_ETCA_BASE_JMP),
+                                     /*PCRel=*/true));
     return 0;
   }
   return 0;
 }
 
-unsigned ETCAMCCodeEmitter::encodeCallTarget(
-    const MCInst &MI, unsigned OpNo,
-    SmallVectorImpl<MCFixup> &Fixups) const {
+unsigned
+ETCAMCCodeEmitter::encodeCallTarget(const MCInst &MI, unsigned OpNo,
+                                    SmallVectorImpl<MCFixup> &Fixups) const {
   const MCOperand &MO = MI.getOperand(OpNo);
   if (MO.isImm()) {
     int64_t Offset = MO.getImm();
@@ -278,17 +292,17 @@ unsigned ETCAMCCodeEmitter::encodeCallTarget(
     // PC-relative: fixup Value will be target_addr - source_addr (bytes).
     // The applyFixup converts it to instruction displacement.
     Fixups.push_back(MCFixup::create(0, MO.getExpr(),
-                                      MCFixupKind(ETCA::fixup_ETCA_SAF_CALL),
-                                      /*PCRel=*/true));
+                                     MCFixupKind(ETCA::fixup_ETCA_SAF_CALL),
+                                     /*PCRel=*/true));
     return 0;
   }
   return 0;
 }
 
 void ETCAMCCodeEmitter::encodeInstruction(const MCInst &MI,
-                                           SmallVectorImpl<char> &CB,
-                                           SmallVectorImpl<MCFixup> &Fixups,
-                                           const MCSubtargetInfo &STI) const {
+                                          SmallVectorImpl<char> &CB,
+                                          SmallVectorImpl<MCFixup> &Fixups,
+                                          const MCSubtargetInfo &STI) const {
   unsigned Opcode = MI.getOpcode();
   uint16_t Encoding = 0;
 
@@ -299,35 +313,32 @@ void ETCAMCCodeEmitter::encodeInstruction(const MCInst &MI,
     // Check for 64-bit (SS=11)
     if (Opc == ETCA::ADD64 || Opc == ETCA::SUB64 || Opc == ETCA::RSUB64 ||
         Opc == ETCA::OR64 || Opc == ETCA::XOR64 || Opc == ETCA::AND64 ||
-        Opc == ETCA::MOVZ64 || Opc == ETCA::MOVS64 ||
-        Opc == ETCA::CMP64 || Opc == ETCA::TEST64 ||
-        Opc == ETCA::ADDI64 || Opc == ETCA::SUBI64 || Opc == ETCA::RSUBI64 ||
-        Opc == ETCA::CMPI64 || Opc == ETCA::ORI64 || Opc == ETCA::XORI64 ||
-        Opc == ETCA::ANDI64 || Opc == ETCA::TESTI64 ||
-        Opc == ETCA::MOVZI64 || Opc == ETCA::MOVSI64 ||
-        Opc == ETCA::LOAD64 || Opc == ETCA::STORE64)
+        Opc == ETCA::MOVZ64 || Opc == ETCA::MOVS64 || Opc == ETCA::CMP64 ||
+        Opc == ETCA::TEST64 || Opc == ETCA::ADDI64 || Opc == ETCA::SUBI64 ||
+        Opc == ETCA::RSUBI64 || Opc == ETCA::CMPI64 || Opc == ETCA::ORI64 ||
+        Opc == ETCA::XORI64 || Opc == ETCA::ANDI64 || Opc == ETCA::TESTI64 ||
+        Opc == ETCA::MOVZI64 || Opc == ETCA::MOVSI64 || Opc == ETCA::LOAD64 ||
+        Opc == ETCA::STORE64)
       return 0b11;
     // Check for 32-bit (SS=10)
     if (Opc == ETCA::ADD32 || Opc == ETCA::SUB32 || Opc == ETCA::RSUB32 ||
         Opc == ETCA::OR32 || Opc == ETCA::XOR32 || Opc == ETCA::AND32 ||
-        Opc == ETCA::MOVZ32 || Opc == ETCA::MOVS32 ||
-        Opc == ETCA::CMP32 || Opc == ETCA::TEST32 ||
-        Opc == ETCA::ADDI32 || Opc == ETCA::SUBI32 || Opc == ETCA::RSUBI32 ||
-        Opc == ETCA::CMPI32 || Opc == ETCA::ORI32 || Opc == ETCA::XORI32 ||
-        Opc == ETCA::ANDI32 || Opc == ETCA::TESTI32 ||
-        Opc == ETCA::MOVZI32 || Opc == ETCA::MOVSI32 ||
-        Opc == ETCA::LOAD32 || Opc == ETCA::STORE32)
+        Opc == ETCA::MOVZ32 || Opc == ETCA::MOVS32 || Opc == ETCA::CMP32 ||
+        Opc == ETCA::TEST32 || Opc == ETCA::ADDI32 || Opc == ETCA::SUBI32 ||
+        Opc == ETCA::RSUBI32 || Opc == ETCA::CMPI32 || Opc == ETCA::ORI32 ||
+        Opc == ETCA::XORI32 || Opc == ETCA::ANDI32 || Opc == ETCA::TESTI32 ||
+        Opc == ETCA::MOVZI32 || Opc == ETCA::MOVSI32 || Opc == ETCA::LOAD32 ||
+        Opc == ETCA::STORE32)
       return 0b10;
     // Check for 8-bit (SS=00) — BYTE extension
     if (Opc == ETCA::ADD8 || Opc == ETCA::SUB8 || Opc == ETCA::RSUB8 ||
         Opc == ETCA::OR8 || Opc == ETCA::XOR8 || Opc == ETCA::AND8 ||
-        Opc == ETCA::MOVZ8 || Opc == ETCA::MOVS8 ||
-        Opc == ETCA::CMP8 || Opc == ETCA::TEST8 ||
-        Opc == ETCA::ADDI8 || Opc == ETCA::SUBI8 || Opc == ETCA::RSUBI8 ||
-        Opc == ETCA::CMPI8 || Opc == ETCA::ORI8 || Opc == ETCA::XORI8 ||
-        Opc == ETCA::ANDI8 || Opc == ETCA::TESTI8 ||
-        Opc == ETCA::MOVZI8 || Opc == ETCA::MOVSI8 ||
-        Opc == ETCA::LOAD8 || Opc == ETCA::STORE8)
+        Opc == ETCA::MOVZ8 || Opc == ETCA::MOVS8 || Opc == ETCA::CMP8 ||
+        Opc == ETCA::TEST8 || Opc == ETCA::ADDI8 || Opc == ETCA::SUBI8 ||
+        Opc == ETCA::RSUBI8 || Opc == ETCA::CMPI8 || Opc == ETCA::ORI8 ||
+        Opc == ETCA::XORI8 || Opc == ETCA::ANDI8 || Opc == ETCA::TESTI8 ||
+        Opc == ETCA::MOVZI8 || Opc == ETCA::MOVSI8 || Opc == ETCA::LOAD8 ||
+        Opc == ETCA::STORE8)
       return 0b00;
     return 0b01; // 16-bit (default)
   };
@@ -335,9 +346,11 @@ void ETCAMCCodeEmitter::encodeInstruction(const MCInst &MI,
   // RR-format instructions: ADD, SUB, RSUB, OR, XOR, AND
   // Encoding (16-bit LE): (rA << 13) | (rB << 10) | (SS << 4) | CCCC
   //   bits [15:13]=rA, [12:10]=rB, [9:8]=00, [7:6]=00, [5:4]=SS, [3:0]=CCCC
-  // Operands: [0]=dst=rA, [1]=src1=rA, [2]=src2=rB  (src1=rA via constraint, same as dst)
+  // Operands: [0]=dst=rA, [1]=src1=rA, [2]=src2=rB  (src1=rA via constraint,
+  // same as dst)
   auto encodeRR = [&](unsigned OpcodeVal) {
-    unsigned RegA = getRegisterOpValue(MI, 1); // src1 (same as dst via tie) => rA
+    unsigned RegA =
+        getRegisterOpValue(MI, 1); // src1 (same as dst via tie) => rA
     unsigned RegB = getRegisterOpValue(MI, 2); // src2 => rB
     unsigned SS = getSS(Opcode);
     Encoding = (RegA << 13) | (RegB << 10) | (SS << 4) | OpcodeVal;
@@ -355,7 +368,8 @@ void ETCAMCCodeEmitter::encodeInstruction(const MCInst &MI,
 
   // RI-format instructions: ADDI, SUBI, RSUBI, CMPI, ORI, XORI, ANDI,
   // TESTI, SLO, READCR, WRITECR
-  // Encoding (16-bit LE): (rA << 13) | (imm << 8) | (0x01 << 6) | (SS << 4) | CCCC
+  // Encoding (16-bit LE): (rA << 13) | (imm << 8) | (0x01 << 6) | (SS << 4) |
+  // CCCC
   //   bits [15:13]=rA, [12:8]=imm, [7:6]=01(fmt), [5:4]=SS, [3:0]=CCCC
   // Two operand layouts:
   //   Standard (dst, src1, imm): dst=op0, src1=op1, imm=op2
@@ -363,9 +377,10 @@ void ETCAMCCodeEmitter::encodeInstruction(const MCInst &MI,
   auto encodeRI = [&](unsigned OpcodeVal, bool IsCmpLike = false) {
     unsigned RegA = getRegisterOpValue(MI, IsCmpLike ? 0 : 1);
     unsigned Imm = getImmOpValue(MI, IsCmpLike ? 1 : 2, Fixups,
-                                  MCFixupKind(ETCA::fixup_ETCA_NONE));
+                                 MCFixupKind(ETCA::fixup_ETCA_NONE));
     unsigned SS = getSS(Opcode);
-    Encoding = (RegA << 13) | ((Imm & 0x1F) << 8) | (0x01 << 6) | (SS << 4) | OpcodeVal;
+    Encoding = (RegA << 13) | ((Imm & 0x1F) << 8) | (0x01 << 6) | (SS << 4) |
+               OpcodeVal;
   };
 
   // Non-tied RI format: MOVZI/MOVSI (2 operands only: [dst, imm])
@@ -373,94 +388,162 @@ void ETCAMCCodeEmitter::encodeInstruction(const MCInst &MI,
   // Operands: [0]=dst=rA, [1]=imm
   auto encodeRI_NT = [&](unsigned OpcodeVal) {
     unsigned RegDst = getRegisterOpValue(MI, 0); // dst => rA
-    unsigned Imm = getImmOpValue(MI, 1, Fixups,
-                                  MCFixupKind(ETCA::fixup_ETCA_NONE));
+    unsigned Imm =
+        getImmOpValue(MI, 1, Fixups, MCFixupKind(ETCA::fixup_ETCA_NONE));
     unsigned SS = getSS(Opcode);
-    Encoding = (RegDst << 13) | ((Imm & 0x1F) << 8) | (0x01 << 6) | (SS << 4) | OpcodeVal;
+    Encoding = (RegDst << 13) | ((Imm & 0x1F) << 8) | (0x01 << 6) | (SS << 4) |
+               OpcodeVal;
   };
 
   switch (Opcode) {
   // === RR instructions (opcode: 0-9) — all width variants ===
-  case ETCA::ADD16: case ETCA::ADD32: case ETCA::ADD64:
+  case ETCA::ADD16:
+  case ETCA::ADD32:
+  case ETCA::ADD64:
   case ETCA::ADD8:
-    encodeRR(0); break;
-  case ETCA::SUB16: case ETCA::SUB32: case ETCA::SUB64:
+    encodeRR(0);
+    break;
+  case ETCA::SUB16:
+  case ETCA::SUB32:
+  case ETCA::SUB64:
   case ETCA::SUB8:
-    encodeRR(1); break;
-  case ETCA::RSUB16: case ETCA::RSUB32: case ETCA::RSUB64:
+    encodeRR(1);
+    break;
+  case ETCA::RSUB16:
+  case ETCA::RSUB32:
+  case ETCA::RSUB64:
   case ETCA::RSUB8:
-    encodeRR(2); break;
-  case ETCA::OR16: case ETCA::OR32: case ETCA::OR64:
+    encodeRR(2);
+    break;
+  case ETCA::OR16:
+  case ETCA::OR32:
+  case ETCA::OR64:
   case ETCA::OR8:
-    encodeRR(4); break;
-  case ETCA::XOR16: case ETCA::XOR32: case ETCA::XOR64:
+    encodeRR(4);
+    break;
+  case ETCA::XOR16:
+  case ETCA::XOR32:
+  case ETCA::XOR64:
   case ETCA::XOR8:
-    encodeRR(5); break;
-  case ETCA::AND16: case ETCA::AND32: case ETCA::AND64:
+    encodeRR(5);
+    break;
+  case ETCA::AND16:
+  case ETCA::AND32:
+  case ETCA::AND64:
   case ETCA::AND8:
-    encodeRR(6); break;
-  case ETCA::MOVZ16: case ETCA::MOVZ32: case ETCA::MOVZ64:
+    encodeRR(6);
+    break;
+  case ETCA::MOVZ16:
+  case ETCA::MOVZ32:
+  case ETCA::MOVZ64:
   case ETCA::MOVZ8:
-    encodeRR_NT(8); break;
-  case ETCA::MOVS16: case ETCA::MOVS32: case ETCA::MOVS64:
+    encodeRR_NT(8);
+    break;
+  case ETCA::MOVS16:
+  case ETCA::MOVS32:
+  case ETCA::MOVS64:
   case ETCA::MOVS8:
-    encodeRR_NT(9); break;
+    encodeRR_NT(9);
+    break;
 
   // === RI instructions (opcode: 0-9, 12, 14, 15) — all width variants ===
-  case ETCA::ADDI16: case ETCA::ADDI32: case ETCA::ADDI64:
+  case ETCA::ADDI16:
+  case ETCA::ADDI32:
+  case ETCA::ADDI64:
   case ETCA::ADDI8:
-    encodeRI(0); break;
-  case ETCA::SUBI16: case ETCA::SUBI32: case ETCA::SUBI64:
+    encodeRI(0);
+    break;
+  case ETCA::SUBI16:
+  case ETCA::SUBI32:
+  case ETCA::SUBI64:
   case ETCA::SUBI8:
-    encodeRI(1); break;
-  case ETCA::RSUBI16: case ETCA::RSUBI32: case ETCA::RSUBI64:
+    encodeRI(1);
+    break;
+  case ETCA::RSUBI16:
+  case ETCA::RSUBI32:
+  case ETCA::RSUBI64:
   case ETCA::RSUBI8:
-    encodeRI(2); break;
-  case ETCA::CMPI16: case ETCA::CMPI32: case ETCA::CMPI64:
+    encodeRI(2);
+    break;
+  case ETCA::CMPI16:
+  case ETCA::CMPI32:
+  case ETCA::CMPI64:
   case ETCA::CMPI8:
-    encodeRI(3); break;
-  case ETCA::ORI16: case ETCA::ORI32: case ETCA::ORI64:
+    encodeRI(3);
+    break;
+  case ETCA::ORI16:
+  case ETCA::ORI32:
+  case ETCA::ORI64:
   case ETCA::ORI8:
-    encodeRI(4); break;
-  case ETCA::XORI16: case ETCA::XORI32: case ETCA::XORI64:
+    encodeRI(4);
+    break;
+  case ETCA::XORI16:
+  case ETCA::XORI32:
+  case ETCA::XORI64:
   case ETCA::XORI8:
-    encodeRI(5); break;
-  case ETCA::ANDI16: case ETCA::ANDI32: case ETCA::ANDI64:
+    encodeRI(5);
+    break;
+  case ETCA::ANDI16:
+  case ETCA::ANDI32:
+  case ETCA::ANDI64:
   case ETCA::ANDI8:
-    encodeRI(6); break;
-  case ETCA::TESTI16: case ETCA::TESTI32: case ETCA::TESTI64:
+    encodeRI(6);
+    break;
+  case ETCA::TESTI16:
+  case ETCA::TESTI32:
+  case ETCA::TESTI64:
   case ETCA::TESTI8:
-    encodeRI(7); break;
-  case ETCA::MOVZI16: case ETCA::MOVZI32: case ETCA::MOVZI64:
+    encodeRI(7);
+    break;
+  case ETCA::MOVZI16:
+  case ETCA::MOVZI32:
+  case ETCA::MOVZI64:
   case ETCA::MOVZI8:
-    encodeRI_NT(8); break;
-  case ETCA::MOVSI16: case ETCA::MOVSI32: case ETCA::MOVSI64:
+    encodeRI_NT(8);
+    break;
+  case ETCA::MOVSI16:
+  case ETCA::MOVSI32:
+  case ETCA::MOVSI64:
   case ETCA::MOVSI8:
-    encodeRI_NT(9); break;
+    encodeRI_NT(9);
+    break;
   case ETCA::SLO16:
-    encodeRI(12); break;
+    encodeRI(12);
+    break;
   case ETCA::READCR:
-    encodeRI(14); break;
+    encodeRI(14);
+    break;
   case ETCA::WRITECR:
-    encodeRI(15); break;
+    encodeRI(15);
+    break;
 
   // === RR-format LOAD/STORE: all widths (8/16/32/64) ===
   // Encoding: (rA << 13) | (rB << 10) | (SS << 4) | CCCC
   //   LOAD: CCCC = 1010, STORE: CCCC = 1011
   // Operands: [0]=dst/val=rA, [1]=addr=rB
-  case ETCA::LOAD8: case ETCA::LOAD16: case ETCA::LOAD32: case ETCA::LOAD64:
-  case ETCA::STORE8: case ETCA::STORE16: case ETCA::STORE32: case ETCA::STORE64: {
+  case ETCA::LOAD8:
+  case ETCA::LOAD16:
+  case ETCA::LOAD32:
+  case ETCA::LOAD64:
+  case ETCA::STORE8:
+  case ETCA::STORE16:
+  case ETCA::STORE32:
+  case ETCA::STORE64: {
     bool IsLoad = (Opcode == ETCA::LOAD8 || Opcode == ETCA::LOAD16 ||
                    Opcode == ETCA::LOAD32 || Opcode == ETCA::LOAD64);
-    unsigned RegA = getRegisterOpValue(MI, 0);  // dst/val => rA
-    unsigned RegB = getRegisterOpValue(MI, 1);  // addr => rB
+    unsigned RegA = getRegisterOpValue(MI, 0); // dst/val => rA
+    unsigned RegB = getRegisterOpValue(MI, 1); // addr => rB
     unsigned SS = getSS(Opcode);
-    Encoding = (RegA << 13) | (RegB << 10) | (SS << 4) | (IsLoad ? 0b1010 : 0b1011);
+    Encoding =
+        (RegA << 13) | (RegB << 10) | (SS << 4) | (IsLoad ? 0b1010 : 0b1011);
     break;
   }
 
   // === CMP/TEST (RR format): (rA << 13) | (rB << 10) | (SS << 4) | CCCC
-  case ETCA::CMP8: case ETCA::CMP: case ETCA::CMP32: case ETCA::CMP64: {
+  case ETCA::CMP8:
+  case ETCA::CMP:
+  case ETCA::CMP32:
+  case ETCA::CMP64: {
     unsigned Src1 = getRegisterOpValue(MI, 0); // rA
     unsigned Src2 = getRegisterOpValue(MI, 1); // rB
     // CMP: CCCC=0011, SS from opcode
@@ -468,7 +551,10 @@ void ETCAMCCodeEmitter::encodeInstruction(const MCInst &MI,
     Encoding = (Src1 << 13) | (Src2 << 10) | (SS << 4) | 0b0011;
     break;
   }
-  case ETCA::TEST8: case ETCA::TEST: case ETCA::TEST32: case ETCA::TEST64: {
+  case ETCA::TEST8:
+  case ETCA::TEST:
+  case ETCA::TEST32:
+  case ETCA::TEST64: {
     unsigned Src1 = getRegisterOpValue(MI, 0); // rA
     unsigned Src2 = getRegisterOpValue(MI, 1); // rB
     // TEST: CCCC=0111, SS from opcode
@@ -482,23 +568,54 @@ void ETCAMCCodeEmitter::encodeInstruction(const MCInst &MI,
   // Byte 1: D[7:0]
   // Encoding = (0x80 | Cond | ((Disp >> 8) & 1) << 4) | ((Disp & 0xFF) << 8)
   // Condition codes match binutils (etca-binutils-gdb).
-  case ETCA::BR:   case ETCA::BEQ:  case ETCA::BNE:
-  case ETCA::BLT:  case ETCA::BGE:  case ETCA::BLTU: case ETCA::BGEU:
-  case ETCA::BLE:  case ETCA::BGT:  case ETCA::BLEU: case ETCA::BGTU: {
+  case ETCA::BR:
+  case ETCA::BEQ:
+  case ETCA::BNE:
+  case ETCA::BLT:
+  case ETCA::BGE:
+  case ETCA::BLTU:
+  case ETCA::BGEU:
+  case ETCA::BLE:
+  case ETCA::BGT:
+  case ETCA::BLEU:
+  case ETCA::BGTU: {
     unsigned Cond;
     switch (Opcode) {
-    case ETCA::BR:   Cond = 14; break;
-    case ETCA::BEQ:  Cond = 0;  break;
-    case ETCA::BNE:  Cond = 1;  break;
-    case ETCA::BLT:  Cond = 10; break;  // binutils: jl/jnge
-    case ETCA::BGE:  Cond = 11; break;  // binutils: jge/jnl
-    case ETCA::BLTU: Cond = 4;  break;  // binutils: jb/jc/jnae
-    case ETCA::BGEU: Cond = 5;  break;  // binutils: jae/jnb/jnc
-    case ETCA::BLE:  Cond = 12; break;  // binutils: jle/jng
-    case ETCA::BGT:  Cond = 13; break;  // binutils: jg/jnle
-    case ETCA::BLEU: Cond = 8;  break;  // binutils: jbe/jna
-    case ETCA::BGTU: Cond = 9;  break;  // binutils: ja/jnbe
-    default: llvm_unreachable("bad branch opcode");
+    case ETCA::BR:
+      Cond = 14;
+      break;
+    case ETCA::BEQ:
+      Cond = 0;
+      break;
+    case ETCA::BNE:
+      Cond = 1;
+      break;
+    case ETCA::BLT:
+      Cond = 10;
+      break; // binutils: jl/jnge
+    case ETCA::BGE:
+      Cond = 11;
+      break; // binutils: jge/jnl
+    case ETCA::BLTU:
+      Cond = 4;
+      break; // binutils: jb/jc/jnae
+    case ETCA::BGEU:
+      Cond = 5;
+      break; // binutils: jae/jnb/jnc
+    case ETCA::BLE:
+      Cond = 12;
+      break; // binutils: jle/jng
+    case ETCA::BGT:
+      Cond = 13;
+      break; // binutils: jg/jnle
+    case ETCA::BLEU:
+      Cond = 8;
+      break; // binutils: jbe/jna
+    case ETCA::BGTU:
+      Cond = 9;
+      break; // binutils: ja/jnbe
+    default:
+      llvm_unreachable("bad branch opcode");
     }
     unsigned Disp = encodeBranchTarget(MI, 0, Fixups);
     unsigned Byte0 = 0x80 | Cond | (((Disp >> 8) & 1) << 4);
@@ -544,10 +661,11 @@ void ETCAMCCodeEmitter::encodeInstruction(const MCInst &MI,
   // Encoding: (110 << 13) | (imm << 8) | (0x01 << 6) | (SS << 4) | 0xD
   //   rA=110(fixed), CCCC=1101
   case ETCA::PUSHI: {
-    unsigned Imm = getImmOpValue(MI, 0, Fixups,
-                                  MCFixupKind(ETCA::fixup_ETCA_NONE));
+    unsigned Imm =
+        getImmOpValue(MI, 0, Fixups, MCFixupKind(ETCA::fixup_ETCA_NONE));
     unsigned SS = getSS(Opcode);
-    Encoding = (6 << 13) | ((Imm & 0x1F) << 8) | (0x01 << 6) | (SS << 4) | 0b1101;
+    Encoding =
+        (6 << 13) | ((Imm & 0x1F) << 8) | (0x01 << 6) | (SS << 4) | 0b1101;
     break;
   }
 
@@ -556,8 +674,8 @@ void ETCAMCCodeEmitter::encodeInstruction(const MCInst &MI,
     unsigned Disp = encodeCallTarget(MI, 0, Fixups);
     // Byte 0 = 1011 (format) | D[11:8], Byte 1 = D[7:0]
     // Written LE: CB[0]=byte0, CB[1]=byte1
-    Encoding = (0xB0 | ((Disp >> 8) & 0xF))   // byte 0: format + disp high nibble
-             | ((Disp & 0xFF) << 8);          // byte 1: disp low byte
+    Encoding = (0xB0 | ((Disp >> 8) & 0xF)) // byte 0: format + disp high nibble
+               | ((Disp & 0xFF) << 8);      // byte 1: disp low byte
     break;
   }
 
@@ -639,9 +757,9 @@ public:
 
       uint16_t &Insn = *reinterpret_cast<uint16_t *>(Data);
       // Preserve condition code (bits 7,6,5,3,2,1,0 of byte 0)
-      Insn &= 0x00EF;  // Clear D8 (bit 4) and D[7:0] (bits [15:8])
-      Insn |= (((Disp >> 8) & 1) << 4)   // D8 at bit 4
-           |  ((Disp & 0xFF) << 8);       // D[7:0] at bits [15:8]
+      Insn &= 0x00EF; // Clear D8 (bit 4) and D[7:0] (bits [15:8])
+      Insn |= (((Disp >> 8) & 1) << 4) // D8 at bit 4
+              | ((Disp & 0xFF) << 8);  // D[7:0] at bits [15:8]
       break;
     }
     case ETCA::fixup_ETCA_SAF_CALL: {
@@ -654,10 +772,10 @@ public:
 
       uint16_t &Insn = *reinterpret_cast<uint16_t *>(Data);
       // Clear existing displacement, keep format nibble (byte0 bits [7:4])
-      Insn &= 0x00F0;  // Keep byte0 bits [7:4], clear rest
-      Insn |= (0xB0)                      // byte0 high nibble = 0xB
-           |  (((Disp >> 8) & 0xF) << 0)  // D[11:8] in byte0 low nibble
-           |  ((Disp & 0xFF) << 8);        // D[7:0] in byte1
+      Insn &= 0x00F0;                      // Keep byte0 bits [7:4], clear rest
+      Insn |= (0xB0)                       // byte0 high nibble = 0xB
+              | (((Disp >> 8) & 0xF) << 0) // D[11:8] in byte0 low nibble
+              | ((Disp & 0xFF) << 8);      // D[7:0] in byte1
       break;
     }
     case ETCA::fixup_ETCA_8: {
@@ -692,13 +810,10 @@ public:
 
   MCFixupKindInfo getFixupKindInfo(MCFixupKind Kind) const override {
     static const MCFixupKindInfo Infos[] = {
-      {"fixup_ETCA_NONE",      0,  0, 0},
-      {"fixup_ETCA_BASE_JMP",  0, 16, 0},
-      {"fixup_ETCA_8",         0,  8, 0},
-      {"fixup_ETCA_16",        0, 16, 0},
-      {"fixup_ETCA_32",        0, 32, 0},
-      {"fixup_ETCA_64",        0, 64, 0},
-      {"fixup_ETCA_SAF_CALL",  0, 16, 0},
+        {"fixup_ETCA_NONE", 0, 0, 0},      {"fixup_ETCA_BASE_JMP", 0, 16, 0},
+        {"fixup_ETCA_8", 0, 8, 0},         {"fixup_ETCA_16", 0, 16, 0},
+        {"fixup_ETCA_32", 0, 32, 0},       {"fixup_ETCA_64", 0, 64, 0},
+        {"fixup_ETCA_SAF_CALL", 0, 16, 0},
     };
     enum { NumETCAFixups = std::size(Infos) };
 
@@ -739,21 +854,21 @@ namespace {
 
 // ETCA ELF relocation types — must match binutils include/elf/etca.h
 enum ETCARelocType : unsigned {
-  R_ETCA_NONE        = 0,
-  R_ETCA_BASE_JMP    = 1,
-  R_ETCA_EXABS_8     = 2,
-  R_ETCA_EXABS_16    = 3,
-  R_ETCA_EXABS_32    = 4,
-  R_ETCA_EXABS_64    = 5,
-  R_ETCA_SAF_CALL    = 6,
-  R_ETCA_8           = 49,
-  R_ETCA_16          = 50,
-  R_ETCA_32          = 51,
-  R_ETCA_64          = 52,
-  R_ETCA_IPREL_8     = 53,
-  R_ETCA_IPREL_16    = 54,
-  R_ETCA_IPREL_32    = 55,
-  R_ETCA_IPREL_64    = 56,
+  R_ETCA_NONE = 0,
+  R_ETCA_BASE_JMP = 1,
+  R_ETCA_EXABS_8 = 2,
+  R_ETCA_EXABS_16 = 3,
+  R_ETCA_EXABS_32 = 4,
+  R_ETCA_EXABS_64 = 5,
+  R_ETCA_SAF_CALL = 6,
+  R_ETCA_8 = 49,
+  R_ETCA_16 = 50,
+  R_ETCA_32 = 51,
+  R_ETCA_64 = 52,
+  R_ETCA_IPREL_8 = 53,
+  R_ETCA_IPREL_16 = 54,
+  R_ETCA_IPREL_32 = 55,
+  R_ETCA_IPREL_64 = 56,
 };
 
 class ETCAELFObjectWriter : public MCELFObjectTargetWriter {
@@ -804,16 +919,14 @@ llvm::createETCAELFObjectWriter(uint8_t OSABI) {
 // LLVM initialization
 //===----------------------------------------------------------------------===//
 
-extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void
-LLVMInitializeETCATargetMC() {
+extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeETCATargetMC() {
   TargetRegistry::RegisterMCRegInfo(getTheETCATarget(),
                                     createETCAMCRegisterInfo);
   TargetRegistry::RegisterMCInstrInfo(getTheETCATarget(),
                                       createETCAMCInstrInfo);
   TargetRegistry::RegisterMCSubtargetInfo(getTheETCATarget(),
                                           createETCAMCSubtargetInfo);
-  TargetRegistry::RegisterMCAsmInfo(getTheETCATarget(),
-                                    createETCAMCAsmInfo);
+  TargetRegistry::RegisterMCAsmInfo(getTheETCATarget(), createETCAMCAsmInfo);
   TargetRegistry::RegisterMCInstPrinter(getTheETCATarget(),
                                         createETCAMCInstPrinter);
   TargetRegistry::RegisterMCCodeEmitter(getTheETCATarget(),

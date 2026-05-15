@@ -18,8 +18,7 @@ class ETCASubtarget;
 
 class ETCAInstructionSelector : public InstructionSelector {
 public:
-  ETCAInstructionSelector(const TargetMachine &TM,
-                          const ETCASubtarget &ST,
+  ETCAInstructionSelector(const TargetMachine &TM, const ETCASubtarget &ST,
                           const RegisterBankInfo &RBI);
 
   bool select(MachineInstr &MI) override;

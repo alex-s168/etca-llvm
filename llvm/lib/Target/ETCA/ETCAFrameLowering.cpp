@@ -1,4 +1,5 @@
-//===- ETCAFrameLowering.cpp - ETCA Frame Lowering -------------------------===//
+//===- ETCAFrameLowering.cpp - ETCA Frame Lowering
+//-------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -77,9 +78,7 @@ void ETCAFrameLowering::emitPrologue(MachineFunction &MF,
   int StackSize = MFI.getStackSize();
   if (StackSize > 0) {
     // sub r6, StackSize — RI format: [dst, src1(tied), imm]
-    BuildMI(MBB, MBBI, DL, TII.get(SUBI16), R6)
-        .addReg(R6)
-        .addImm(StackSize);
+    BuildMI(MBB, MBBI, DL, TII.get(SUBI16), R6).addReg(R6).addImm(StackSize);
   }
 }
 
@@ -130,12 +129,14 @@ ETCAFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
   //
   // With SAF prologue, bp = old_sp, and sp = bp - StackSize.
   // Objects are allocated at SP + object_offset.
-  // So relative to BP: bp - StackSize + object_offset = bp - (StackSize - object_offset)
+  // So relative to BP: bp - StackSize + object_offset = bp - (StackSize -
+  // object_offset)
   //
   // In practice, the frame info's getObjectOffset returns offset from SP.
   // So: FrameIndex ref = bp + (object_offset - StackSize)
   // But since bp = sp + StackSize (after prologue):
-  //   object addr = sp + object_offset = bp - StackSize + object_offset = bp + (object_offset - StackSize)
+  //   object addr = sp + object_offset = bp - StackSize + object_offset = bp +
+  //   (object_offset - StackSize)
 
   if (ST.hasSAF()) {
     int StackSize = MFI.getStackSize();
@@ -166,8 +167,7 @@ bool ETCAFrameLowering::assignCalleeSavedSpillSlots(
 
   for (auto &CS : CSI) {
     unsigned Reg = CS.getReg();
-    (void)TRI->getMinimalPhysRegClassLLT(
-        Reg, LLT::scalar(RegWidth));
+    (void)TRI->getMinimalPhysRegClassLLT(Reg, LLT::scalar(RegWidth));
     int FI = MFI.CreateStackObject(SlotSize, Align(SlotSize), true);
     CS.setFrameIdx(FI);
   }

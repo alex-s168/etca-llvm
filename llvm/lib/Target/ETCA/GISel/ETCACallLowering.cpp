@@ -52,27 +52,34 @@ static const MCPhysReg ArgRegs64[] = {ETCA::Q0, ETCA::Q1, ETCA::Q2, ETCA::Q3};
 
 static const MCPhysReg *getArgRegs(unsigned WordSize) {
   switch (WordSize) {
-  case 64: return ArgRegs64;
-  case 32: return ArgRegs32;
-  default: return ArgRegs16;
+  case 64:
+    return ArgRegs64;
+  case 32:
+    return ArgRegs32;
+  default:
+    return ArgRegs16;
   }
 }
 
 static MCRegister getRetReg(unsigned WordSize) {
   switch (WordSize) {
-  case 64: return ETCA::Q0;
-  case 32: return ETCA::D0;
-  default: return ETCA::R0;
+  case 64:
+    return ETCA::Q0;
+  case 32:
+    return ETCA::D0;
+  default:
+    return ETCA::R0;
   }
 }
 
-bool ETCACallLowering::lowerReturn(
-    MachineIRBuilder &MIRBuilder, const Value *Val, ArrayRef<Register> VRegs,
-    FunctionLoweringInfo &FLI) const {
+bool ETCACallLowering::lowerReturn(MachineIRBuilder &MIRBuilder,
+                                   const Value *Val, ArrayRef<Register> VRegs,
+                                   FunctionLoweringInfo &FLI) const {
   if (Val && !VRegs.empty()) {
     assert(VRegs.size() == 1 && "ETCa only supports single-register returns");
     const auto &ST = MIRBuilder.getMF().getSubtarget<ETCASubtarget>();
-    MIRBuilder.buildCopy(Register(getRetReg(ST.getWordSize())), Register(VRegs[0]));
+    MIRBuilder.buildCopy(Register(getRetReg(ST.getWordSize())),
+                         Register(VRegs[0]));
   }
   // Emit JMPR r7 directly instead of RET_Pseudo to avoid late expansion.
   // Also add an implicit use of the return register so that the COPY to it
@@ -88,9 +95,10 @@ bool ETCACallLowering::lowerReturn(
   return true;
 }
 
-bool ETCACallLowering::lowerFormalArguments(
-    MachineIRBuilder &MIRBuilder, const Function &F,
-    ArrayRef<ArrayRef<Register>> VRegs, FunctionLoweringInfo &FLI) const {
+bool ETCACallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
+                                            const Function &F,
+                                            ArrayRef<ArrayRef<Register>> VRegs,
+                                            FunctionLoweringInfo &FLI) const {
   MachineFunction &MF = MIRBuilder.getMF();
   MachineRegisterInfo &MRI = MF.getRegInfo();
   const auto &ST = MF.getSubtarget<ETCASubtarget>();
@@ -130,14 +138,14 @@ bool ETCACallLowering::lowerFormalArguments(
       MIRBuilder.buildCopy(VReg, Register(ArgRegs[Idx]));
     } else {
       // Stack argument: create frame index and load
-      int FI = MF.getFrameInfo().CreateFixedObject(
-          RegBytes, RegBytes * (Idx - 4), true);
+      int FI = MF.getFrameInfo().CreateFixedObject(RegBytes,
+                                                   RegBytes * (Idx - 4), true);
       LLT PtrTy = LLT::pointer(0, ST.getPtrSize());
       Register AddrReg = MRI.createGenericVirtualRegister(PtrTy);
       MIRBuilder.buildFrameIndex(AddrReg, FI);
       auto MMO = MF.getMachineMemOperand(
-          MachinePointerInfo::getFixedStack(MF, FI),
-          MachineMemOperand::MOLoad, RegBytes, Align(RegBytes));
+          MachinePointerInfo::getFixedStack(MF, FI), MachineMemOperand::MOLoad,
+          RegBytes, Align(RegBytes));
       MIRBuilder.buildLoad(VReg, AddrReg, *MMO);
     }
     ++Idx;

@@ -43,16 +43,26 @@ using namespace ETCA;
 
 static unsigned getETCACondCode(ISD::CondCode CC) {
   switch (CC) {
-  case ISD::SETEQ:  return ETCAISD::COND_EQ;
-  case ISD::SETNE:  return ETCAISD::COND_NE;
-  case ISD::SETLT:  return ETCAISD::COND_LT;
-  case ISD::SETGE:  return ETCAISD::COND_GE;
-  case ISD::SETULT: return ETCAISD::COND_ULT;
-  case ISD::SETUGE: return ETCAISD::COND_UGE;
-  case ISD::SETLE:  return ETCAISD::COND_LE;
-  case ISD::SETGT:  return ETCAISD::COND_GT;
-  case ISD::SETULE: return ETCAISD::COND_ULE;
-  case ISD::SETUGT: return ETCAISD::COND_UGT;
+  case ISD::SETEQ:
+    return ETCAISD::COND_EQ;
+  case ISD::SETNE:
+    return ETCAISD::COND_NE;
+  case ISD::SETLT:
+    return ETCAISD::COND_LT;
+  case ISD::SETGE:
+    return ETCAISD::COND_GE;
+  case ISD::SETULT:
+    return ETCAISD::COND_ULT;
+  case ISD::SETUGE:
+    return ETCAISD::COND_UGE;
+  case ISD::SETLE:
+    return ETCAISD::COND_LE;
+  case ISD::SETGT:
+    return ETCAISD::COND_GT;
+  case ISD::SETULE:
+    return ETCAISD::COND_ULE;
+  case ISD::SETUGT:
+    return ETCAISD::COND_UGT;
   default:
     llvm_unreachable("Unknown condition code for ETCA");
   }
@@ -80,33 +90,33 @@ ETCATargetLowering::ETCATargetLowering(const TargetMachine &TM,
   if (WS <= 16) {
     setLoadExtAction(ISD::ZEXTLOAD, MVT::i16, MVT::i8, Expand);
     setLoadExtAction(ISD::SEXTLOAD, MVT::i16, MVT::i8, Expand);
-    setLoadExtAction(ISD::EXTLOAD,  MVT::i16, MVT::i8, Expand);
+    setLoadExtAction(ISD::EXTLOAD, MVT::i16, MVT::i8, Expand);
   }
 
   // MUL/DIV are not natively supported in base ISA.
   // Use libcalls (compiler-rt __mulhi3, __divhi3, etc.).
   if (WS == 64) {
-    setOperationAction(ISD::MUL,    MVT::i64, LibCall);
-    setOperationAction(ISD::UDIV,   MVT::i64, LibCall);
-    setOperationAction(ISD::SDIV,   MVT::i64, LibCall);
-    setOperationAction(ISD::UREM,   MVT::i64, LibCall);
-    setOperationAction(ISD::SREM,   MVT::i64, LibCall);
+    setOperationAction(ISD::MUL, MVT::i64, LibCall);
+    setOperationAction(ISD::UDIV, MVT::i64, LibCall);
+    setOperationAction(ISD::SDIV, MVT::i64, LibCall);
+    setOperationAction(ISD::UREM, MVT::i64, LibCall);
+    setOperationAction(ISD::SREM, MVT::i64, LibCall);
   }
   if (WS >= 32) {
-    setOperationAction(ISD::MUL,    MVT::i32, LibCall);
-    setOperationAction(ISD::UDIV,   MVT::i32, LibCall);
-    setOperationAction(ISD::SDIV,   MVT::i32, LibCall);
-    setOperationAction(ISD::UREM,   MVT::i32, LibCall);
-    setOperationAction(ISD::SREM,   MVT::i32, LibCall);
+    setOperationAction(ISD::MUL, MVT::i32, LibCall);
+    setOperationAction(ISD::UDIV, MVT::i32, LibCall);
+    setOperationAction(ISD::SDIV, MVT::i32, LibCall);
+    setOperationAction(ISD::UREM, MVT::i32, LibCall);
+    setOperationAction(ISD::SREM, MVT::i32, LibCall);
   }
-  setOperationAction(ISD::MUL,    MVT::i16, LibCall);
-  setOperationAction(ISD::UDIV,   MVT::i16, LibCall);
-  setOperationAction(ISD::SDIV,   MVT::i16, LibCall);
-  setOperationAction(ISD::UREM,   MVT::i16, LibCall);
-  setOperationAction(ISD::SREM,   MVT::i16, LibCall);
+  setOperationAction(ISD::MUL, MVT::i16, LibCall);
+  setOperationAction(ISD::UDIV, MVT::i16, LibCall);
+  setOperationAction(ISD::SDIV, MVT::i16, LibCall);
+  setOperationAction(ISD::UREM, MVT::i16, LibCall);
+  setOperationAction(ISD::SREM, MVT::i16, LibCall);
 
-  setOperationAction(ISD::MULHS,  MVT::i16, Expand);
-  setOperationAction(ISD::MULHU,  MVT::i16, Expand);
+  setOperationAction(ISD::MULHS, MVT::i16, Expand);
+  setOperationAction(ISD::MULHU, MVT::i16, Expand);
 
   // Shift operations
   if (WS == 64) {
@@ -125,31 +135,31 @@ ETCATargetLowering::ETCATargetLowering(const TargetMachine &TM,
 
   // BR_CC / BRCOND
   if (WS == 64) {
-    setOperationAction(ISD::SETCC,   MVT::i64, Expand);
-    setOperationAction(ISD::BR_CC,   MVT::i64, Custom);
-    setOperationAction(ISD::BRCOND,  MVT::i64, Custom);
+    setOperationAction(ISD::SETCC, MVT::i64, Expand);
+    setOperationAction(ISD::BR_CC, MVT::i64, Custom);
+    setOperationAction(ISD::BRCOND, MVT::i64, Custom);
     setOperationAction(ISD::SELECT_CC, MVT::i64, Expand);
     setOperationAction(ISD::GlobalAddress, MVT::i64, Custom);
-    setOperationAction(ISD::ConstantPool,  MVT::i64, Custom);
-    setOperationAction(ISD::JumpTable,     MVT::i64, Custom);
+    setOperationAction(ISD::ConstantPool, MVT::i64, Custom);
+    setOperationAction(ISD::JumpTable, MVT::i64, Custom);
   }
   if (WS >= 32) {
-    setOperationAction(ISD::SETCC,   MVT::i32, Expand);
-    setOperationAction(ISD::BR_CC,   MVT::i32, Custom);
-    setOperationAction(ISD::BRCOND,  MVT::i32, Custom);
+    setOperationAction(ISD::SETCC, MVT::i32, Expand);
+    setOperationAction(ISD::BR_CC, MVT::i32, Custom);
+    setOperationAction(ISD::BRCOND, MVT::i32, Custom);
     setOperationAction(ISD::SELECT_CC, MVT::i32, Expand);
     setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
-    setOperationAction(ISD::ConstantPool,  MVT::i32, Custom);
-    setOperationAction(ISD::JumpTable,     MVT::i32, Custom);
+    setOperationAction(ISD::ConstantPool, MVT::i32, Custom);
+    setOperationAction(ISD::JumpTable, MVT::i32, Custom);
   }
-  setOperationAction(ISD::SETCC,   MVT::i16, Expand);
-  setOperationAction(ISD::BR_CC,   MVT::i16, Custom);
-  setOperationAction(ISD::BRCOND,  MVT::i16, Custom);
-  setOperationAction(ISD::BRCOND,  MVT::i1,  Custom);
+  setOperationAction(ISD::SETCC, MVT::i16, Expand);
+  setOperationAction(ISD::BR_CC, MVT::i16, Custom);
+  setOperationAction(ISD::BRCOND, MVT::i16, Custom);
+  setOperationAction(ISD::BRCOND, MVT::i1, Custom);
   setOperationAction(ISD::SELECT_CC, MVT::i16, Expand);
   setOperationAction(ISD::GlobalAddress, MVT::i16, Custom);
-  setOperationAction(ISD::ConstantPool,  MVT::i16, Custom);
-  setOperationAction(ISD::JumpTable,     MVT::i16, Custom);
+  setOperationAction(ISD::ConstantPool, MVT::i16, Custom);
+  setOperationAction(ISD::JumpTable, MVT::i16, Custom);
 
   setBooleanContents(ZeroOrOneBooleanContent);
   setBooleanVectorContents(ZeroOrOneBooleanContent);
@@ -159,10 +169,14 @@ ETCATargetLowering::ETCATargetLowering(const TargetMachine &TM,
 
 const char *ETCATargetLowering::getTargetNodeName(unsigned Opcode) const {
   switch ((ETCAISD::NodeType)Opcode) {
-  case ETCAISD::CMP:      return "ETCAISD::CMP";
-  case ETCAISD::RET_FLAG: return "ETCAISD::RET_FLAG";
-  case ETCAISD::CALL:     return "ETCAISD::CALL";
-  case ETCAISD::BR_CC:    return "ETCAISD::BR_CC";
+  case ETCAISD::CMP:
+    return "ETCAISD::CMP";
+  case ETCAISD::RET_FLAG:
+    return "ETCAISD::RET_FLAG";
+  case ETCAISD::CALL:
+    return "ETCAISD::CALL";
+  case ETCAISD::BR_CC:
+    return "ETCAISD::BR_CC";
   }
   return nullptr;
 }
@@ -188,15 +202,15 @@ SDValue ETCATargetLowering::LowerOperation(SDValue Op,
   }
 }
 
-void ETCATargetLowering::ReplaceNodeResults(
-    SDNode *N, SmallVectorImpl<SDValue> &Results, SelectionDAG &DAG) const {}
+void ETCATargetLowering::ReplaceNodeResults(SDNode *N,
+                                            SmallVectorImpl<SDValue> &Results,
+                                            SelectionDAG &DAG) const {}
 
 //===----------------------------------------------------------------------===//
 //  Lowering helpers
 //===----------------------------------------------------------------------===//
 
-SDValue ETCATargetLowering::LowerBR_CC(SDValue Op,
-                                        SelectionDAG &DAG) const {
+SDValue ETCATargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
   SDValue Chain = Op.getOperand(0);
   ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(1))->get();
@@ -215,8 +229,7 @@ SDValue ETCATargetLowering::LowerBR_CC(SDValue Op,
   return DAG.getNode(ETCAISD::BR_CC, DL, BrVTs, Ops);
 }
 
-SDValue ETCATargetLowering::LowerBRCOND(SDValue Op,
-                                         SelectionDAG &DAG) const {
+SDValue ETCATargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
   SDValue Chain = Op.getOperand(0);
   SDValue Cond = Op.getOperand(1);
@@ -253,9 +266,12 @@ SDValue ETCATargetLowering::LowerFormalArguments(
   for (auto &VA : ArgLocs) {
     MVT ValVT = VA.getValVT();
     const TargetRegisterClass *RC = nullptr;
-    if (ValVT == MVT::i64) RC = &GPR64RegClass;
-    else if (ValVT == MVT::i32) RC = &GPR32RegClass;
-    else RC = &GPRRegClass;
+    if (ValVT == MVT::i64)
+      RC = &GPR64RegClass;
+    else if (ValVT == MVT::i32)
+      RC = &GPR32RegClass;
+    else
+      RC = &GPRRegClass;
 
     if (VA.isRegLoc()) {
       Register Reg = MF.addLiveIn(VA.getLocReg(), RC);
@@ -263,21 +279,23 @@ SDValue ETCATargetLowering::LowerFormalArguments(
       InVals.push_back(ArgVal);
     } else {
       unsigned Size = ValVT.getSizeInBits() / 8;
-      int FI = MF.getFrameInfo().CreateFixedObject(Size, VA.getLocMemOffset(), true);
+      int FI =
+          MF.getFrameInfo().CreateFixedObject(Size, VA.getLocMemOffset(), true);
       SDValue FIN = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
       SDValue Load = DAG.getLoad(ValVT, DL, Chain, FIN,
-                                  MachinePointerInfo::getFixedStack(MF, FI));
+                                 MachinePointerInfo::getFixedStack(MF, FI));
       InVals.push_back(Load);
     }
   }
   return Chain;
 }
 
-SDValue ETCATargetLowering::LowerReturn(
-    SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
-    const SmallVectorImpl<ISD::OutputArg> &Outs,
-    const SmallVectorImpl<SDValue> &OutVals, const SDLoc &DL,
-    SelectionDAG &DAG) const {
+SDValue
+ETCATargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
+                                bool isVarArg,
+                                const SmallVectorImpl<ISD::OutputArg> &Outs,
+                                const SmallVectorImpl<SDValue> &OutVals,
+                                const SDLoc &DL, SelectionDAG &DAG) const {
   MachineFunction &MF = DAG.getMachineFunction();
   SmallVector<CCValAssign, 16> RVLocs;
   CCState CCInfo(CallConv, isVarArg, MF, RVLocs, *DAG.getContext());
@@ -285,7 +303,8 @@ SDValue ETCATargetLowering::LowerReturn(
   SDValue Glue;
   for (auto &VA : RVLocs) {
     assert(VA.isRegLoc() && "Can only return in registers");
-    Chain = DAG.getCopyToReg(Chain, DL, VA.getLocReg(), OutVals[VA.getValNo()], Glue);
+    Chain = DAG.getCopyToReg(Chain, DL, VA.getLocReg(), OutVals[VA.getValNo()],
+                             Glue);
     Glue = Chain.getValue(1);
   }
   if (Glue.getNode())
@@ -293,9 +312,8 @@ SDValue ETCATargetLowering::LowerReturn(
   return DAG.getNode(ETCAISD::RET_FLAG, DL, MVT::Other, Chain);
 }
 
-SDValue ETCATargetLowering::LowerCall(
-    TargetLowering::CallLoweringInfo &CLI,
-    SmallVectorImpl<SDValue> &InVals) const {
+SDValue ETCATargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
+                                      SmallVectorImpl<SDValue> &InVals) const {
   SelectionDAG &DAG = CLI.DAG;
   SDLoc &DL = CLI.DL;
   const SmallVectorImpl<ISD::OutputArg> &Outs = CLI.Outs;
@@ -328,9 +346,11 @@ SDValue ETCATargetLowering::LowerCall(
       assert(VA.isMemLoc());
       if (!StackPtr)
         StackPtr = DAG.getCopyFromReg(Chain, DL, R6, PtrVT);
-      SDValue PtrOff = DAG.getNode(ISD::ADD, DL, PtrVT, StackPtr,
-                                    DAG.getConstant(VA.getLocMemOffset(), DL, PtrVT));
-      MemOpChains.push_back(DAG.getStore(Chain, DL, Arg, PtrOff, MachinePointerInfo()));
+      SDValue PtrOff =
+          DAG.getNode(ISD::ADD, DL, PtrVT, StackPtr,
+                      DAG.getConstant(VA.getLocMemOffset(), DL, PtrVT));
+      MemOpChains.push_back(
+          DAG.getStore(Chain, DL, Arg, PtrOff, MachinePointerInfo()));
     }
   }
 
@@ -354,8 +374,8 @@ SDValue ETCATargetLowering::LowerCall(
   if (Glue.getNode())
     Ops.push_back(Glue);
 
-  Chain = DAG.getNode(ETCAISD::CALL, DL,
-                       DAG.getVTList(MVT::Other, MVT::Glue), Ops);
+  Chain =
+      DAG.getNode(ETCAISD::CALL, DL, DAG.getVTList(MVT::Other, MVT::Glue), Ops);
 
   SmallVector<CCValAssign, 16> RVLocs;
   CCState RCCInfo(CallConv, isVarArg, MF, RVLocs, *DAG.getContext());
@@ -370,8 +390,9 @@ SDValue ETCATargetLowering::LowerCall(
 }
 
 bool ETCATargetLowering::isLegalAddressingMode(const DataLayout &DL,
-                                                const AddrMode &AM, Type *Ty,
-                                                unsigned AS,
-                                                Instruction *I) const {
-  return AM.BaseGV == nullptr && AM.HasBaseReg && AM.Scale == 0 && AM.BaseOffs == 0;
+                                               const AddrMode &AM, Type *Ty,
+                                               unsigned AS,
+                                               Instruction *I) const {
+  return AM.BaseGV == nullptr && AM.HasBaseReg && AM.Scale == 0 &&
+         AM.BaseOffs == 0;
 }

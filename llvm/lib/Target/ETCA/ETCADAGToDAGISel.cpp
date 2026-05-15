@@ -16,8 +16,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "ETCA.h"
-#include "ETCAInstrInfo.h"
 #include "ETCAISelLowering.h"
+#include "ETCAInstrInfo.h"
 #include "ETCATargetMachine.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
@@ -48,9 +48,9 @@ public:
 
   void Select(SDNode *N) override;
 
-  bool SelectInlineAsmMemoryOperand(
-      const SDValue &Op, InlineAsm::ConstraintCode ConstraintID,
-      std::vector<SDValue> &OutOps) override;
+  bool SelectInlineAsmMemoryOperand(const SDValue &Op,
+                                    InlineAsm::ConstraintCode ConstraintID,
+                                    std::vector<SDValue> &OutOps) override;
 
 #include "ETCAGenDAGISel.inc"
 };
@@ -92,8 +92,8 @@ void ETCADAGToDAGISel::Select(SDNode *N) {
   case ISD::BR: {
     SDValue Target = N->getOperand(1);
     SDValue Chain = N->getOperand(0);
-    SDNode *BrNode = CurDAG->getMachineNode(
-        ETCA::BR, DL, MVT::Other, Target, Chain);
+    SDNode *BrNode =
+        CurDAG->getMachineNode(ETCA::BR, DL, MVT::Other, Target, Chain);
     ReplaceNode(N, BrNode);
     return;
   }
@@ -104,9 +104,12 @@ void ETCADAGToDAGISel::Select(SDNode *N) {
     int64_t Val = C->getSExtValue();
     MVT VT = N->getSimpleValueType(0);
     unsigned Opc;
-    if (VT == MVT::i64)      Opc = MOVZI64;
-    else if (VT == MVT::i32) Opc = MOVZI32;
-    else                     Opc = MOVZI16;
+    if (VT == MVT::i64)
+      Opc = MOVZI64;
+    else if (VT == MVT::i32)
+      Opc = MOVZI32;
+    else
+      Opc = MOVZI16;
 
     SDNode *Mov = CurDAG->getMachineNode(
         Opc, DL, VT, CurDAG->getTargetConstant(Val, DL, VT));
@@ -130,9 +133,12 @@ void ETCADAGToDAGISel::Select(SDNode *N) {
     MVT VT = N->getSimpleValueType(0);
     SDValue TFI = CurDAG->getTargetFrameIndex(FI->getIndex(), VT);
     unsigned Opc;
-    if (VT == MVT::i64)      Opc = MOVZI64;
-    else if (VT == MVT::i32) Opc = MOVZI32;
-    else                     Opc = MOVZI16;
+    if (VT == MVT::i64)
+      Opc = MOVZI64;
+    else if (VT == MVT::i32)
+      Opc = MOVZI32;
+    else
+      Opc = MOVZI16;
     SDNode *Mov = CurDAG->getMachineNode(Opc, DL, VT, TFI);
     ReplaceNode(N, Mov);
     return;
@@ -145,19 +151,17 @@ void ETCADAGToDAGISel::Select(SDNode *N) {
   case ETCAISD::CMP: {
     SDValue LHS = N->getOperand(0);
     SDValue RHS = N->getOperand(1);
-    ReplaceNode(N,
-                CurDAG->getMachineNode(ETCA::CMP, DL, MVT::Glue, LHS, RHS));
+    ReplaceNode(N, CurDAG->getMachineNode(ETCA::CMP, DL, MVT::Glue, LHS, RHS));
     return;
   }
   case ETCAISD::RET_FLAG: {
     SDValue Chain = N->getOperand(0);
     if (N->getNumOperands() > 1 && N->getOperand(1).getValueType() == MVT::Glue)
       ReplaceNode(N, CurDAG->getMachineNode(ETCA::RET_Pseudo, DL, MVT::Other,
-                                             Chain, N->getOperand(1)));
+                                            Chain, N->getOperand(1)));
     else
-      ReplaceNode(N,
-                  CurDAG->getMachineNode(ETCA::RET_Pseudo, DL, MVT::Other,
-                                         Chain));
+      ReplaceNode(
+          N, CurDAG->getMachineNode(ETCA::RET_Pseudo, DL, MVT::Other, Chain));
     return;
   }
   case ETCAISD::CALL: {
@@ -167,8 +171,7 @@ void ETCADAGToDAGISel::Select(SDNode *N) {
     for (unsigned i = 2, e = N->getNumOperands(); i < e; ++i)
       Ops.push_back(N->getOperand(i));
     SDVTList VTs = CurDAG->getVTList(MVT::Other, MVT::Glue);
-    SDNode *CallNode =
-        CurDAG->getMachineNode(ETCA::CALL_Pseudo, DL, VTs, Ops);
+    SDNode *CallNode = CurDAG->getMachineNode(ETCA::CALL_Pseudo, DL, VTs, Ops);
     ReplaceNode(N, CallNode);
     return;
   }
@@ -206,16 +209,36 @@ void ETCADAGToDAGISel::Select(SDNode *N) {
 
     unsigned BrOpc;
     switch (ECC) {
-    case ETCAISD::COND_EQ:  BrOpc = ETCA::BEQ;  break;
-    case ETCAISD::COND_NE:  BrOpc = ETCA::BNE;  break;
-    case ETCAISD::COND_LT:  BrOpc = ETCA::BLT;  break;
-    case ETCAISD::COND_GE:  BrOpc = ETCA::BGE;  break;
-    case ETCAISD::COND_ULT: BrOpc = ETCA::BLTU; break;
-    case ETCAISD::COND_UGE: BrOpc = ETCA::BGEU; break;
-    case ETCAISD::COND_LE:  BrOpc = ETCA::BLE;  break;
-    case ETCAISD::COND_GT:  BrOpc = ETCA::BGT;  break;
-    case ETCAISD::COND_ULE: BrOpc = ETCA::BLEU; break;
-    case ETCAISD::COND_UGT: BrOpc = ETCA::BGTU; break;
+    case ETCAISD::COND_EQ:
+      BrOpc = ETCA::BEQ;
+      break;
+    case ETCAISD::COND_NE:
+      BrOpc = ETCA::BNE;
+      break;
+    case ETCAISD::COND_LT:
+      BrOpc = ETCA::BLT;
+      break;
+    case ETCAISD::COND_GE:
+      BrOpc = ETCA::BGE;
+      break;
+    case ETCAISD::COND_ULT:
+      BrOpc = ETCA::BLTU;
+      break;
+    case ETCAISD::COND_UGE:
+      BrOpc = ETCA::BGEU;
+      break;
+    case ETCAISD::COND_LE:
+      BrOpc = ETCA::BLE;
+      break;
+    case ETCAISD::COND_GT:
+      BrOpc = ETCA::BGT;
+      break;
+    case ETCAISD::COND_ULE:
+      BrOpc = ETCA::BLEU;
+      break;
+    case ETCAISD::COND_UGT:
+      BrOpc = ETCA::BGTU;
+      break;
     default:
       BrOpc = ETCA::BR;
       break;

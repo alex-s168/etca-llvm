@@ -27,8 +27,7 @@ public:
 
   const TargetRegisterInfo &getRegisterInfo() const;
 
-  bool isMoveInstr(const TargetRegisterInfo &TRI,
-                   const MachineInstr &MI) const;
+  bool isMoveInstr(const TargetRegisterInfo &TRI, const MachineInstr &MI) const;
 
   Register isLoadFromStackSlot(const MachineInstr &MI,
                                int &FrameIndex) const override;
@@ -41,20 +40,16 @@ public:
                    bool KillSrc, bool RenamableDest = false,
                    bool RenamableSrc = false) const override;
 
-  void storeRegToStackSlot(MachineBasicBlock &MBB,
-                           MachineBasicBlock::iterator I, Register SrcReg,
-                           bool isKill, int FrameIndex,
-                           const TargetRegisterClass *RC, Register VReg,
-                           MachineInstr::MIFlag Flags =
-                               MachineInstr::NoFlags) const override;
+  void storeRegToStackSlot(
+      MachineBasicBlock &MBB, MachineBasicBlock::iterator I, Register SrcReg,
+      bool isKill, int FrameIndex, const TargetRegisterClass *RC, Register VReg,
+      MachineInstr::MIFlag Flags = MachineInstr::NoFlags) const override;
 
-  void loadRegFromStackSlot(MachineBasicBlock &MBB,
-                            MachineBasicBlock::iterator I, Register DestReg,
-                            int FrameIndex,
-                            const TargetRegisterClass *RC, Register VReg,
-                            unsigned SubReg = 0,
-                            MachineInstr::MIFlag Flags =
-                                MachineInstr::NoFlags) const override;
+  void loadRegFromStackSlot(
+      MachineBasicBlock &MBB, MachineBasicBlock::iterator I, Register DestReg,
+      int FrameIndex, const TargetRegisterClass *RC, Register VReg,
+      unsigned SubReg = 0,
+      MachineInstr::MIFlag Flags = MachineInstr::NoFlags) const override;
 
   /// Get the number of bytes pushed/popped for a given register class.
   unsigned getRegClassSize(const TargetRegisterClass &RC) const;

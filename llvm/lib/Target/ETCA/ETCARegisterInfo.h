@@ -47,7 +47,7 @@ public:
                            RegScavenger *RS = nullptr) const override;
 
   const uint32_t *getCallPreservedMask(const MachineFunction &MF,
-                                        CallingConv::ID CC) const override;
+                                       CallingConv::ID CC) const override;
 
   Register getFrameRegister(const MachineFunction &MF) const override;
 

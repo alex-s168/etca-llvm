@@ -37,9 +37,7 @@ public:
     return &Subtarget;
   }
 
-  const ETCASubtarget *getSubtargetImpl() const {
-    return &Subtarget;
-  }
+  const ETCASubtarget *getSubtargetImpl() const { return &Subtarget; }
 
   TargetLoweringObjectFile *getObjFileLowering() const override {
     return const_cast<TargetLoweringObjectFileELF *>(&TLOF);

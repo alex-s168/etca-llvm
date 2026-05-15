@@ -39,10 +39,13 @@ const TargetRegisterInfo &ETCAInstrInfo::getRegisterInfo() const {
 }
 
 unsigned ETCAInstrInfo::getRegClassSize(const TargetRegisterClass &RC) const {
-  if (&RC == &GPRRegClass)   return 2;  // 16-bit
-  if (&RC == &GPR32RegClass) return 4;  // 32-bit
-  if (&RC == &GPR64RegClass) return 8;  // 64-bit
-  return 2; // default
+  if (&RC == &GPRRegClass)
+    return 2; // 16-bit
+  if (&RC == &GPR32RegClass)
+    return 4; // 32-bit
+  if (&RC == &GPR64RegClass)
+    return 8; // 64-bit
+  return 2;   // default
 }
 
 bool ETCAInstrInfo::isMoveInstr(const TargetRegisterInfo &TRI,
@@ -109,9 +112,15 @@ void ETCAInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   unsigned RegWidth = ST.getRegWidth();
   unsigned Opc;
   switch (RegWidth) {
-  case 64: Opc = MOVZ64; break;
-  case 32: Opc = MOVZ32; break;
-  default: Opc = MOVZ16; break;
+  case 64:
+    Opc = MOVZ64;
+    break;
+  case 32:
+    Opc = MOVZ32;
+    break;
+  default:
+    Opc = MOVZ16;
+    break;
   }
 
   // RR format (non-tied): [dst, src]
@@ -129,41 +138,55 @@ void ETCAInstrInfo::storeRegToStackSlot(
 
   unsigned StoreOpc;
   switch (Size) {
-  case 8:  StoreOpc = STORE8; break;
-  case 4:  StoreOpc = STORE32; break;
+  case 8:
+    StoreOpc = STORE8;
+    break;
+  case 4:
+    StoreOpc = STORE32;
+    break;
   case 2:
-  default: StoreOpc = STORE16; break;
+  default:
+    StoreOpc = STORE16;
+    break;
   }
   auto MIB = BuildMI(MBB, I, I->getDebugLoc(), get(StoreOpc))
-      .addReg(SrcReg, getKillRegState(isKill))
-      .addFrameIndex(FrameIndex)
-      .addMemOperand(MF.getMachineMemOperand(
-          MachinePointerInfo::getFixedStack(MF, FrameIndex),
-          MachineMemOperand::MOStore, Size, Alignment));
+                 .addReg(SrcReg, getKillRegState(isKill))
+                 .addFrameIndex(FrameIndex)
+                 .addMemOperand(MF.getMachineMemOperand(
+                     MachinePointerInfo::getFixedStack(MF, FrameIndex),
+                     MachineMemOperand::MOStore, Size, Alignment));
   if (Flags != MachineInstr::NoFlags)
     MIB.setMIFlags(Flags);
 }
 
-void ETCAInstrInfo::loadRegFromStackSlot(
-    MachineBasicBlock &MBB, MachineBasicBlock::iterator I, Register DestReg,
-    int FrameIndex, const TargetRegisterClass *RC, Register VReg,
-    unsigned SubReg, MachineInstr::MIFlag Flags) const {
+void ETCAInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
+                                         MachineBasicBlock::iterator I,
+                                         Register DestReg, int FrameIndex,
+                                         const TargetRegisterClass *RC,
+                                         Register VReg, unsigned SubReg,
+                                         MachineInstr::MIFlag Flags) const {
   MachineFunction &MF = *MBB.getParent();
   unsigned Size = getRegClassSize(*RC);
   Align Alignment(Size);
 
   unsigned LoadOpc;
   switch (Size) {
-  case 8:  LoadOpc = LOAD8; break;
-  case 4:  LoadOpc = LOAD32; break;
+  case 8:
+    LoadOpc = LOAD8;
+    break;
+  case 4:
+    LoadOpc = LOAD32;
+    break;
   case 2:
-  default: LoadOpc = LOAD16; break;
+  default:
+    LoadOpc = LOAD16;
+    break;
   }
   auto MIB = BuildMI(MBB, I, I->getDebugLoc(), get(LoadOpc), DestReg)
-      .addFrameIndex(FrameIndex)
-      .addMemOperand(MF.getMachineMemOperand(
-          MachinePointerInfo::getFixedStack(MF, FrameIndex),
-          MachineMemOperand::MOLoad, Size, Alignment));
+                 .addFrameIndex(FrameIndex)
+                 .addMemOperand(MF.getMachineMemOperand(
+                     MachinePointerInfo::getFixedStack(MF, FrameIndex),
+                     MachineMemOperand::MOLoad, Size, Alignment));
   if (Flags != MachineInstr::NoFlags)
     MIB.setMIFlags(Flags);
 }
@@ -178,10 +201,10 @@ bool ETCAInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   default:
     return false;
 
-  //===----------------------------------------------------------------===//
-  // RET_Pseudo -> jmpr r7 (when SAF is available)
-  // Without SAF, RET_Pseudo should not be generated.
-  //===----------------------------------------------------------------===//
+    //===----------------------------------------------------------------===//
+    // RET_Pseudo -> jmpr r7 (when SAF is available)
+    // Without SAF, RET_Pseudo should not be generated.
+    //===----------------------------------------------------------------===//
 
   case ETCA::RET_Pseudo: {
     assert(ST.hasSAF() && "RET_Pseudo requires SAF extension");
@@ -190,9 +213,9 @@ bool ETCAInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     return true;
   }
 
-  //===----------------------------------------------------------------===//
-  // CALL_Pseudo -> CALL (SAF 12-bit PC-relative call)
-  //===----------------------------------------------------------------===//
+    //===----------------------------------------------------------------===//
+    // CALL_Pseudo -> CALL (SAF 12-bit PC-relative call)
+    //===----------------------------------------------------------------===//
 
   case ETCA::CALL_Pseudo: {
     assert(ST.hasSAF() && "CALL_Pseudo requires SAF extension");

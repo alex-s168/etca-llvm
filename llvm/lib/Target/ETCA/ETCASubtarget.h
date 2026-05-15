@@ -111,12 +111,12 @@ public:
   unsigned getPtrSize() const { return PtrSize; }
 
   // Extension accessors
-  bool hasSAF()   const { return HasSAF; }
-  bool hasByte()  const { return HasByte; }
-  bool hasDW()    const { return HasDW; }
-  bool hasQW()    const { return HasQW; }
-  bool hasDWAS()  const { return HasDWAS; }
-  bool hasQWAS()  const { return HasQWAS; }
+  bool hasSAF() const { return HasSAF; }
+  bool hasByte() const { return HasByte; }
+  bool hasDW() const { return HasDW; }
+  bool hasQW() const { return HasQW; }
+  bool hasDWAS() const { return HasDWAS; }
+  bool hasQWAS() const { return HasQWAS; }
 
   // Derived queries
   /// Returns the register width in bits (same as WordSize).
@@ -136,8 +136,7 @@ public:
 
   /// Build a DataLayout string from raw parameters (WordSize, PtrSize).
   /// Public so ETCATargetMachine::computeDataLayout can delegate to it.
-  static std::string buildDataLayoutString(unsigned WordSize,
-                                           unsigned PtrSize);
+  static std::string buildDataLayoutString(unsigned WordSize, unsigned PtrSize);
 
 private:
   void buildDLString();

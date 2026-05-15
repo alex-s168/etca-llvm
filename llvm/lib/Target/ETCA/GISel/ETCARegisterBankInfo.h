@@ -31,9 +31,8 @@ class ETCARegisterBankInfo final : public ETCAGenRegisterBankInfo {
 public:
   ETCARegisterBankInfo(const TargetRegisterInfo &TRI);
 
-  const RegisterBank &
-  getRegBankFromRegClass(const TargetRegisterClass &RC,
-                         LLT Ty) const override;
+  const RegisterBank &getRegBankFromRegClass(const TargetRegisterClass &RC,
+                                             LLT Ty) const override;
 
   const InstructionMapping &
   getInstrMapping(const MachineInstr &MI) const override;

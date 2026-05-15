@@ -9,12 +9,12 @@
 #include "ETCATargetMachine.h"
 #include "TargetInfo/ETCATargetInfo.h"
 #include "llvm/CodeGen/AsmPrinter.h"
-#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
-#include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCStreamer.h"
+#include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/PassRegistry.h"
 #include "llvm/Support/Compiler.h"
@@ -42,7 +42,8 @@ private:
 };
 } // end anonymous namespace
 
-extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeETCAAsmPrinter() {
+extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void
+LLVMInitializeETCAAsmPrinter() {
   RegisterAsmPrinter<ETCAAsmPrinter> X(getTheETCATarget());
 }
 
@@ -74,9 +75,8 @@ void ETCAAsmPrinter::LowerETCAMPEMCInst(const MachineInstr *MI,
           MCSymbolRefExpr::create(getSymbol(MO.getGlobal()), OutContext));
       break;
     case MachineOperand::MO_ExternalSymbol:
-      MCOp = MCOperand::createExpr(
-          MCSymbolRefExpr::create(
-              OutContext.getOrCreateSymbol(MO.getSymbolName()), OutContext));
+      MCOp = MCOperand::createExpr(MCSymbolRefExpr::create(
+          OutContext.getOrCreateSymbol(MO.getSymbolName()), OutContext));
       break;
     }
     OutMI.addOperand(MCOp);

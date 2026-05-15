@@ -30,8 +30,8 @@ ETCARegisterBankInfo::ETCARegisterBankInfo(const TargetRegisterInfo &TRI)
     : ETCAGenRegisterBankInfo(/*HwMode=*/0) {}
 
 const RegisterBank &
-ETCARegisterBankInfo::getRegBankFromRegClass(
-    const TargetRegisterClass &RC, LLT Ty) const {
+ETCARegisterBankInfo::getRegBankFromRegClass(const TargetRegisterClass &RC,
+                                             LLT Ty) const {
   // All register classes map to the single GPR bank.
   return getRegBank(ETCA::GPRBankID);
 }
@@ -84,6 +84,5 @@ ETCARegisterBankInfo::getInstrMapping(const MachineInstr &MI) const {
   }
 
   return getInstructionMapping(DefaultMappingID, /*Cost=*/1,
-                                getOperandsMapping(OpMappings),
-                                NumOperands);
+                               getOperandsMapping(OpMappings), NumOperands);
 }

@@ -63,7 +63,8 @@ using namespace llvm;
 
 #define DEBUG_TYPE "etca-asm-parser"
 
-// GET_REGINFO_ENUM and GET_SUBTARGETINFO_ENUM are provided by ETCAMCTargetDesc.h
+// GET_REGINFO_ENUM and GET_SUBTARGETINFO_ENUM are provided by
+// ETCAMCTargetDesc.h
 #define GET_INSTRINFO_ENUM
 #include "ETCAGenInstrInfo.inc"
 
@@ -86,18 +87,21 @@ public:
   SMLoc StartLoc, EndLoc;
 
 private:
+  struct RegOperand {
+    unsigned RegNum;
+    unsigned WidthHint; // 8, 16, 32, or 64 — derived from register name suffix
+  };
+  struct ImmOperand {
+    int64_t Value;
+  };
+  struct MemOperand {
+    unsigned RegNum;
+    unsigned WidthHint;
+  };
   union {
-    struct {
-      unsigned RegNum;
-      unsigned WidthHint; // 8, 16, 32, or 64 — derived from register name suffix
-    } Reg;
-    struct {
-      int64_t Value;
-    } Imm;
-    struct {
-      unsigned RegNum;
-      unsigned WidthHint;
-    } Mem;
+    RegOperand Reg;
+    ImmOperand Imm;
+    MemOperand Mem;
   };
   const MCExpr *Expr = nullptr;
 
@@ -108,34 +112,36 @@ public:
   }
 
   // --- Factory methods ---
-  static std::unique_ptr<ETCAOperand> CreateReg(unsigned RegNum,
-                                                 unsigned WidthHint,
-                                                 SMLoc S, SMLoc E) {
+  static std::unique_ptr<ETCAOperand>
+  createReg(unsigned RegNum, unsigned WidthHint, SMLoc S, SMLoc E) {
     auto Op = std::make_unique<ETCAOperand>(k_Register, S, E);
     Op->Reg.RegNum = RegNum;
     Op->Reg.WidthHint = WidthHint;
     return Op;
   }
-  static std::unique_ptr<ETCAOperand> CreateImm(int64_t Val, SMLoc S, SMLoc E) {
+
+  static std::unique_ptr<ETCAOperand> createImm(int64_t Val, SMLoc S, SMLoc E) {
     auto Op = std::make_unique<ETCAOperand>(k_Immediate, S, E);
     Op->Imm.Value = Val;
     return Op;
   }
-  static std::unique_ptr<ETCAOperand> CreateExpr(const MCExpr *ExprVal, SMLoc S,
-                                                   SMLoc End) {
+
+  static std::unique_ptr<ETCAOperand> createExpr(const MCExpr *ExprVal, SMLoc S,
+                                                 SMLoc End) {
     auto Op = std::make_unique<ETCAOperand>(k_Expression, S, End);
     Op->Expr = ExprVal;
     return Op;
   }
-  static std::unique_ptr<ETCAOperand> CreateMem(unsigned RegNum,
-                                                   unsigned WidthHint,
-                                                   SMLoc S, SMLoc E) {
+
+  static std::unique_ptr<ETCAOperand>
+  createMem(unsigned RegNum, unsigned WidthHint, SMLoc S, SMLoc E) {
     auto Op = std::make_unique<ETCAOperand>(k_Memory, S, E);
     Op->Mem.RegNum = RegNum;
     Op->Mem.WidthHint = WidthHint;
     return Op;
   }
-  static std::unique_ptr<ETCAOperand> CreateTok(SMLoc S, SMLoc E) {
+
+  static std::unique_ptr<ETCAOperand> createTok(SMLoc S, SMLoc E) {
     return std::make_unique<ETCAOperand>(k_Token, S, E);
   }
 
@@ -252,10 +258,14 @@ class ETCAAsmParser : public MCTargetAsmParser {
   // Opcode lookup tables.
   struct RR_RI_Entry {
     const char *Mnemonic;
-    unsigned Opcode8RR;   unsigned Opcode16RR;
-    unsigned Opcode32RR;  unsigned Opcode64RR;
-    unsigned Opcode8RI;   unsigned Opcode16RI;
-    unsigned Opcode32RI;  unsigned Opcode64RI;
+    unsigned Opcode8RR;
+    unsigned Opcode16RR;
+    unsigned Opcode32RR;
+    unsigned Opcode64RR;
+    unsigned Opcode8RI;
+    unsigned Opcode16RI;
+    unsigned Opcode32RI;
+    unsigned Opcode64RI;
   };
   static const RR_RI_Entry ALUOps[];
 
@@ -270,23 +280,21 @@ class ETCAAsmParser : public MCTargetAsmParser {
     unsigned Opcode;
     unsigned NumOps;   // expected operand count
     bool IsTargetExpr; // true if operand is a branch/call target expression
-    bool IsMov;       // true if this is the mov pseudo-instruction
+    bool IsMov;        // true if this is the mov pseudo-instruction
   };
   static const FixedEntry FixedOps[];
 
 public:
   ETCAAsmParser(const MCSubtargetInfo &STI, MCAsmParser &Parser,
                 const MCInstrInfo &MII)
-      : MCTargetAsmParser(STI, MII),
-        Parser(Parser),
+      : MCTargetAsmParser(STI, MII), Parser(Parser),
         MRI(*Parser.getContext().getRegisterInfo()) {
     MCAsmParserExtension::Initialize(Parser);
     setAvailableFeatures(FeatureBitset());
   }
 
   // --- Required MCTargetAsmParser overrides ---
-  bool parseRegister(MCRegister &Reg, SMLoc &StartLoc,
-                     SMLoc &EndLoc) override;
+  bool parseRegister(MCRegister &Reg, SMLoc &StartLoc, SMLoc &EndLoc) override;
   ParseStatus tryParseRegister(MCRegister &Reg, SMLoc &StartLoc,
                                SMLoc &EndLoc) override;
   bool parseInstruction(ParseInstructionInfo &Info, StringRef Name,
@@ -339,66 +347,67 @@ private:
 // ALU operations: mnemonic → {8RR, 16RR, 32RR, 64RR, 8RI, 16RI, 32RI, 64RI}
 // Entries with 0 mean "not available in this width/form".
 const ETCAAsmParser::RR_RI_Entry ETCAAsmParser::ALUOps[] = {
-  {"add",  ETCA::ADD8,  ETCA::ADD16,  ETCA::ADD32,  ETCA::ADD64,
-           ETCA::ADDI8,  ETCA::ADDI16,  ETCA::ADDI32,  ETCA::ADDI64},
-  {"sub",  ETCA::SUB8,  ETCA::SUB16,  ETCA::SUB32,  ETCA::SUB64,
-           ETCA::SUBI8,  ETCA::SUBI16,  ETCA::SUBI32,  ETCA::SUBI64},
-  {"rsub", ETCA::RSUB8, ETCA::RSUB16, ETCA::RSUB32, ETCA::RSUB64,
-           ETCA::RSUBI8, ETCA::RSUBI16, ETCA::RSUBI32, ETCA::RSUBI64},
-  {"or",   ETCA::OR8,   ETCA::OR16,   ETCA::OR32,   ETCA::OR64,
-           ETCA::ORI8,   ETCA::ORI16,   ETCA::ORI32,   ETCA::ORI64},
-  {"xor",  ETCA::XOR8,  ETCA::XOR16,  ETCA::XOR32,  ETCA::XOR64,
-           ETCA::XORI8,  ETCA::XORI16,  ETCA::XORI32,  ETCA::XORI64},
-  {"and",  ETCA::AND8,  ETCA::AND16,  ETCA::AND32,  ETCA::AND64,
-           ETCA::ANDI8,  ETCA::ANDI16,  ETCA::ANDI32,  ETCA::ANDI64},
-  {"movz", ETCA::MOVZ8, ETCA::MOVZ16, ETCA::MOVZ32, ETCA::MOVZ64,
-           ETCA::MOVZI8, ETCA::MOVZI16, ETCA::MOVZI32, ETCA::MOVZI64},
-  {"movs", ETCA::MOVS8, ETCA::MOVS16, ETCA::MOVS32, ETCA::MOVS64,
-           ETCA::MOVSI8, ETCA::MOVSI16, ETCA::MOVSI32, ETCA::MOVSI64},
-  // CMP/TEST in RR form: width-selectable via SS bits
-  {"cmp",  ETCA::CMP8,  ETCA::CMP,   ETCA::CMP32,  ETCA::CMP64,
-           ETCA::CMPI8,  ETCA::CMPI16, ETCA::CMPI32, ETCA::CMPI64},
-  {"test", ETCA::TEST8, ETCA::TEST,  ETCA::TEST32, ETCA::TEST64,
-           ETCA::TESTI8, ETCA::TESTI16, ETCA::TESTI32, ETCA::TESTI64},
-  {"slo",  0, 0, 0, 0,  0, ETCA::SLO16, 0, 0},  // RI only, 16-bit only
-  {"readcr",  0, 0, 0, 0,  0, ETCA::READCR, 0, 0},
-  {"writecr", 0, 0, 0, 0,  0, ETCA::WRITECR, 0, 0},
+    {"add", ETCA::ADD8, ETCA::ADD16, ETCA::ADD32, ETCA::ADD64, ETCA::ADDI8,
+     ETCA::ADDI16, ETCA::ADDI32, ETCA::ADDI64},
+    {"sub", ETCA::SUB8, ETCA::SUB16, ETCA::SUB32, ETCA::SUB64, ETCA::SUBI8,
+     ETCA::SUBI16, ETCA::SUBI32, ETCA::SUBI64},
+    {"rsub", ETCA::RSUB8, ETCA::RSUB16, ETCA::RSUB32, ETCA::RSUB64,
+     ETCA::RSUBI8, ETCA::RSUBI16, ETCA::RSUBI32, ETCA::RSUBI64},
+    {"or", ETCA::OR8, ETCA::OR16, ETCA::OR32, ETCA::OR64, ETCA::ORI8,
+     ETCA::ORI16, ETCA::ORI32, ETCA::ORI64},
+    {"xor", ETCA::XOR8, ETCA::XOR16, ETCA::XOR32, ETCA::XOR64, ETCA::XORI8,
+     ETCA::XORI16, ETCA::XORI32, ETCA::XORI64},
+    {"and", ETCA::AND8, ETCA::AND16, ETCA::AND32, ETCA::AND64, ETCA::ANDI8,
+     ETCA::ANDI16, ETCA::ANDI32, ETCA::ANDI64},
+    {"movz", ETCA::MOVZ8, ETCA::MOVZ16, ETCA::MOVZ32, ETCA::MOVZ64,
+     ETCA::MOVZI8, ETCA::MOVZI16, ETCA::MOVZI32, ETCA::MOVZI64},
+    {"movs", ETCA::MOVS8, ETCA::MOVS16, ETCA::MOVS32, ETCA::MOVS64,
+     ETCA::MOVSI8, ETCA::MOVSI16, ETCA::MOVSI32, ETCA::MOVSI64},
+    // CMP/TEST in RR form: width-selectable via SS bits
+    {"cmp", ETCA::CMP8, ETCA::CMP, ETCA::CMP32, ETCA::CMP64, ETCA::CMPI8,
+     ETCA::CMPI16, ETCA::CMPI32, ETCA::CMPI64},
+    {"test", ETCA::TEST8, ETCA::TEST, ETCA::TEST32, ETCA::TEST64, ETCA::TESTI8,
+     ETCA::TESTI16, ETCA::TESTI32, ETCA::TESTI64},
+    {"slo", 0, 0, 0, 0, 0, ETCA::SLO16, 0, 0}, // RI only, 16-bit only
+    {"readcr", 0, 0, 0, 0, 0, ETCA::READCR, 0, 0},
+    {"writecr", 0, 0, 0, 0, 0, ETCA::WRITECR, 0, 0},
 };
 
 // Branch instructions — both LLVM-style and binutils-compatible names.
 const ETCAAsmParser::BranchEntry ETCAAsmParser::BranchOps[] = {
-  // LLVM-style and binutils-compatible names
-  {"br",   ETCA::BR},
-  {"jmp",  ETCA::BR},  {"j",    ETCA::BR},
-  {"beq",  ETCA::BEQ}, {"je",   ETCA::BEQ}, {"jz",   ETCA::BEQ},
-  {"bne",  ETCA::BNE}, {"jne",  ETCA::BNE}, {"jnz",  ETCA::BNE},
-  {"blt",  ETCA::BLT}, {"jl",   ETCA::BLT}, {"jn",   ETCA::BLT},
-  {"bge",  ETCA::BGE}, {"jge",  ETCA::BGE}, {"jnn",  ETCA::BGE},
-  {"bltu", ETCA::BLTU},{"jlo",  ETCA::BLTU},{"jb",   ETCA::BLTU},
-  {"bgeu", ETCA::BGEU},{"jhs",  ETCA::BGEU},{"jae",  ETCA::BGEU},{"jnb", ETCA::BGEU},
-  {"ble",  ETCA::BLE},  {"jle",  ETCA::BLE}, {"jng",  ETCA::BLE},
-  {"bgt",  ETCA::BGT},  {"jg",   ETCA::BGT}, {"jnle", ETCA::BGT},
-  {"bleu", ETCA::BLEU}, {"jls",  ETCA::BLEU},{"jna",  ETCA::BLEU},{"jbe", ETCA::BLEU},
-  {"bgtu", ETCA::BGTU}, {"ja",   ETCA::BGTU},
+    // LLVM-style and binutils-compatible names
+    {"br", ETCA::BR},     {"jmp", ETCA::BR},    {"j", ETCA::BR},
+    {"beq", ETCA::BEQ},   {"je", ETCA::BEQ},    {"jz", ETCA::BEQ},
+    {"bne", ETCA::BNE},   {"jne", ETCA::BNE},   {"jnz", ETCA::BNE},
+    {"blt", ETCA::BLT},   {"jl", ETCA::BLT},    {"jn", ETCA::BLT},
+    {"bge", ETCA::BGE},   {"jge", ETCA::BGE},   {"jnn", ETCA::BGE},
+    {"bltu", ETCA::BLTU}, {"jlo", ETCA::BLTU},  {"jb", ETCA::BLTU},
+    {"bgeu", ETCA::BGEU}, {"jhs", ETCA::BGEU},  {"jae", ETCA::BGEU},
+    {"jnb", ETCA::BGEU},  {"ble", ETCA::BLE},   {"jle", ETCA::BLE},
+    {"jng", ETCA::BLE},   {"bgt", ETCA::BGT},   {"jg", ETCA::BGT},
+    {"jnle", ETCA::BGT},  {"bleu", ETCA::BLEU}, {"jls", ETCA::BLEU},
+    {"jna", ETCA::BLEU},  {"jbe", ETCA::BLEU},  {"bgtu", ETCA::BGTU},
+    {"ja", ETCA::BGTU},
 };
 
 // Fixed-format instructions: LOAD, STORE, SAF ops, NOP.
 // NumOps is the number of operand operands (not counting the mnemonic token).
 // IsTargetExpr: true for branch/call targets (parsed as expressions).
 const ETCAAsmParser::FixedEntry ETCAAsmParser::FixedOps[] = {
-  // LOAD/STORE use RR format.  The AsmParser selects width-specific opcode
-  // (LOAD8/LOAD16/LOAD32/LOAD64) based on the register width hint.
-  // We only need the FixedEntry for the mnemonic lookup; the actual opcode
-  // is determined dynamically in the Load/Store handler below.
-  {"load",  ETCA::LOAD16, 2, false, false},
-  {"store", ETCA::STORE16, 2, false, false},
-  {"call",  ETCA::CALL,  1, true,  false},
-  {"push",  ETCA::PUSH,  1, false, false},
-  {"pop",   ETCA::POP,   1, false, false},
-  {"jmpr",  ETCA::JMPR,  1, false, false},
-  {"callr", ETCA::CALLR, 1, false, false},
-  {"nop",   ETCA::NOP,   0, false, false},
-  {"mov",   ETCA::MOVS16, 0, false, true},  // mov pseudo: width determined by suffix/register
+    // LOAD/STORE use RR format.  The AsmParser selects width-specific opcode
+    // (LOAD8/LOAD16/LOAD32/LOAD64) based on the register width hint.
+    // We only need the FixedEntry for the mnemonic lookup; the actual opcode
+    // is determined dynamically in the Load/Store handler below.
+    {"load", ETCA::LOAD16, 2, false, false},
+    {"store", ETCA::STORE16, 2, false, false},
+    {"call", ETCA::CALL, 1, true, false},
+    {"push", ETCA::PUSH, 1, false, false},
+    {"pop", ETCA::POP, 1, false, false},
+    {"jmpr", ETCA::JMPR, 1, false, false},
+    {"callr", ETCA::CALLR, 1, false, false},
+    {"nop", ETCA::NOP, 0, false, false},
+    {"mov", ETCA::MOVS16, 0, false,
+     true}, // mov pseudo: width determined by suffix/register
 };
 
 //===------------------------------------------------------------------===//
@@ -422,8 +431,7 @@ ETCAAsmParser::lookupFixed(StringRef Mnemonic) {
   return nullptr;
 }
 
-const ETCAAsmParser::RR_RI_Entry *
-ETCAAsmParser::lookupALU(StringRef Mnemonic) {
+const ETCAAsmParser::RR_RI_Entry *ETCAAsmParser::lookupALU(StringRef Mnemonic) {
   // Case-insensitive compare
   for (const auto &E : ALUOps) {
     if (Mnemonic.equals_insensitive(E.Mnemonic))
@@ -461,23 +469,47 @@ MCRegister ETCAAsmParser::matchRegisterName(StringRef Name) {
   // These must be checked before the size-suffix logic below.
   auto matchABI = [](StringRef N) -> MCRegister {
     return StringSwitch<MCRegister>(N)
-      .Case("a0",  ETCA::R0).Case("a0x", ETCA::R0).Case("a0h", ETCA::R0)
-      .Case("a0d", ETCA::D0).Case("a0q", ETCA::Q0)
-      .Case("a1",  ETCA::R1).Case("a1x", ETCA::R1).Case("a1h", ETCA::R1)
-      .Case("a1d", ETCA::D1).Case("a1q", ETCA::Q1)
-      .Case("a2",  ETCA::R2).Case("a2x", ETCA::R2).Case("a2h", ETCA::R2)
-      .Case("a2d", ETCA::D2).Case("a2q", ETCA::Q2)
-      .Case("s0",  ETCA::R3).Case("s0x", ETCA::R3).Case("s0h", ETCA::R3)
-      .Case("s0d", ETCA::D3).Case("s0q", ETCA::Q3)
-      .Case("s1",  ETCA::R4).Case("s1x", ETCA::R4).Case("s1h", ETCA::R4)
-      .Case("s1d", ETCA::D4).Case("s1q", ETCA::Q4)
-      .Case("bp",  ETCA::R5).Case("bpx", ETCA::R5).Case("bph", ETCA::R5)
-      .Case("bpd", ETCA::D5).Case("bpq", ETCA::Q5)
-      .Case("sp",  ETCA::R6).Case("spx", ETCA::R6).Case("sph", ETCA::R6)
-      .Case("spd", ETCA::D6).Case("spq", ETCA::Q6)
-      .Case("ln",  ETCA::R7).Case("lnx", ETCA::R7).Case("lnh", ETCA::R7)
-      .Case("lnd", ETCA::D7).Case("lnq", ETCA::Q7)
-      .Default(MCRegister::NoRegister);
+        .Case("a0", ETCA::R0)
+        .Case("a0x", ETCA::R0)
+        .Case("a0h", ETCA::R0)
+        .Case("a0d", ETCA::D0)
+        .Case("a0q", ETCA::Q0)
+        .Case("a1", ETCA::R1)
+        .Case("a1x", ETCA::R1)
+        .Case("a1h", ETCA::R1)
+        .Case("a1d", ETCA::D1)
+        .Case("a1q", ETCA::Q1)
+        .Case("a2", ETCA::R2)
+        .Case("a2x", ETCA::R2)
+        .Case("a2h", ETCA::R2)
+        .Case("a2d", ETCA::D2)
+        .Case("a2q", ETCA::Q2)
+        .Case("s0", ETCA::R3)
+        .Case("s0x", ETCA::R3)
+        .Case("s0h", ETCA::R3)
+        .Case("s0d", ETCA::D3)
+        .Case("s0q", ETCA::Q3)
+        .Case("s1", ETCA::R4)
+        .Case("s1x", ETCA::R4)
+        .Case("s1h", ETCA::R4)
+        .Case("s1d", ETCA::D4)
+        .Case("s1q", ETCA::Q4)
+        .Case("bp", ETCA::R5)
+        .Case("bpx", ETCA::R5)
+        .Case("bph", ETCA::R5)
+        .Case("bpd", ETCA::D5)
+        .Case("bpq", ETCA::Q5)
+        .Case("sp", ETCA::R6)
+        .Case("spx", ETCA::R6)
+        .Case("sph", ETCA::R6)
+        .Case("spd", ETCA::D6)
+        .Case("spq", ETCA::Q6)
+        .Case("ln", ETCA::R7)
+        .Case("lnx", ETCA::R7)
+        .Case("lnh", ETCA::R7)
+        .Case("lnd", ETCA::D7)
+        .Case("lnq", ETCA::Q7)
+        .Default(MCRegister::NoRegister);
   };
 
   MCRegister ABI = matchABI(Name);
@@ -491,32 +523,38 @@ MCRegister ETCAAsmParser::matchRegisterName(StringRef Name) {
   unsigned RegNum;
   char LastChar = tolower(Name.back());
   bool HasSizeSuffix = (Name.size() >= 3 && tolower(Name[0]) == 'r' &&
-       (LastChar == 'd' || LastChar == 'q' ||
-        LastChar == 'x' || LastChar == 'h'));
+                        (LastChar == 'd' || LastChar == 'q' ||
+                         LastChar == 'x' || LastChar == 'h'));
   // Check postfix format: rNd, rNq, rNx, rNh
   if (HasSizeSuffix) {
     StringRef NumPart = Name.substr(1, Name.size() - 2);
     if (!NumPart.getAsInteger(10, RegNum) && RegNum <= 7) {
       switch (LastChar) {
-      case 'd': return ETCA::D0 + RegNum;
-      case 'q': return ETCA::Q0 + RegNum;
+      case 'd':
+        return ETCA::D0 + RegNum;
+      case 'q':
+        return ETCA::Q0 + RegNum;
       case 'x':
-      case 'h': return ETCA::R0 + RegNum;
+      case 'h':
+        return ETCA::R0 + RegNum;
       }
     }
   }
   // Check infix format: rdN, rqN, rxN, rhN (binutils-compatible)
   if (Name.size() >= 3 && tolower(Name[0]) == 'r') {
     char SecondChar = tolower(Name[1]);
-    if (SecondChar == 'd' || SecondChar == 'q' ||
-        SecondChar == 'x' || SecondChar == 'h') {
+    if (SecondChar == 'd' || SecondChar == 'q' || SecondChar == 'x' ||
+        SecondChar == 'h') {
       StringRef NumPart = Name.substr(2);
       if (!NumPart.getAsInteger(10, RegNum) && RegNum <= 7) {
         switch (SecondChar) {
-        case 'd': return ETCA::D0 + RegNum;  // rdN → 32-bit
-        case 'q': return ETCA::Q0 + RegNum;  // rqN → 64-bit
+        case 'd':
+          return ETCA::D0 + RegNum; // rdN → 32-bit
+        case 'q':
+          return ETCA::Q0 + RegNum; // rqN → 64-bit
         case 'x':
-        case 'h': return ETCA::R0 + RegNum;  // rxN/rhN → 16-bit/8-bit, R reg
+        case 'h':
+          return ETCA::R0 + RegNum; // rxN/rhN → 16-bit/8-bit, R reg
         }
       }
     }
@@ -534,10 +572,14 @@ MCRegister ETCAAsmParser::matchRegisterName(StringRef Name) {
     return MCRegister::NoRegister;
 
   switch (Prefix) {
-  case 'r': return ETCA::R0 + RegNum;  // rN → 16-bit (default when no suffix)
-  case 'd': return ETCA::D0 + RegNum;  // dN → 32-bit (backward compat)
-  case 'q': return ETCA::Q0 + RegNum;  // qN → 64-bit (backward compat)
-  default: return MCRegister::NoRegister;
+  case 'r':
+    return ETCA::R0 + RegNum; // rN → 16-bit (default when no suffix)
+  case 'd':
+    return ETCA::D0 + RegNum; // dN → 32-bit (backward compat)
+  case 'q':
+    return ETCA::Q0 + RegNum; // qN → 64-bit (backward compat)
+  default:
+    return MCRegister::NoRegister;
   }
 }
 
@@ -547,38 +589,51 @@ unsigned ETCAAsmParser::getWidthHintFromName(StringRef Name) {
   // Check for postfix size suffixes: rNd, rNq, rNx, rNh
   char LastChar = tolower(Name.back());
   if (Name.size() >= 3 && tolower(Name[0]) == 'r' &&
-      (LastChar == 'd' || LastChar == 'q' ||
-       LastChar == 'x' || LastChar == 'h')) {
+      (LastChar == 'd' || LastChar == 'q' || LastChar == 'x' ||
+       LastChar == 'h')) {
     switch (LastChar) {
-    case 'q': return 64;
-    case 'd': return 32;
-    case 'h': return 8;
-    case 'x': return 16;
+    case 'q':
+      return 64;
+    case 'd':
+      return 32;
+    case 'h':
+      return 8;
+    case 'x':
+      return 16;
     }
   }
   // Check for infix size suffixes: rdN, rqN, rxN, rhN (binutils-compatible)
   if (Name.size() >= 3 && tolower(Name[0]) == 'r') {
     char SecondChar = tolower(Name[1]);
-    if (SecondChar == 'd' || SecondChar == 'q' ||
-        SecondChar == 'x' || SecondChar == 'h') {
+    if (SecondChar == 'd' || SecondChar == 'q' || SecondChar == 'x' ||
+        SecondChar == 'h') {
       switch (SecondChar) {
-      case 'q': return 64;
-      case 'd': return 32;
-      case 'h': return 8;
-      case 'x': return 16;
+      case 'q':
+        return 64;
+      case 'd':
+        return 32;
+      case 'h':
+        return 8;
+      case 'x':
+        return 16;
       }
     }
   }
   // Check for backward-compatible prefixes.
   char Prefix = tolower(Name[0]);
-  if (Prefix == 'd') return 32;
-  if (Prefix == 'q') return 64;
+  if (Prefix == 'd')
+    return 32;
+  if (Prefix == 'q')
+    return 64;
   // ABI names with size suffixes — check last character.
   if (!Name.empty()) {
     char Last = tolower(Name.back());
-    if (Last == 'q') return 64;
-    if (Last == 'd') return 32;
-    if (Last == 'h') return 8;
+    if (Last == 'q')
+      return 64;
+    if (Last == 'd')
+      return 32;
+    if (Last == 'h')
+      return 8;
   }
   return 16; // default
 }
@@ -679,7 +734,7 @@ bool ETCAAsmParser::parseOperand(OperandVector &Operands) {
       return Error(Parser.getTok().getLoc(), "expected ']' after register");
     Parser.Lex(); // consume ']'
     unsigned WH = getWidthHintFromName(RegName);
-    Operands.push_back(ETCAOperand::CreateMem(Reg, WH, S, E));
+    Operands.push_back(ETCAOperand::createMem(Reg, WH, S, E));
     return false;
   }
 
@@ -695,7 +750,7 @@ bool ETCAAsmParser::parseOperand(OperandVector &Operands) {
         SMLoc E = NameTok.getEndLoc();
         Parser.Lex(); // consume register name
         unsigned WH = getWidthHintFromName(Name);
-        Operands.push_back(ETCAOperand::CreateReg(Reg, WH, S, E));
+        Operands.push_back(ETCAOperand::createReg(Reg, WH, S, E));
         return false;
       }
     }
@@ -707,9 +762,9 @@ bool ETCAAsmParser::parseOperand(OperandVector &Operands) {
       return true;
     SMLoc E = Parser.getTok().getLoc();
     if (const auto *CE = dyn_cast<MCConstantExpr>(Expr))
-      Operands.push_back(ETCAOperand::CreateImm(CE->getValue(), S, E));
+      Operands.push_back(ETCAOperand::createImm(CE->getValue(), S, E));
     else
-      Operands.push_back(ETCAOperand::CreateExpr(Expr, S, E));
+      Operands.push_back(ETCAOperand::createExpr(Expr, S, E));
     return false;
   }
 
@@ -721,7 +776,7 @@ bool ETCAAsmParser::parseOperand(OperandVector &Operands) {
       SMLoc E = Tok.getEndLoc();
       Parser.Lex();
       unsigned WH = getWidthHintFromName(Name);
-      Operands.push_back(ETCAOperand::CreateReg(Reg, WH, S, E));
+      Operands.push_back(ETCAOperand::createReg(Reg, WH, S, E));
       return false;
     }
     // Not a register — parse as symbolic expression.
@@ -731,9 +786,9 @@ bool ETCAAsmParser::parseOperand(OperandVector &Operands) {
     SMLoc E = Parser.getTok().getLoc();
     // Collapse absolute expressions to immediates.
     if (const auto *CE = dyn_cast<MCConstantExpr>(Expr))
-      Operands.push_back(ETCAOperand::CreateImm(CE->getValue(), S, E));
+      Operands.push_back(ETCAOperand::createImm(CE->getValue(), S, E));
     else
-      Operands.push_back(ETCAOperand::CreateExpr(Expr, S, E));
+      Operands.push_back(ETCAOperand::createExpr(Expr, S, E));
     return false;
   }
 
@@ -743,9 +798,9 @@ bool ETCAAsmParser::parseOperand(OperandVector &Operands) {
     return true;
   SMLoc E = Parser.getTok().getLoc();
   if (const auto *CE = dyn_cast<MCConstantExpr>(Expr))
-    Operands.push_back(ETCAOperand::CreateImm(CE->getValue(), S, E));
+    Operands.push_back(ETCAOperand::createImm(CE->getValue(), S, E));
   else
-    Operands.push_back(ETCAOperand::CreateExpr(Expr, S, E));
+    Operands.push_back(ETCAOperand::createExpr(Expr, S, E));
   return false;
 }
 
@@ -753,9 +808,8 @@ bool ETCAAsmParser::parseOperand(OperandVector &Operands) {
 // Instruction parsing
 //===------------------------------------------------------------------===//
 
-bool ETCAAsmParser::parseInstruction(ParseInstructionInfo &Info,
-                                     StringRef Name, SMLoc NameLoc,
-                                     OperandVector &Operands) {
+bool ETCAAsmParser::parseInstruction(ParseInstructionInfo &Info, StringRef Name,
+                                     SMLoc NameLoc, OperandVector &Operands) {
   // Detect and strip instruction size suffix (binutils-compatible).
   // Suffixes: h=byte, x=word, d=dword, q=qword
   // E.g., addd → width=32, base=add; loadq → width=64, base=load
@@ -767,12 +821,21 @@ bool ETCAAsmParser::parseInstruction(ParseInstructionInfo &Info,
       // Check that the remaining prefix is a known instruction base.
       BaseName = Name.drop_back(1);
       // Verify it's a valid base by trying the lookups.
-      if (lookupALU(BaseName) || lookupBranch(BaseName) || lookupFixed(BaseName)) {
+      if (lookupALU(BaseName) || lookupBranch(BaseName) ||
+          lookupFixed(BaseName)) {
         switch (Last) {
-        case 'q': CurrentInstrWidth = 64; break;
-        case 'd': CurrentInstrWidth = 32; break;
-        case 'h': CurrentInstrWidth = 8;  break;
-        case 'x': CurrentInstrWidth = 16; break;
+        case 'q':
+          CurrentInstrWidth = 64;
+          break;
+        case 'd':
+          CurrentInstrWidth = 32;
+          break;
+        case 'h':
+          CurrentInstrWidth = 8;
+          break;
+        case 'x':
+          CurrentInstrWidth = 16;
+          break;
         }
       } else {
         // Not a valid base with suffix, use full name.
@@ -785,7 +848,7 @@ bool ETCAAsmParser::parseInstruction(ParseInstructionInfo &Info,
   CurrentMnemonic = BaseName.lower();
 
   // Push the mnemonic as a token (operand 0).
-  Operands.push_back(ETCAOperand::CreateTok(NameLoc, NameLoc));
+  Operands.push_back(ETCAOperand::createTok(NameLoc, NameLoc));
 
   // Parse operands if any.
   if (Parser.getTok().isNot(AsmToken::EndOfStatement)) {
@@ -802,8 +865,7 @@ bool ETCAAsmParser::parseInstruction(ParseInstructionInfo &Info,
   }
 
   if (Parser.getTok().isNot(AsmToken::EndOfStatement))
-    return Error(Parser.getTok().getLoc(),
-                 "unexpected token in operand list");
+    return Error(Parser.getTok().getLoc(), "unexpected token in operand list");
 
   return false;
 }
@@ -834,7 +896,7 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   // ---- Pseudo-instructions (CodeGenOnly — shouldn't appear in user asm) ----
   if (Mnemonic == "ret" || Mnemonic == "select") {
     return Error(IDLoc, "pseudo-instruction '" + Mnemonic +
-                        "' is not valid in assembly");
+                            "' is not valid in assembly");
   }
 
   // ---- Branch instructions ----
@@ -863,7 +925,8 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   if (FE) {
     if (FE->IsMov) {
       // MOV pseudo-instruction: handles multiple forms.
-      // Must be checked BEFORE NumOps==0 (mov has NumOps=0 to bypass the count check).
+      // Must be checked BEFORE NumOps==0 (mov has NumOps=0 to bypass the count
+      // check).
       //   mov dst, src_reg     → movs dst, src_reg
       //   mov dst, imm         → movs dst, imm
       //   mov [addr], src_reg  → store addr, src_reg
@@ -877,8 +940,8 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
       unsigned Width = CurrentInstrWidth;
       auto &Op1 = static_cast<ETCAOperand &>(*Operands[1]);
       bool Op1IsMem = Op1.isMem();
-      bool Op2IsMem = (NumOps >= 2) &&
-          static_cast<ETCAOperand &>(*Operands[2]).isMem();
+      bool Op2IsMem =
+          (NumOps >= 2) && static_cast<ETCAOperand &>(*Operands[2]).isMem();
 
       if (Op1IsMem && NumOps >= 2) {
         auto &Op2 = static_cast<ETCAOperand &>(*Operands[2]);
@@ -886,10 +949,18 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
           return Error(IDLoc, "mov [addr], src: src must be a register");
         unsigned W = Width ? Width : Op1.getMemWidthHint();
         switch (W) {
-        case 8:  Inst.setOpcode(ETCA::STORE8); break;
-        case 32: Inst.setOpcode(ETCA::STORE32); break;
-        case 64: Inst.setOpcode(ETCA::STORE64); break;
-        default: Inst.setOpcode(ETCA::STORE16); break;
+        case 8:
+          Inst.setOpcode(ETCA::STORE8);
+          break;
+        case 32:
+          Inst.setOpcode(ETCA::STORE32);
+          break;
+        case 64:
+          Inst.setOpcode(ETCA::STORE64);
+          break;
+        default:
+          Inst.setOpcode(ETCA::STORE16);
+          break;
         }
         Inst.addOperand(MCOperand::createReg(Op2.getReg()));
         Inst.addOperand(MCOperand::createReg(Op1.getMemReg()));
@@ -899,10 +970,18 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
           return Error(IDLoc, "mov dst, [addr]: dst must be a register");
         unsigned W = Width ? Width : Op2.getMemWidthHint();
         switch (W) {
-        case 8:  Inst.setOpcode(ETCA::LOAD8); break;
-        case 32: Inst.setOpcode(ETCA::LOAD32); break;
-        case 64: Inst.setOpcode(ETCA::LOAD64); break;
-        default: Inst.setOpcode(ETCA::LOAD16); break;
+        case 8:
+          Inst.setOpcode(ETCA::LOAD8);
+          break;
+        case 32:
+          Inst.setOpcode(ETCA::LOAD32);
+          break;
+        case 64:
+          Inst.setOpcode(ETCA::LOAD64);
+          break;
+        default:
+          Inst.setOpcode(ETCA::LOAD16);
+          break;
         }
         Inst.addOperand(MCOperand::createReg(Op1.getReg()));
         Inst.addOperand(MCOperand::createReg(Op2.getMemReg()));
@@ -913,10 +992,18 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
         auto &Op2 = static_cast<ETCAOperand &>(*Operands[2]);
         if (Op2.isReg()) {
           switch (W) {
-          case 8:  Inst.setOpcode(ETCA::MOVS8); break;
-          case 32: Inst.setOpcode(ETCA::MOVS32); break;
-          case 64: Inst.setOpcode(ETCA::MOVS64); break;
-          default: Inst.setOpcode(ETCA::MOVS16); break;
+          case 8:
+            Inst.setOpcode(ETCA::MOVS8);
+            break;
+          case 32:
+            Inst.setOpcode(ETCA::MOVS32);
+            break;
+          case 64:
+            Inst.setOpcode(ETCA::MOVS64);
+            break;
+          default:
+            Inst.setOpcode(ETCA::MOVS16);
+            break;
           }
           Inst.addOperand(MCOperand::createReg(Op1.getReg()));
           Inst.addOperand(MCOperand::createReg(Op2.getReg()));
@@ -928,7 +1015,7 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
             // Split into 5-bit chunks (LSB first).
             // Use unsigned value for chunking.
             uint64_t UV = static_cast<uint64_t>(static_cast<int64_t>(Val));
-            UV &= (1ULL << W) - 1;  // mask to width
+            UV &= (1ULL << W) - 1; // mask to width
             // Collect 5-bit chunks from LSB to MSB
             SmallVector<unsigned, 4> Chunks;
             while (UV) {
@@ -961,24 +1048,35 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
               Inst = MCInst(); // Clear so we don't emit again below
             }
           } else {
-            // Fits in 5-bit immediate, or non-16-bit width: use direct MOVS/MOVZ
+            // Fits in 5-bit immediate, or non-16-bit width: use direct
+            // MOVS/MOVZ
             switch (W) {
-            case 8:  Inst.setOpcode(ETCA::MOVSI8); break;
-            case 32: Inst.setOpcode(ETCA::MOVSI32); break;
-            case 64: Inst.setOpcode(ETCA::MOVSI64); break;
-            default: Inst.setOpcode(ETCA::MOVSI16); break;
+            case 8:
+              Inst.setOpcode(ETCA::MOVSI8);
+              break;
+            case 32:
+              Inst.setOpcode(ETCA::MOVSI32);
+              break;
+            case 64:
+              Inst.setOpcode(ETCA::MOVSI64);
+              break;
+            default:
+              Inst.setOpcode(ETCA::MOVSI16);
+              break;
             }
             Inst.addOperand(MCOperand::createReg(RegNum));
             Inst.addOperand(MCOperand::createImm(Val & 0x1F));
           }
         } else {
-          return Error(IDLoc, "mov: second operand must be register or immediate");
+          return Error(IDLoc,
+                       "mov: second operand must be register or immediate");
         }
       } else {
         return Error(IDLoc, "mov expects 1 or 2 operands");
       }
 
-      // Emit the instruction (for SLO chain case, already emitted inside the block).
+      // Emit the instruction (for SLO chain case, already emitted inside the
+      // block).
       if (Inst.getOpcode() != 0)
         Out.emitInstruction(Inst, getSTI());
       return false;
@@ -1000,7 +1098,7 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     MCInst Inst;
     Inst.setOpcode(FE->Opcode);
     Inst.setLoc(IDLoc);
-      Inst.setLoc(IDLoc);
+    Inst.setLoc(IDLoc);
     if (FE->IsTargetExpr) {
       // CALL: operand is a target expression.
       auto &Op = static_cast<ETCAOperand &>(*Operands[1]);
@@ -1016,17 +1114,22 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
       auto &Op1 = static_cast<ETCAOperand &>(*Operands[1]);
       if (!Op1.isReg())
         return Error(IDLoc, "first operand must be a register");
-      unsigned Width = CurrentInstrWidth ? CurrentInstrWidth : Op1.getRegisterWidth();
+      unsigned Width =
+          CurrentInstrWidth ? CurrentInstrWidth : Op1.getRegisterWidth();
       bool IsLoad = (FE->Opcode == ETCA::LOAD16);
       switch (Width) {
       case 8:
-        Inst.setOpcode(IsLoad ? ETCA::LOAD8 : ETCA::STORE8); break;
+        Inst.setOpcode(IsLoad ? ETCA::LOAD8 : ETCA::STORE8);
+        break;
       case 32:
-        Inst.setOpcode(IsLoad ? ETCA::LOAD32 : ETCA::STORE32); break;
+        Inst.setOpcode(IsLoad ? ETCA::LOAD32 : ETCA::STORE32);
+        break;
       case 64:
-        Inst.setOpcode(IsLoad ? ETCA::LOAD64 : ETCA::STORE64); break;
+        Inst.setOpcode(IsLoad ? ETCA::LOAD64 : ETCA::STORE64);
+        break;
       default:
-        Inst.setOpcode(IsLoad ? ETCA::LOAD16 : ETCA::STORE16); break;
+        Inst.setOpcode(IsLoad ? ETCA::LOAD16 : ETCA::STORE16);
+        break;
       }
       Inst.addOperand(MCOperand::createReg(Op1.getReg()));
       if (FE->NumOps >= 2) {
@@ -1069,8 +1172,7 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   const RR_RI_Entry *AE = lookupALU(Mnemonic);
   if (AE) {
     if (NumOps != 2)
-      return Error(IDLoc,
-                   "instruction expects 2 operands (dst, src2 or imm)");
+      return Error(IDLoc, "instruction expects 2 operands (dst, src2 or imm)");
 
     auto &Op1 = static_cast<ETCAOperand &>(*Operands[1]); // dst (also src1)
     auto &Op2 = static_cast<ETCAOperand &>(*Operands[2]); // src2 or imm
@@ -1086,18 +1188,19 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
                           "immediate (labels not allowed here)");
 
     // Use instruction suffix width if available; otherwise infer from register.
-    unsigned Width = CurrentInstrWidth ? CurrentInstrWidth : Op1.getRegisterWidth();
+    unsigned Width =
+        CurrentInstrWidth ? CurrentInstrWidth : Op1.getRegisterWidth();
     if (IsRR) {
       unsigned W2 = Op2.getRegisterWidth();
       if (Width != W2)
-        return Error(IDLoc,
-                     "register width mismatch in operands");
+        return Error(IDLoc, "register width mismatch in operands");
     }
     // If instruction suffix forced a width, validate that register width
     // is compatible (e.g., addd with 32-bit regs).
     if (CurrentInstrWidth && Width != CurrentInstrWidth && IsRR &&
         Op1.getRegisterWidth() != CurrentInstrWidth) {
-      return Error(IDLoc, "instruction width suffix does not match register width");
+      return Error(IDLoc,
+                   "instruction width suffix does not match register width");
     }
 
     unsigned Opc = selectWidth(*AE, IsRR, Width);
@@ -1113,17 +1216,20 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     // and $src1=$dst constraint — 3 operands like other ALU ops.
     // MOVZ/MOVS RR and MOVZI/MOVSI RI use non-tied formats (EInstRR_NT /
     // EInstRI_NT) with only 2 operands: [dst, src] for RR, [dst, imm] for RI.
-    // All other ALU ops use the tied format with 3 operands: [dst, src1, src2/imm].
-    bool IsMovRR = (Opc == ETCA::MOVZ8  || Opc == ETCA::MOVS8  ||
-                    Opc == ETCA::MOVZ16 || Opc == ETCA::MOVS16 ||
-                    Opc == ETCA::MOVZ32 || Opc == ETCA::MOVS32 ||
-                    Opc == ETCA::MOVZ64 || Opc == ETCA::MOVS64);
-    bool IsMovRI = (Opc == ETCA::MOVZI8  || Opc == ETCA::MOVSI8  ||
-                    Opc == ETCA::MOVZI16 || Opc == ETCA::MOVSI16 ||
-                    Opc == ETCA::MOVZI32 || Opc == ETCA::MOVSI32 ||
-                    Opc == ETCA::MOVZI64 || Opc == ETCA::MOVSI64);
-    bool IsCmpRR = (Opc == ETCA::CMP8 || Opc == ETCA::CMP || Opc == ETCA::CMP32 || Opc == ETCA::CMP64 ||
-                    Opc == ETCA::TEST8 || Opc == ETCA::TEST || Opc == ETCA::TEST32 || Opc == ETCA::TEST64);
+    // All other ALU ops use the tied format with 3 operands: [dst, src1,
+    // src2/imm].
+    bool IsMovRR =
+        (Opc == ETCA::MOVZ8 || Opc == ETCA::MOVS8 || Opc == ETCA::MOVZ16 ||
+         Opc == ETCA::MOVS16 || Opc == ETCA::MOVZ32 || Opc == ETCA::MOVS32 ||
+         Opc == ETCA::MOVZ64 || Opc == ETCA::MOVS64);
+    bool IsMovRI =
+        (Opc == ETCA::MOVZI8 || Opc == ETCA::MOVSI8 || Opc == ETCA::MOVZI16 ||
+         Opc == ETCA::MOVSI16 || Opc == ETCA::MOVZI32 || Opc == ETCA::MOVSI32 ||
+         Opc == ETCA::MOVZI64 || Opc == ETCA::MOVSI64);
+    bool IsCmpRR =
+        (Opc == ETCA::CMP8 || Opc == ETCA::CMP || Opc == ETCA::CMP32 ||
+         Opc == ETCA::CMP64 || Opc == ETCA::TEST8 || Opc == ETCA::TEST ||
+         Opc == ETCA::TEST32 || Opc == ETCA::TEST64);
 
     if (IsCmpRR) {
       // 2-operand layout for CMP/TEST RR: [src1, src2]
