@@ -84,12 +84,16 @@ class EInstRR<bits<2> ss, bits<4> opcod, dag outs, dag ins,
 
   let Constraints = "$src1 = $dst";
 
-  let Inst{15-14} = 0b00;
-  let Inst{13-12} = ss;     // SS: size bits
-  let Inst{11-8}  = opcod;  // CCCC: opcode
-  let Inst{7-5}   = src1;   // AAA: destination + left operand
-  let Inst{4-2}   = src2;   // BBB: right operand
-  let Inst{1-0}   = 0b00;   // MM: memory mode (base=00)
+  // Actual encoding (16-bit LE):
+  //   Byte 0 (low): 0b00SSCCCC  — format[7:6]=00, SS[5:4], CCCC[3:0]
+  //   Byte 1 (high): 0bAAABBBMM — AAA[7:5], BBB[4:2], MM[1:0]
+  //   16-bit value: (AAA << 13) | (BBB << 10) | (MM << 8) | (0b00 << 6) | (SS << 4) | CCCC
+  let Inst{15-13} = src1;   // AAA: destination + left operand
+  let Inst{12-10} = src2;   // BBB: right operand
+  let Inst{9-8}   = 0b00;   // MM: memory mode (base=00)
+  let Inst{7-6}   = 0b00;   // format marker (00 = RR)
+  let Inst{5-4}   = ss;     // SS: size bits
+  let Inst{3-0}   = opcod;  // CCCC: opcode
 }
 
 // Non-tied RR format class — no constraint.
@@ -102,12 +106,15 @@ class EInstRR_NT<bits<2> ss, bits<4> opcod, dag outs, dag ins,
   bits<3> dst;   // AAA
   bits<3> src;   // BBB
 
-  let Inst{15-14} = 0b00;
-  let Inst{13-12} = ss;     // SS: size bits
-  let Inst{11-8}  = opcod;  // CCCC: opcode
-  let Inst{7-5}   = dst;    // AAA: destination (same as first source in encoding)
-  let Inst{4-2}   = src;    // BBB: right operand
-  let Inst{1-0}   = 0b00;   // MM: memory mode (base=00)
+  // Actual encoding (16-bit LE):
+  //   Byte 0 (low): 0b00SSCCCC  — format[7:6]=00, SS[5:4], CCCC[3:0]
+  //   Byte 1 (high): 0bAAABBBMM — AAA[7:5], BBB[4:2], MM[1:0]
+  let Inst{15-13} = dst;    // AAA: destination
+  let Inst{12-10} = src;    // BBB: source
+  let Inst{9-8}   = 0b00;   // MM: memory mode (base=00)
+  let Inst{7-6}   = 0b00;   // format marker (00 = RR)
+  let Inst{5-4}   = ss;     // SS: size bits
+  let Inst{3-0}   = opcod;  // CCCC: opcode
 }
 
 // Convenience: 16-bit RR instruction (SS=01) — tied
@@ -179,11 +186,15 @@ class EInstRI<bits<2> ss, bits<4> opcod, dag outs, dag ins,
   bits<5> imm;   // IIIII
   let Constraints = "$src1 = $dst";
 
-  let Inst{15-14} = 0b01;
-  let Inst{13-12} = ss;     // SS: size bits
-  let Inst{11-8}  = opcod;  // CCCC: opcode
-  let Inst{7-5}   = src1;   // AAA: destination
-  let Inst{4-0}   = imm;    // IIIII: 5-bit immediate
+  // Actual encoding (16-bit LE):
+  //   Byte 0 (low): 0b01SSCCCC  — format[7:6]=01, SS[5:4], CCCC[3:0]
+  //   Byte 1 (high): 0bAAAIIIII — AAA[7:5], IIIII[4:0]
+  //   16-bit value: (AAA << 13) | (IIIII << 8) | (0b01 << 6) | (SS << 4) | CCCC
+  let Inst{15-13} = src1;   // AAA: destination
+  let Inst{12-8}  = imm;    // IIIII: 5-bit immediate
+  let Inst{7-6}   = 0b01;   // format marker (01 = RI)
+  let Inst{5-4}   = ss;     // SS: size bits
+  let Inst{3-0}   = opcod;  // CCCC: opcode
 }
 
 // Non-tied RI format: for MOVZI/MOVSI/etc where src1 is ignored
@@ -193,11 +204,14 @@ class EInstRI_NT<bits<2> ss, bits<4> opcod, dag outs, dag ins,
   bits<3> dst;   // AAA
   bits<5> imm;   // IIIII
 
-  let Inst{15-14} = 0b01;
-  let Inst{13-12} = ss;     // SS: size bits
-  let Inst{11-8}  = opcod;  // CCCC: opcode
-  let Inst{7-5}   = dst;    // AAA: destination
-  let Inst{4-0}   = imm;    // IIIII: 5-bit immediate
+  // Actual encoding (16-bit LE):
+  //   Byte 0 (low): 0b01SSCCCC  — format[7:6]=01, SS[5:4], CCCC[3:0]
+  //   Byte 1 (high): 0bAAAIIIII — AAA[7:5], IIIII[4:0]
+  let Inst{15-13} = dst;    // AAA: destination
+  let Inst{12-8}  = imm;    // IIIII: 5-bit immediate
+  let Inst{7-6}   = 0b01;   // format marker (01 = RI)
+  let Inst{5-4}   = ss;     // SS: size bits
+  let Inst{3-0}   = opcod;  // CCCC: opcode
 }
 
 // Convenience: 16-bit RI instruction (SS=01) — tied
@@ -264,11 +278,15 @@ class EInstBranch<bits<4> cond_val, string asmstr, list<dag> pattern>
     : EInst<(outs), (ins brtarget:$target), asmstr, pattern> {
   bits<9> target;
 
-  let Inst{15-14} = 0b10;
-  let Inst{13}    = 0;
-  let Inst{12}    = target{8};
-  let Inst{11-8}  = cond_val;
-  let Inst{7-0}   = target{7-0};
+  // Actual encoding (16-bit LE):
+  //   Byte 0 (low): 0b1000DCCC  — bit[7]=1, bits[6:5]=00, bit[4]=D8, bits[3:0]=CCCC
+  //   Byte 1 (high): D[7:0]
+  //   16-bit value: (D[7:0] << 8) | 0x80 | (D8 << 4) | CCCC
+  let Inst{15-8}  = target{7-0};  // D[7:0] in high byte
+  let Inst{7}     = 1;            // format marker bit 7
+  let Inst{6-5}   = 0;            // reserved
+  let Inst{4}     = target{8};    // D8: high bit of 9-bit displacement
+  let Inst{3-0}   = cond_val;     // CCCC: condition code
 
   let mayLoad = 0;
   let mayStore = 0;
@@ -290,8 +308,13 @@ class EInstSAFCall<string asmstr, list<dag> pattern>
     : EInst<(outs), (ins calltarget:$target), asmstr, pattern> {
   bits<12> target;
 
-  let Inst{15-12} = 0b1011;
-  let Inst{11-0}  = target;
+  // Actual encoding (16-bit LE):
+  //   Byte 0 (low): 0b1011DDDD  — bits[7:4]=1011, bits[3:0]=D[11:8]
+  //   Byte 1 (high): D[7:0]
+  //   16-bit value: (D[7:0] << 8) | 0xB0 | D[11:8]
+  let Inst{15-8}  = target{7-0};   // D[7:0] in high byte
+  let Inst{7-4}   = 0b1011;        // format marker
+  let Inst{3-0}   = target{11-8};  // D[11:8] in low nibble
 
   let mayLoad = 0;
   let mayStore = 0;
@@ -316,12 +339,14 @@ class EInstSAFCall<string asmstr, list<dag> pattern>
 class EInstSAFJmp<bits<4> cond_val, string asmstr, list<dag> pattern>
     : EInst<(outs), (ins GPR:$rs), asmstr, pattern> {
   bits<3> rs;
-  let Inst{15-13} = 0b101;
-  let Inst{12}    = 0;
-  let Inst{11-8}  = 0b1111;
-  let Inst{7-5}   = rs;
-  let Inst{4}     = 0;
-  let Inst{3-0}   = cond_val;
+  // Actual encoding (16-bit LE):
+  //   Byte 0 (low): 0xAF = 0b10101111
+  //   Byte 1 (high): RRR[7:5] | X=0[4] | CCCC[3:0]
+  //   16-bit value: (RRR << 13) | (0 << 12) | (CCCC << 8) | 0xAF
+  let Inst{15-13} = rs;       // RRR: target register
+  let Inst{12}    = 0;        // X=0 (jump, not call)
+  let Inst{11-8}  = cond_val; // CCCC: condition code
+  let Inst{7-0}   = 0xAF;     // low byte = 0xAF
 
   let mayLoad = 0;
   let mayStore = 0;
@@ -335,12 +360,14 @@ class EInstSAFJmp<bits<4> cond_val, string asmstr, list<dag> pattern>
 class EInstSAFCallReg<bits<4> cond_val, string asmstr, list<dag> pattern>
     : EInst<(outs), (ins GPR:$rs), asmstr, pattern> {
   bits<3> rs;
-  let Inst{15-13} = 0b101;
-  let Inst{12}    = 0;
-  let Inst{11-8}  = 0b1111;
-  let Inst{7-5}   = rs;
-  let Inst{4}     = 1;
-  let Inst{3-0}   = cond_val;
+  // Actual encoding (16-bit LE):
+  //   Byte 0 (low): 0xAF = 0b10101111
+  //   Byte 1 (high): RRR[7:5] | X=1[4] | CCCC[3:0]
+  //   16-bit value: (RRR << 13) | (1 << 12) | (CCCC << 8) | 0xAF
+  let Inst{15-13} = rs;       // RRR: target register
+  let Inst{12}    = 1;        // X=1 (call, not jump)
+  let Inst{11-8}  = cond_val; // CCCC: condition code
+  let Inst{7-0}   = 0xAF;     // low byte = 0xAF
 
   let mayLoad = 0;
   let mayStore = 0;
@@ -372,12 +399,15 @@ class EInstPOP<bits<2> ss, dag outs, dag ins,
     : EInst<outs, ins, asmstr, pattern> {
   bits<3> dst;
 
-  let Inst{15-14} = 0b00;
-  let Inst{13-12} = ss;
-  let Inst{11-8}  = 0b1100;
-  let Inst{7-5}   = dst;
-  let Inst{4-2}   = 0b110;
-  let Inst{1-0}   = 0b00;
+  // Actual encoding (16-bit LE, RR format):
+  //   Byte 0 (low): 0b00SS1100  — format[7:6]=00, SS[5:4], CCCC=1100[3:0]
+  //   Byte 1 (high): 0bAAABBBMM — AAA=dst[7:5], BBB=110[4:2], MM=00[1:0]
+  let Inst{15-13} = dst;     // AAA: destination register
+  let Inst{12-10} = 0b110;   // BBB: sp = 6
+  let Inst{9-8}   = 0b00;    // MM: memory mode (base=00)
+  let Inst{7-6}   = 0b00;    // format marker (00 = RR)
+  let Inst{5-4}   = ss;      // SS: stack increment size
+  let Inst{3-0}   = 0b1100;  // CCCC: POP opcode
 
   let mayLoad = 1;
   let mayStore = 1;
@@ -395,12 +425,15 @@ class EInstPUSHR<bits<2> ss, dag outs, dag ins,
     : EInst<outs, ins, asmstr, pattern> {
   bits<3> src;
 
-  let Inst{15-14} = 0b00;
-  let Inst{13-12} = ss;
-  let Inst{11-8}  = 0b1101;
-  let Inst{7-5}   = 0b110;
-  let Inst{4-2}   = src;
-  let Inst{1-0}   = 0b00;
+  // Actual encoding (16-bit LE, RR format):
+  //   Byte 0 (low): 0b00SS1101  — format[7:6]=00, SS[5:4], CCCC=1101[3:0]
+  //   Byte 1 (high): 0bAAABBBMM — AAA=110[7:5], BBB=src[4:2], MM=00[1:0]
+  let Inst{15-13} = 0b110;   // AAA: sp = 6
+  let Inst{12-10} = src;     // BBB: source register
+  let Inst{9-8}   = 0b00;    // MM: memory mode (base=00)
+  let Inst{7-6}   = 0b00;    // format marker (00 = RR)
+  let Inst{5-4}   = ss;      // SS: stack increment size
+  let Inst{3-0}   = 0b1101;  // CCCC: PUSH opcode
 
   let mayLoad = 1;
   let mayStore = 1;
@@ -418,11 +451,14 @@ class EInstPUSHI<bits<2> ss, dag outs, dag ins,
     : EInst<outs, ins, asmstr, pattern> {
   bits<5> imm;
 
-  let Inst{15-14} = 0b01;
-  let Inst{13-12} = ss;
-  let Inst{11-8}  = 0b1101;
-  let Inst{7-5}   = 0b110;
-  let Inst{4-0}   = imm;
+  // Actual encoding (16-bit LE, RI format):
+  //   Byte 0 (low): 0b01SS1101  — format[7:6]=01, SS[5:4], CCCC=1101[3:0]
+  //   Byte 1 (high): 0bAAAIIIII — AAA=110[7:5], IIIII=imm[4:0]
+  let Inst{15-13} = 0b110;   // AAA: sp = 6
+  let Inst{12-8}  = imm;     // IIIII: 5-bit immediate
+  let Inst{7-6}   = 0b01;    // format marker (01 = RI)
+  let Inst{5-4}   = ss;      // SS: stack increment size
+  let Inst{3-0}   = 0b1101;  // CCCC: PUSH opcode
 
   let mayLoad = 1;
   let mayStore = 1;
@@ -453,12 +489,15 @@ class EInstLoadRR<bits<2> ss, dag outs, string asmstr, list<dag> pattern>
     : EInst<outs, (ins GPR:$addr), asmstr, pattern> {
   bits<3> dst;
   bits<3> addr;
-  let Inst{15-14} = 0b00;    // format = computation
-  let Inst{13-12} = ss;      // SS: operand size
-  let Inst{11-8}  = 0b1010;  // CCCC = LOAD opcode
-  let Inst{7-5}   = dst;     // AAA: destination
-  let Inst{4-2}   = addr;    // BBB: address
-  let Inst{1-0}   = 0b00;    // MM: base
+  // Actual encoding (16-bit LE, RR format):
+  //   Byte 0 (low): 0b00SS1010  — format[7:6]=00, SS[5:4], CCCC=1010[3:0]
+  //   Byte 1 (high): 0bAAABBBMM — AAA=dst[7:5], BBB=addr[4:2], MM=00[1:0]
+  let Inst{15-13} = dst;     // AAA: destination
+  let Inst{12-10} = addr;    // BBB: address
+  let Inst{9-8}   = 0b00;    // MM: base
+  let Inst{7-6}   = 0b00;    // format = computation
+  let Inst{5-4}   = ss;      // SS: operand size
+  let Inst{3-0}   = 0b1010;  // CCCC = LOAD opcode
   let mayLoad = 1;
   let hasSideEffects = 0;
   let SchedRW = [WriteLD];
@@ -485,12 +524,15 @@ class EInstStoreRRBase<bits<2> ss, dag outs, dag ins, string asmstr, list<dag> p
     : EInst<outs, ins, asmstr, pattern> {
   bits<3> val;
   bits<3> addr;
-  let Inst{15-14} = 0b00;    // format = computation
-  let Inst{13-12} = ss;      // SS: operand size
-  let Inst{11-8}  = 0b1011;  // CCCC = STORE opcode
-  let Inst{7-5}   = val;     // AAA: value to store
-  let Inst{4-2}   = addr;    // BBB: address
-  let Inst{1-0}   = 0b00;    // MM: base
+  // Actual encoding (16-bit LE, RR format):
+  //   Byte 0 (low): 0b00SS1011  — format[7:6]=00, SS[5:4], CCCC=1011[3:0]
+  //   Byte 1 (high): 0bAAABBBMM — AAA=val[7:5], BBB=addr[4:2], MM=00[1:0]
+  let Inst{15-13} = val;     // AAA: value to store
+  let Inst{12-10} = addr;    // BBB: address
+  let Inst{9-8}   = 0b00;    // MM: base
+  let Inst{7-6}   = 0b00;    // format = computation
+  let Inst{5-4}   = ss;      // SS: operand size
+  let Inst{3-0}   = 0b1011;  // CCCC = STORE opcode
   let mayStore = 1;
   let hasSideEffects = 0;
   let SchedRW = [WriteST];

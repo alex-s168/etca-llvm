@@ -9,9 +9,9 @@ tablegen(LLVM ETCAGenCallingConv.inc -gen-callingconv)
 # Disassembler tables not auto-generated — manual decoder in ETCADisassembler.cpp
 # The CMP format (LOAD/STORE/CMP/TEST) conflicts with RI format for certain
 # operand combinations, so TableGen fails on -gen-disassembler.
+tablegen(LLVM ETCAGenMCCodeEmitter.inc -gen-emitter)
 tablegen(LLVM ETCAGenGlobalISel.inc -gen-global-isel -gisel-extended-llt)
 tablegen(LLVM ETCAGenInstrInfo.inc -gen-instr-info)
-tablegen(LLVM ETCAGenMCCodeEmitter.inc -gen-emitter)
 tablegen(LLVM ETCAGenRegisterBank.inc -gen-register-bank)
 tablegen(LLVM ETCAGenRegisterInfo.inc -gen-register-info)
 tablegen(LLVM ETCAGenSubtargetInfo.inc -gen-subtarget)

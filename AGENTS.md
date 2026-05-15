@@ -101,9 +101,15 @@ All NOP emission paths use `0x008F` ([0x8F, 0x00] LE) — the canonical 2-byte b
 - `applyFixup` is non-const (pure virtual in base)
 - `FKF_IsPCRel` flag deleted from `MCFixupKindInfo` entries
 
-### Encoder is manual
-- `MCCodeEmitter` in `MCTargetDesc/ETCAMCTargetDesc.cpp` produces correct 16-bit LE encoding for all base + SAF instructions.
-- `ETCAGenMCCodeEmitter.inc` was removed (incorrect bit shifts).
+### Encoder is auto-generated (was manual)
+The `ETCAGenMCCodeEmitter.inc` was originally removed because the `Inst` field bit
+assignments in `ETCAInstrFormats.td` used a logical MSB-to-LSB order that didn't
+match the actual 16-bit little-endian encoding. The bit assignments were fixed
+(2026-05-15) to match the real byte layout. The `-gen-emitter` TableGen command
+is now active and the generated file is included via `#include "ETCAGenMCCodeEmitter.inc"`
+in `MCTargetDesc/ETCAMCTargetDesc.cpp`. Helper methods (`getRegisterOpValue`,
+`getImmOpValue`, `encodeBranchTarget`, `encodeCallTarget`) are kept for the
+generated code to call.
 
 ### Mul/Div libcalls require clean cmake cache
 `ETCALegalizerInfo` uses `.libcallFor()` which relies on LLVM's libcall infrastructure. An early cmake cache build can leave broken RTLIB::RuntimeLibcallsInfo state that prevents libcall resolution (especially for 16-bit types like `__mulhi3`).
