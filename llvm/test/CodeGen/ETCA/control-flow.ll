@@ -237,9 +237,8 @@ else:
 define i16 @select_eq(i16 %a, i16 %b, i16 %c) {
 ; CHECK-LABEL: select_eq:
 ; CHECK:       sub %r6
-; CHECK:       add %r5
-; CHECK:       store %r3, %r5
-; CHECK:       add %r5
+; CHECK:       movz %r7, %r5
+; CHECK:       store %r3, %r7
 ; CHECK:       cmp
 ; CHECK:       beq
 ; CHECK:       br

@@ -46,6 +46,8 @@ public:
                            unsigned FIOperandNum,
                            RegScavenger *RS = nullptr) const override;
 
+  bool requiresRegisterScavenging(const MachineFunction &MF) const override;
+
   const uint32_t *getCallPreservedMask(const MachineFunction &MF,
                                        CallingConv::ID CC) const override;
 

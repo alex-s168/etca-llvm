@@ -39,11 +39,15 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; GEN:       push %r5
 ; GEN:       movz %r5, %r6
 ; GEN:       sub %r6, 8
-;; Prologue: spill callee-saves and arguments
-; GEN:       store %r3, %r5
-; GEN:       store %r4, %r5
-; GEN:       store %r0, %r5
-; GEN:       store %r1, %r5
+;; Prologue: spill callee-saves and arguments (using scratch regs)
+; GEN:       movz %r{{[0-9]+}}, %r5
+; GEN:       store %r3, %r{{[0-9]+}}
+; GEN:       movz %r{{[0-9]+}}, %r5
+; GEN:       store %r4, %r{{[0-9]+}}
+; GEN:       movz %r{{[0-9]+}}, %r5
+; GEN:       store %r0, %r{{[0-9]+}}
+; GEN:       movz %r{{[0-9]+}}, %r5
+; GEN:       store %r1, %r{{[0-9]+}}
 ; GEN:       movz %r2h, 0
 ; GEN:       movz %r3, 1
 ; GEN:       movz %r4, 0
@@ -70,11 +74,14 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; DW:       push %r5
 ; DW:       movz %r5, %r6
 ; DW:       sub %r6,
-; DW:       store %r3, %r5
-; DW:       store %r4, %r5
+; DW:       movz %r{{[0-9]+}}, %r5
+; DW:       store %r3, %r{{[0-9]+}}
+; DW:       movz %r{{[0-9]+}}, %r5
+; DW:       store %r4, %r{{[0-9]+}}
 ; DW:       movz %r2h, 0
 ; DW:       movz %r3d, 1
-; DW:       store %r4, %r5
+; DW:       movz %r{{[0-9]+}}, %r5
+; DW:       store %r4, %r{{[0-9]+}}
 ;; Loop: load byte from src, store to dest, increment both pointers
 ; DW:       load %r{{[0-9]+}}h, %r{{[0-9]+}}h
 ; DW:       store %r{{[0-9]+}}h, %r{{[0-9]+}}h
@@ -92,11 +99,14 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; QW:       push %r5
 ; QW:       movz %r5, %r6
 ; QW:       sub %r6,
-; QW:       store %r3, %r5
-; QW:       store %r4, %r5
+; QW:       movz %r{{[0-9]+}}, %r5
+; QW:       store %r3, %r{{[0-9]+}}
+; QW:       movz %r{{[0-9]+}}, %r5
+; QW:       store %r4, %r{{[0-9]+}}
 ; QW:       movz %r2h, 0
 ; QW:       movz %r3q, 1
-; QW:       store %r4, %r5
+; QW:       movz %r{{[0-9]+}}, %r5
+; QW:       store %r4, %r{{[0-9]+}}
 ;; Loop: load byte from src, store to dest, increment both pointers
 ; QW:       load %r{{[0-9]+}}h, %r{{[0-9]+}}h
 ; QW:       store %r{{[0-9]+}}h, %r{{[0-9]+}}h

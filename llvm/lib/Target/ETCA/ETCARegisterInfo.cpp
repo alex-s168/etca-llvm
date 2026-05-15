@@ -169,41 +169,50 @@ bool ETCARegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
       return false;
     }
 
-    // For STORE, temporarily adjust the frame register, use it as the
-    // address, then restore.  This avoids needing a scratch register on
-    // a target with only 8 registers.
-    //   ADDI FrameReg, FrameReg, offset    ; temp adjust
-    //   ...  (chain for large offsets)
-    //   STORE val, FrameReg
-    //   SUBI FrameReg, FrameReg, offset    ; restore
-    //   ...  (chain for large offsets, reverse order)
+    // For STORE, use a scratch register from the register scavenger to
+    // compute the address, then use that register for the STORE.
+    //   MOVZ scratch, FrameReg
+    //   ADDI scratch, scratch, offset  (chained for large offsets)
+    //   STORE val, scratch
+    Register ScratchReg;
+    if (RS) {
+      ScratchReg = RS->scavengeRegisterBackwards(*RC, II, false, SPAdj);
+    } else {
+      // Fallback (rare): temporarily adjust the frame register in place,
+      // use it as the address, then restore.
+      SmallVector<int64_t, 4> Steps;
+      int64_t Remaining = Off;
+      while (Remaining != 0) {
+        int64_t Step = std::clamp<int64_t>(Remaining, -16, 15);
+        Steps.push_back(Step);
+        BuildMI(MBB, II, DL, TII.get(AddiOpc), FrameReg)
+            .addReg(FrameReg)
+            .addImm(Step);
+        Remaining -= Step;
+      }
+      MI.getOperand(FIOperandNum)
+          .ChangeToRegister(FrameReg, /*isDef=*/false);
+      for (int64_t Step : llvm::reverse(Steps)) {
+        BuildMI(MBB, std::next(II), DL, TII.get(AddiOpc), FrameReg)
+            .addReg(FrameReg)
+            .addImm(-Step);
+      }
+      return false;
+    }
 
-    // Forward chain: add offset to FrameReg
-    // We record each step so we can reverse it for the restore.
-    SmallVector<int64_t, 4> Steps;
+    BuildMI(MBB, II, DL, TII.get(MovOpc), ScratchReg).addReg(FrameReg);
+
     int64_t Remaining = Off;
     while (Remaining != 0) {
       int64_t Step = std::clamp<int64_t>(Remaining, -16, 15);
-      Steps.push_back(Step);
-      BuildMI(MBB, II, DL, TII.get(AddiOpc), FrameReg)
-          .addReg(FrameReg)
+      BuildMI(MBB, II, DL, TII.get(AddiOpc), ScratchReg)
+          .addReg(ScratchReg)
           .addImm(Step);
       Remaining -= Step;
     }
 
-    // Replace FrameIndex with FrameReg (now holding the correct address)
-    MI.getOperand(FIOperandNum).ChangeToRegister(FrameReg, /*isDef=*/false);
-
-    // Restore chain: go in reverse and subtract (use AddiOpc with negated step)
-    for (int64_t Step : llvm::reverse(Steps)) {
-      // SUBI is AddiOpc with a different opcode number, but we can use
-      // AddiOpc with the negated step value if it fits in [-16, +15].
-      // Since Steps were clamped to [-16, +15], negating them still fits.
-      BuildMI(MBB, std::next(II), DL, TII.get(AddiOpc), FrameReg)
-          .addReg(FrameReg)
-          .addImm(-Step);
-    }
-
+    MI.getOperand(FIOperandNum)
+        .ChangeToRegister(ScratchReg, /*isDef=*/false);
     return false;
   }
 
@@ -273,6 +282,15 @@ bool ETCARegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   llvm_unreachable("Unexpected opcode in eliminateFrameIndex");
   return false;
+}
+
+bool ETCARegisterInfo::requiresRegisterScavenging(
+    const MachineFunction &MF) const {
+  // We need the register scavenger during frame index elimination to
+  // provide a scratch register for addressing spills (STORE frame
+  // operands), so that the frame pointer (r5) does not need to be
+  // temporarily modified for each spill slot.
+  return true;
 }
 
 const uint32_t *
