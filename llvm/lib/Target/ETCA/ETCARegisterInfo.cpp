@@ -89,26 +89,185 @@ bool ETCARegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   Register FrameReg;
   StackOffset Offset = TFI->getFrameIndexReference(MF, FrameIndex, FrameReg);
 
-  // Replace the frame index operand with FrameReg + offset.
-  // For LOAD/STORE, the address must be in a register.
-  // We handle this by keeping the frame index as-is if we can;
-  // the MC layer will resolve it for direct LOAD/STORE with FI operands.
-  //
-  // For MOVZ with FI, replace FI with FrameReg + immediate.
+  // Determine MOV/ADDI opcodes and register class for the address width.
   unsigned Opc = MI.getOpcode();
-  if (Opc == LOAD16 || Opc == LOAD8 || Opc == LOAD32 || Opc == LOAD64 ||
-      Opc == STORE16 || Opc == STORE8 || Opc == STORE32 || Opc == STORE64) {
-    // LOAD/STORE can encode FrameIndex directly — the MC layer handles it.
-    // Just replace with the frame register.
-    MI.getOperand(FIOperandNum).ChangeToRegister(FrameReg, false);
+  unsigned MovOpc, AddiOpc;
+  const TargetRegisterClass *RC = nullptr;
+  bool IsLoad = false;
+
+  auto setWidth = [&](unsigned Mov, unsigned Addi,
+                      const TargetRegisterClass *RegClass) {
+    MovOpc = Mov;
+    AddiOpc = Addi;
+    RC = RegClass;
+  };
+
+  switch (Opc) {
+  case LOAD8:
+    IsLoad = true;
+    [[fallthrough]];
+  case STORE8:
+    setWidth(MOVZ8, ADDI8, &GPRRegClass);
+    break;
+  case LOAD16:
+    IsLoad = true;
+    [[fallthrough]];
+  case STORE16:
+    setWidth(MOVZ16, ADDI16, &GPRRegClass);
+    break;
+  case LOAD32:
+    IsLoad = true;
+    [[fallthrough]];
+  case STORE32:
+    setWidth(MOVZ32, ADDI32, &GPR32RegClass);
+    break;
+  case LOAD64:
+    IsLoad = true;
+    [[fallthrough]];
+  case STORE64:
+    setWidth(MOVZ64, ADDI64, &GPR64RegClass);
+    break;
+  default:
+    // Not a LOAD/STORE — only MOVZ/MOVZI handled below.
+    break;
+  }
+
+  if (RC) {
+    int64_t Off = Offset.getFixed();
+
+    if (Off == 0) {
+      // Zero offset: just use the frame register directly.
+      MI.getOperand(FIOperandNum).ChangeToRegister(FrameReg, /*isDef=*/false);
+      return false;
+    }
+
+    // Non-zero offset: compute FrameReg + Offset into a scratch register,
+    // then use that register for the LOAD/STORE.
+    const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
+    DebugLoc DL = MI.getDebugLoc();
+
+    if (IsLoad) {
+      // LOAD destination register is dead before the instruction (it's
+      // about to be overwritten), so reuse it as the scratch register.
+      //   MOVZ scratch, FrameReg
+      //   ADDI scratch, scratch, offset
+      //   LOAD dst, scratch
+      Register ScratchReg = MI.getOperand(0).getReg();
+
+      BuildMI(MBB, II, DL, TII.get(MovOpc), ScratchReg).addReg(FrameReg);
+
+      int64_t Remaining = Off;
+      while (Remaining != 0) {
+        int64_t Step = std::clamp<int64_t>(Remaining, -16, 15);
+        BuildMI(MBB, II, DL, TII.get(AddiOpc), ScratchReg)
+            .addReg(ScratchReg)
+            .addImm(Step);
+        Remaining -= Step;
+      }
+
+      MI.getOperand(FIOperandNum).ChangeToRegister(ScratchReg, /*isDef=*/false);
+      return false;
+    }
+
+    // For STORE, temporarily adjust the frame register, use it as the
+    // address, then restore.  This avoids needing a scratch register on
+    // a target with only 8 registers.
+    //   ADDI FrameReg, FrameReg, offset    ; temp adjust
+    //   ...  (chain for large offsets)
+    //   STORE val, FrameReg
+    //   SUBI FrameReg, FrameReg, offset    ; restore
+    //   ...  (chain for large offsets, reverse order)
+
+    // Forward chain: add offset to FrameReg
+    // We record each step so we can reverse it for the restore.
+    SmallVector<int64_t, 4> Steps;
+    int64_t Remaining = Off;
+    while (Remaining != 0) {
+      int64_t Step = std::clamp<int64_t>(Remaining, -16, 15);
+      Steps.push_back(Step);
+      BuildMI(MBB, II, DL, TII.get(AddiOpc), FrameReg)
+          .addReg(FrameReg)
+          .addImm(Step);
+      Remaining -= Step;
+    }
+
+    // Replace FrameIndex with FrameReg (now holding the correct address)
+    MI.getOperand(FIOperandNum).ChangeToRegister(FrameReg, /*isDef=*/false);
+
+    // Restore chain: go in reverse and subtract (use AddiOpc with negated step)
+    for (int64_t Step : llvm::reverse(Steps)) {
+      // SUBI is AddiOpc with a different opcode number, but we can use
+      // AddiOpc with the negated step value if it fits in [-16, +15].
+      // Since Steps were clamped to [-16, +15], negating them still fits.
+      BuildMI(MBB, std::next(II), DL, TII.get(AddiOpc), FrameReg)
+          .addReg(FrameReg)
+          .addImm(-Step);
+    }
+
     return false;
   }
 
-  // For MOVZ/MOVZI, we need to compute the offset.
-  // Insert an ADD between the frame register and the offset.
-  if (Opc == MOVZI16 || Opc == MOVZ16) {
+  // For MOVZ/MOVS with FrameIndex (from G_FRAME_INDEX selection):
+  // replace FI with FrameReg, then add the offset via ADDI.
+  switch (Opc) {
+  case MOVZ8:
+  case MOVS8:
+    AddiOpc = ADDI8;
+    break;
+  case MOVZ16:
+  case MOVS16:
+    AddiOpc = ADDI16;
+    break;
+  case MOVZ32:
+  case MOVS32:
+    AddiOpc = ADDI32;
+    break;
+  case MOVZ64:
+  case MOVS64:
+    AddiOpc = ADDI64;
+    break;
+  default:
+    AddiOpc = 0;
+    break;
+  }
+
+  if (AddiOpc) {
+    int64_t Off = Offset.getFixed();
+
+    if (Off == 0) {
+      // Zero offset: MOVZ dst, FrameReg is sufficient.
+      MI.getOperand(FIOperandNum).ChangeToRegister(FrameReg, false);
+      return false;
+    }
+
+    // Non-zero offset: MOVZ dst, FrameReg; ADDI dst, dst, offset
+    Register Dst = MI.getOperand(0).getReg();
     MI.getOperand(FIOperandNum).ChangeToRegister(FrameReg, false);
-    // The offset remains as an immediate which the instruction encodes.
+
+    const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
+    DebugLoc DL = MI.getDebugLoc();
+
+    // Insert ADDI after the MOVZ (advance iterator past original MI)
+    MachineBasicBlock::iterator NextII = std::next(II);
+    int64_t Remaining = Off;
+    while (Remaining != 0) {
+      int64_t Step = std::clamp<int64_t>(Remaining, -16, 15);
+      BuildMI(MBB, NextII, DL, TII.get(AddiOpc), Dst)
+          .addReg(Dst)
+          .addImm(Step);
+      Remaining -= Step;
+    }
+    return false;
+  }
+
+  // MOVZI with FrameIndex (G_GLOBAL_VALUE path — handled by fixup/relocation)
+  if (Opc == MOVZI16 || Opc == MOVZI32 || Opc == MOVZI64 ||
+      Opc == MOVZI8 || Opc == MOVSI16 || Opc == MOVSI32 || Opc == MOVSI64 ||
+      Opc == MOVSI8) {
+    // For MOVZI, the immediate will be resolved via a fixup/relocation.
+    // Just replace the FrameIndex with an immediate 0 placeholder.
+    // The actual resolution happens in the AsmBackend.
+    MI.getOperand(FIOperandNum).ChangeToImmediate(0);
     return false;
   }
 

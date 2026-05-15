@@ -12,7 +12,9 @@
 
 define i16 @fib(i16 %n) {
 ; CHECK-LABEL: fib:
+; CHECK:       add %r5
 ; CHECK:       store %r3, %r5
+; CHECK:       add %r5
 ; CHECK:       cmp
 ; CHECK:       bltu
 ; CHECK:       br

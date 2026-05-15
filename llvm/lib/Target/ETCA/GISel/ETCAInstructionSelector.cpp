@@ -247,7 +247,10 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     int FI = MI.getOperand(1).getIndex();
     LLT DstTy = MRI->getType(Dst);
     unsigned Size = DstTy.getSizeInBits();
-    BuildMI(MBB, MI, MIMD, TII.get(getMovziOpc(Size)), Dst).addFrameIndex(FI);
+    // Use MOVZ (RR form) with FrameIndex, NOT MOVZI (immediate form).
+    // FrameIndex needs register-based resolution (FrameReg + offset),
+    // which eliminateFrameIndex handles by emitting MOVZ+ADDI chain.
+    BuildMI(MBB, MI, MIMD, TII.get(getMovzOpc(Size)), Dst).addFrameIndex(FI);
     if (!constrainReg(Dst, DstTy, RBI, *MRI))
       return false;
     MI.eraseFromParent();

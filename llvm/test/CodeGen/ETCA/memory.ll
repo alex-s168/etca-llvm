@@ -85,7 +85,9 @@ define void @store_zero(i16* %ptr) {
 define i16 @multi_alloca(i16 %a, i16 %b) {
 ; CHECK-LABEL: multi_alloca:
 ; CHECK:       sub %r6
+; CHECK:       add %r5
 ; CHECK:       store %r3, %r5
+; CHECK:       add %r5
 ; CHECK:       movz
 ; CHECK:       store
 ; CHECK:       store

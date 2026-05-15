@@ -43,7 +43,9 @@ base:
 
 define i16 @fib(i16 %n) {
 ; CHECK-LABEL: fib:
+; CHECK:       add %r5
 ; CHECK:       store %r3, %r5
+; CHECK:       add %r5
 ; CHECK:       cmp
 ; CHECK:       bltu
 ; CHECK:       br
@@ -78,7 +80,9 @@ define void @multi_call() {
 
 define i16 @branch_eq(i16 %a, i16 %b) {
 ; CHECK-LABEL: branch_eq:
+; CHECK:       add %r5
 ; CHECK:       store %r3, %r5
+; CHECK:       add %r5
 ; CHECK:       cmp
 ; CHECK:       beq
 ; CHECK-NOT:   cmp
@@ -124,7 +128,9 @@ define i16 @branch_sgt(i16 %a, i16 %b) {
 define i16 @loop(i16 %limit) {
 ; CHECK-LABEL: loop:
 ; CHECK:       sub %r6
+; CHECK:       add %r5
 ; CHECK:       store %r3, %r5
+; CHECK:       add %r5
 ; CHECK:       add
 ; CHECK:       cmp
 ; CHECK:       blt
