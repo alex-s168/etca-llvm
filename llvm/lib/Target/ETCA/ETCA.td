@@ -62,24 +62,24 @@ include "ETCASchedule.td"
 
 // Base: 16-bit word, 16-bit pointer, SAF extension
 def : ProcessorModel<"generic", ETCASchedModel,
-    [Feature16Bit, FeaturePtr16, FeatureSAF]>;
+    [Feature16Bit, FeaturePtr16, FeatureSAF, FeatureByte]>;
 
 // 32-bit word, 32-bit pointer (DW + DWAS)
 def : ProcessorModel<"etca32", ETCASchedModel,
-    [Feature32Bit, FeaturePtr32, FeatureSAF, FeatureDW, FeatureDWAS]>;
+    [Feature32Bit, FeaturePtr32, FeatureSAF, FeatureDW, FeatureDWAS, FeatureByte]>;
 
 // 32-bit word, 64-bit pointer (DW + QWAS; QWAS requires QW, meaning
 // registers are 64-bit but word size is 32 for default operations)
 def : ProcessorModel<"etca32p64", ETCASchedModel,
-    [Feature64Bit, FeaturePtr64, FeatureSAF, FeatureDW, FeatureQW, FeatureQWAS]>;
+    [Feature64Bit, FeaturePtr64, FeatureSAF, FeatureDW, FeatureQW, FeatureQWAS, FeatureByte]>;
 
 // 64-bit word, 32-bit pointer (QW + DWAS; note: DW is implied by QW)
 def : ProcessorModel<"etca64p32", ETCASchedModel,
-    [Feature64Bit, FeaturePtr32, FeatureSAF, FeatureDW, FeatureQW, FeatureDWAS]>;
+    [Feature64Bit, FeaturePtr32, FeatureSAF, FeatureDW, FeatureQW, FeatureDWAS, FeatureByte]>;
 
 // 64-bit word, 64-bit pointer (QW + QWAS)
 def : ProcessorModel<"etca64", ETCASchedModel,
-    [Feature64Bit, FeaturePtr64, FeatureSAF, FeatureDW, FeatureQW, FeatureQWAS]>;
+    [Feature64Bit, FeaturePtr64, FeatureSAF, FeatureDW, FeatureQW, FeatureQWAS, FeatureByte]>;
 
 //===----------------------------------------------------------------------===//
 // Register File, Calling Conv, Instruction Descriptions

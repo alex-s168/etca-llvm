@@ -154,7 +154,15 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
 
   //===----------------------------------------------------------------===//
   // Load and Store — TIER 1 (data-flow)
+  //
+  // In addition to scalar types, pointer types (p0) must be legal for
+  // loads/stores of pointer values (common in alloca-based code where
+  // the address of an alloca is stored to a pointer variable).
   //===----------------------------------------------------------------===//
+
+  // Memory type for pointer-sized loads/stores.
+  LLT PtrMemTy = LLT::scalar(PS);
+  unsigned PtrAlign = PS / 8;
 
   auto &LoadActions = getActionDefinitionsBuilder(G_LOAD);
   if (HasByte)
@@ -162,6 +170,8 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   LoadActions.legalForTypesWithMemDesc({{s16, p0, s16, 2}});
   LoadActions.legalForTypesWithMemDesc({{s32, p0, s32, 4}});
   LoadActions.legalForTypesWithMemDesc({{s64, p0, s64, 8}});
+  // Pointer loads: result type p0, addr p0, memory is PS-bit scalar
+  LoadActions.legalForTypesWithMemDesc({{p0, p0, PtrMemTy, PtrAlign}});
   LoadActions.widenScalarToNextPow2(0, MinLegal.getSizeInBits());
   LoadActions.clampScalar(0, MinLegal, s64);
 
@@ -171,6 +181,8 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   StoreActions.legalForTypesWithMemDesc({{s16, p0, s16, 2}});
   StoreActions.legalForTypesWithMemDesc({{s32, p0, s32, 4}});
   StoreActions.legalForTypesWithMemDesc({{s64, p0, s64, 8}});
+  // Pointer stores: value type p0, addr p0, memory is PS-bit scalar
+  StoreActions.legalForTypesWithMemDesc({{p0, p0, PtrMemTy, PtrAlign}});
   StoreActions.widenScalarToNextPow2(0, MinLegal.getSizeInBits());
   StoreActions.clampScalar(0, MinLegal, s64);
 
@@ -188,11 +200,18 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
 
   //===----------------------------------------------------------------===//
   // Pointer arithmetic — TIER 1 (data-flow)
+  //
+  // The offset type must match what the ALU can handle (s16 always,
+  // s32 with HasDW, s64 with HasQW).  Pointer arithmetic decomposes
+  // into word-size ADD instructions, so this mirrors computation gating.
   //===----------------------------------------------------------------===//
 
-  getActionDefinitionsBuilder(G_PTR_ADD)
-      .legalFor({{p0, s16}})
-      .clampScalar(1, s16, s64);
+  auto &PtrAddActions = getActionDefinitionsBuilder(G_PTR_ADD);
+  PtrAddActions.legalFor({{p0, s16}});
+  PtrAddActions.legalFor(HasDW, {{p0, s32}});
+  PtrAddActions.legalFor(HasQW, {{p0, s64}});
+  PtrAddActions.widenScalarToNextPow2(1, MinLegal.getSizeInBits());
+  PtrAddActions.clampScalar(1, MinLegal, MaxComp);
 
   //===----------------------------------------------------------------===//
   // Extensions and truncations — TIER 1 (always-legal)

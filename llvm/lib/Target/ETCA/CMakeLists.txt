@@ -49,7 +49,6 @@ add_llvm_target(ETCACodeGen
   MC
   MCDisassembler
   MCParser
-  SelectionDAG
   Support
   Target
   TargetParser

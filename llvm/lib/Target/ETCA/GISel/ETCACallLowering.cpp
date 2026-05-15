@@ -82,14 +82,17 @@ bool ETCACallLowering::lowerReturn(MachineIRBuilder &MIRBuilder,
                          Register(VRegs[0]));
   }
   // Emit JMPR r7 directly instead of RET_Pseudo to avoid late expansion.
-  // Also add an implicit use of the return register so that the COPY to it
-  // (emitted above) is not eliminated by DeadMachineInstructionElimination.
+  // If there is a return value, also add an implicit use of the return
+  // register so that the COPY to it (emitted above) is not eliminated by
+  // DeadMachineInstructionElimination.  For void functions, no implicit
+  // register is needed — $r0 would be undefined and cause verifier errors.
   if (MIRBuilder.getMF().getSubtarget<ETCASubtarget>().hasSAF()) {
-    const auto &ST = MIRBuilder.getMF().getSubtarget<ETCASubtarget>();
-    MCRegister RetReg = getRetReg(ST.getWordSize());
-    MIRBuilder.buildInstr(ETCA::JMPR)
-        .addReg(ETCA::R7)
-        .addReg(RetReg, RegState::Implicit);
+    auto Jmp = MIRBuilder.buildInstr(ETCA::JMPR).addReg(ETCA::R7);
+    if (Val && !VRegs.empty()) {
+      const auto &ST = MIRBuilder.getMF().getSubtarget<ETCASubtarget>();
+      MCRegister RetReg = getRetReg(ST.getWordSize());
+      Jmp.addReg(RetReg, RegState::Implicit);
+    }
   } else
     MIRBuilder.buildInstr(ETCA::RET_Pseudo);
   return true;
@@ -106,18 +109,14 @@ bool ETCACallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
   unsigned RegBytes = RegWidth / 8;
   const MCPhysReg *ArgRegs = getArgRegs(RegWidth);
 
-  // R7 is the link register (return address).  Mark it live-in so
-  // the register allocator knows it's defined at function entry.
-  // Also add it to all other blocks that may use JMPR $r7 (liveness
-  // propagation from entry through the CFG ensures correct liveness).
-  if (ST.hasSAF()) {
+  // R7 is the link register (return address).  Mark it live-in on the
+  // entry block so the register allocator knows it's defined there.
+  // Liveness propagation through the CFG will make it live at all blocks
+  // that use it (e.g., the return block which emits JMPR $r7).
+  // Do NOT add R7 as live-in to non-entry blocks — LLVM's machine
+  // verifier rejects allocatable live-ins on non-entry blocks.
+  if (ST.hasSAF())
     MIRBuilder.getMBB().addLiveIn(ETCA::R7);
-    // Add R7 as live-in to all blocks to ensure the verifier doesn't
-    // flag uses of R7 as undefined (as R7 is not reserved anymore).
-    for (auto &MBB : MF)
-      if (&MBB != &MIRBuilder.getMBB())
-        MBB.addLiveIn(ETCA::R7);
-  }
 
   if (F.arg_empty())
     return true;
