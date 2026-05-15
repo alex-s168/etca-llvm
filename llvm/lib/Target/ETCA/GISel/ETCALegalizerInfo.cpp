@@ -236,6 +236,7 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
 
   auto &PhiActions = getActionDefinitionsBuilder(G_PHI);
   dataFlowTypes(PhiActions);
+  PhiActions.legalFor({p0});
 
   //===----------------------------------------------------------------===//
   // MUL/DIV/REM — libcalls (available for all widths via software)
