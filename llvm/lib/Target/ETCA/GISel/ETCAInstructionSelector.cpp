@@ -12,13 +12,13 @@
 // Handles all word sizes (16, 32, 64) and SAF extension instructions.
 //
 // NOTE on two-address instructions:
-//   ALU ops (ADD, SUB, AND, OR, XOR) and CMPI use a tied-def constraint
+//   ALU ops (ADD, SUB, AND, OR, XOR) and ADDI/SUBI use a tied-def constraint
 //   ($src1 = $dst) because the hardware encodes dest as the same register
-//   as the first source.  The instruction selector uses a TEMPORARY vreg
-//   for the first source operand, which DIFFERS from the destination.
-//   The TwoAddressInstructionPass then inserts a COPY to satisfy the
-//   constraint.  This keeps the MIR in SSA form (each vreg defined once)
-//   before TwoAddress passes.
+//   as the first source.  The instruction selector emits the tied-def
+//   directly (using $src1 as the tied source operand).  The
+//   TwoAddressInstructionPass then converts to non-SSA form by inserting a
+//   COPY of $src1 to $dst when $dst != $src1.  This is the conventional
+//   approach — no need for the instruction selector to pre-insert copies.
 //
 //   MOVZ, MOVS, MOVZI, MOVSI, READCR, WRITECR do NOT have tied-defs
 //   because they ignore the old dest value.  They use the _NT (non-tied)
@@ -299,13 +299,12 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     // Arithmetic and logical operations
     //
     // ALU ops (ADD, SUB, etc.) have tied-def: $src1 = $dst.
-    // To keep SSA form, we emit:
-    //   %tmp = COPY %src1           (source vreg, no tied-def)
-    //   %dst = OP %tmp(tied), %src2 (tied src≠dst, TwoAddress inserts COPY)
+    // We emit the tied-def directly.  TwoAddressInstructionPass handles
+    // the conversion from SSA form: it sees $dst != $src1 (different
+    // vregs) and inserts a COPY of $src1 to $dst before the OP.
     //
     // After TwoAddress pass:
-    //   %tmp = COPY %src1
-    //   %dst = COPY %tmp
+    //   %dst = COPY %src1
     //   %dst = OP %dst(tied), %src2  →  %dst = %src1 OP %src2
     //===----------------------------------------------------------------===//
 
@@ -318,7 +317,6 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     Register Src1 = MI.getOperand(1).getReg();
     Register Src2 = MI.getOperand(2).getReg();
     LLT DstTy = MRI->getType(Dst);
-    const TargetRegisterClass *RC = getRCForType(DstTy);
     unsigned Size = DstTy.getSizeInBits();
 
     // For ADD and SUB, check if Src2 is a small constant that fits in
@@ -371,14 +369,9 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
 
     unsigned ETCaOpc = getETCAAluOpcode(MI.getOpcode(), Size);
 
-    // Copy Src1 to a temp (no tied-def since COPY is generic).
-    Register Tmp = MRI->createVirtualRegister(RC);
-    BuildMI(MBB, MI, MIMD, TII.get(TargetOpcode::COPY), Tmp).addReg(Src1);
-    if (!constrainReg(Tmp, DstTy, RBI, *MRI))
-      return false;
-
-    // ALU op with tied source = Tmp (≠ Dst → TwoAddress inserts COPY).
-    BuildMI(MBB, MI, MIMD, TII.get(ETCaOpc), Dst).addReg(Tmp).addReg(Src2);
+    // ALU op with tied-def: $src1 = $dst.  TwoAddressInstructionPass
+    // handles the SSA-to-non-SSA conversion (inserts COPY when needed).
+    BuildMI(MBB, MI, MIMD, TII.get(ETCaOpc), Dst).addReg(Src1).addReg(Src2);
     if (!constrainReg(Dst, DstTy, RBI, *MRI))
       return false;
     MI.eraseFromParent();
@@ -410,7 +403,8 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
       return false;
 
     // Expand as repeated ADD: each iteration doubles via ADD (tied-def).
-    // MOVZ initial copy is non-tied.
+    // MOVZ initial copy is non-tied.  The ADD tied-def is handled by
+    // TwoAddressInstructionPass (same conventional approach as above).
     unsigned AddOpc = getETCAAluOpcode(TargetOpcode::G_ADD, Size);
     Register Val = ShiftAmt == 0 ? Dst : MRI->createVirtualRegister(RC);
     BuildMI(MBB, MI, MIMD, TII.get(getMovzOpc(Size)), Val).addReg(Src1);
@@ -420,7 +414,7 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     for (int64_t i = 0; i < ShiftAmt; ++i) {
       Register Next =
           (i == ShiftAmt - 1) ? Dst : MRI->createVirtualRegister(RC);
-      // ADD with tied source = Val (≠ Next) → TwoAddress inserts COPY.
+      // ADD tied-def: TwoAddress inserts COPY when Next != Val.
       BuildMI(MBB, MI, MIMD, TII.get(AddOpc), Next).addReg(Val).addReg(Val);
       if (!constrainReg(Next, DstTy, RBI, *MRI))
         return false;
@@ -699,7 +693,6 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     Register Src1 = MI.getOperand(1).getReg();
     Register Src2 = MI.getOperand(2).getReg();
     LLT DstTy = MRI->getType(Dst);
-    const TargetRegisterClass *RC = getRCForType(DstTy);
     unsigned Size = DstTy.getSizeInBits();
 
     // Check if Src2 is a small constant that fits in RI range.
@@ -735,14 +728,11 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
       }
     }
 
-    // Fall back to RR form.
-    Register Tmp = MRI->createVirtualRegister(RC);
-    BuildMI(MBB, MI, MIMD, TII.get(TargetOpcode::COPY), Tmp).addReg(Src1);
-    if (!constrainReg(Tmp, DstTy, RBI, *MRI))
-      return false;
-    BuildMI(MBB, MI, MIMD, TII.get(getETCAAluOpcode(TargetOpcode::G_ADD, Size)),
-            Dst)
-        .addReg(Tmp)
+    // Fall back to RR form (tied-def: $src1 = $dst).
+    // TwoAddressInstructionPass handles SSA-to-non-SSA conversion.
+    BuildMI(MBB, MI, MIMD,
+            TII.get(getETCAAluOpcode(TargetOpcode::G_ADD, Size)), Dst)
+        .addReg(Src1)
         .addReg(Src2);
     if (!constrainReg(Dst, DstTy, RBI, *MRI))
       return false;

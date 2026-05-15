@@ -251,9 +251,8 @@ cmake -S llvm -B build-etca -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_CXX_COMPILER=c++
 
-# Build specific libraries
-ninja -C build-etca LLVMETCACodeGen LLVMETCADesc LLVMETCAInfo \
-  LLVMETCAAsmParser LLVMETCADisassembler llc llvm-mc
+# Build everything. NEVER build only individual targets!
+ninja -C build-etca
 
 # Quick smoke test
 echo 'define i16 @add(i16 %a, i16 %b) {
@@ -263,9 +262,6 @@ echo 'define i16 @add(i16 %a, i16 %b) {
 
 # Run all ETCA tests
 llvm-lit build-etca/test/MC/ETCA/ build-etca/test/CodeGen/ETCA/
-
-# Compile individual .o files
-ninja -C build-etca lib/Target/ETCA/CMakeFiles/LLVMETCACodeGen.dir/<file>.cpp.o
 ```
 
 **Compiler note**: Clang 22.1.4 + libc++ has `abi_tag` incompatibility with `libDebugInfoGSYM`. GCC works but is slower.
