@@ -142,6 +142,41 @@ static bool constrainReg(Register Reg, LLT Ty, const RegisterBankInfo &RBI,
   return RBI.constrainGenericRegister(Reg, *RC, MRI);
 }
 
+// Encode a CmpInst::Predicate into an ICMP_Pseudo pred value (1-10).
+// These values match the encoding used by SELECT_Pseudo and ETCASelectExpand.
+static int64_t encodeICMPPred(CmpInst::Predicate P) {
+  switch (P) {
+  case CmpInst::ICMP_EQ:  return 1;
+  case CmpInst::ICMP_NE:  return 2;
+  case CmpInst::ICMP_UGT: return 3;
+  case CmpInst::ICMP_UGE: return 4;
+  case CmpInst::ICMP_ULT: return 5;
+  case CmpInst::ICMP_ULE: return 6;
+  case CmpInst::ICMP_SGT: return 7;
+  case CmpInst::ICMP_SGE: return 8;
+  case CmpInst::ICMP_SLT: return 9;
+  case CmpInst::ICMP_SLE: return 10;
+  default:                return 2; // NE (conservative fallback)
+  }
+}
+
+// Map an ICMP_Pseudo pred value (1-10) to a branch opcode.
+static unsigned getBranchOpcForPred(int64_t Pred) {
+  switch (Pred) {
+  case 1:  return ETCA::BEQ;
+  case 2:  return ETCA::BNE;
+  case 3:  return ETCA::BGTU;
+  case 4:  return ETCA::BGEU;
+  case 5:  return ETCA::BLTU;
+  case 6:  return ETCA::BLEU;
+  case 7:  return ETCA::BGT;
+  case 8:  return ETCA::BGE;
+  case 9:  return ETCA::BLT;
+  case 10: return ETCA::BLE;
+  default: return ETCA::BNE;
+  }
+}
+
 ETCAInstructionSelector::ETCAInstructionSelector(const TargetMachine &TM,
                                                  const ETCASubtarget &ST,
                                                  const RegisterBankInfo &RBI)
@@ -507,24 +542,35 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     //===----------------------------------------------------------------===//
     // G_BRCOND: conditional branch
     //
-    // Two cases:
+    // Three cases:
     //
-    // 1. Cond is defined by G_ICMP: use the matching branch for the
-    //    predicate, emitting CMP inline with the original operands.
+    // 1. Cond is defined by ICMP_Pseudo (G_ICMP was already selected):
+    //    CMP was already emitted by the G_ICMP handler, so just emit the
+    //    matching branch using the predicate from ICMP_Pseudo.
     //
-    // 2. Otherwise: CMP Cond, 0; BNE Target.
+    // 2. Cond is defined by G_ICMP (reverse-order traversal:
+    //    G_BRCOND is visited before G_ICMP): emit CMP + branch inline,
+    //    and replace the G_ICMP with an ICMP_Pseudo so the G_ICMP
+    //    handler will skip it when encountered.
+    //
+    // 3. Otherwise: CMP Cond, 0; BNE Target (free-floating condition).
     //===----------------------------------------------------------------===//
 
   case TargetOpcode::G_BRCOND: {
     Register Cond = MI.getOperand(0).getReg();
     MachineBasicBlock *Target = MI.getOperand(1).getMBB();
-    LLT CondTy = MRI->getType(Cond);
-    unsigned Size = CondTy.getSizeInBits();
 
-    // Check if Cond is defined by G_ICMP (may not have been processed yet
-    // due to reverse-order iteration — G_BRCOND comes after G_ICMP in
-    // reverse, so G_ICMP still exists and hasn't been selected yet).
     if (auto *DefMI = MRI->getVRegDef(Cond)) {
+      // Case 1: CMP already emitted by G_ICMP handler.
+      if (DefMI->getOpcode() == ETCA::ICMP_Pseudo) {
+        int64_t Pred = DefMI->getOperand(3).getImm();
+        BuildMI(MBB, MI, MIMD, TII.get(getBranchOpcForPred(Pred)))
+            .addMBB(Target);
+        MI.eraseFromParent();
+        return true;
+      }
+
+      // Case 2: G_ICMP not yet selected (reverse-order traversal).
       if (DefMI->getOpcode() == TargetOpcode::G_ICMP) {
         CmpInst::Predicate Pred = static_cast<CmpInst::Predicate>(
             DefMI->getOperand(1).getPredicate());
@@ -535,51 +581,27 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
         BuildMI(MBB, MI, MIMD, TII.get(ETCA::CMP)).addReg(LHS).addReg(RHS);
 
         // Emit matching branch.
-        unsigned BrOpc;
-        switch (Pred) {
-        case CmpInst::ICMP_EQ:
-          BrOpc = ETCA::BEQ;
-          break;
-        case CmpInst::ICMP_NE:
-          BrOpc = ETCA::BNE;
-          break;
-        case CmpInst::ICMP_UGT:
-          BrOpc = ETCA::BGTU;
-          break;
-        case CmpInst::ICMP_UGE:
-          BrOpc = ETCA::BGEU;
-          break;
-        case CmpInst::ICMP_ULT:
-          BrOpc = ETCA::BLTU;
-          break;
-        case CmpInst::ICMP_ULE:
-          BrOpc = ETCA::BLEU;
-          break;
-        case CmpInst::ICMP_SGT:
-          BrOpc = ETCA::BGT;
-          break;
-        case CmpInst::ICMP_SGE:
-          BrOpc = ETCA::BGE;
-          break;
-        case CmpInst::ICMP_SLT:
-          BrOpc = ETCA::BLT;
-          break;
-        case CmpInst::ICMP_SLE:
-          BrOpc = ETCA::BLE;
-          break;
-        default:
-          BrOpc = ETCA::BNE;
-          break;
-        }
-        BuildMI(MBB, MI, MIMD, TII.get(BrOpc)).addMBB(Target);
+        int64_t EncPred = encodeICMPPred(Pred);
+        BuildMI(MBB, MI, MIMD, TII.get(getBranchOpcForPred(EncPred)))
+            .addMBB(Target);
 
+        // Replace G_ICMP with ICMP_Pseudo so the G_ICMP handler is a
+        // no-op when encountered later in the traversal.
+        Register GICMPDst = DefMI->getOperand(0).getReg();
+        BuildMI(MBB, *DefMI, MIMD, TII.get(ETCA::ICMP_Pseudo), GICMPDst)
+            .addReg(LHS)
+            .addReg(RHS)
+            .addImm(EncPred);
         DefMI->eraseFromParent();
         MI.eraseFromParent();
         return true;
       }
     }
 
-    // No ICMP — emit MOVZI Zero,0; CMP Cond, Zero; BNE Target.
+    // Case 3: Free-floating condition.
+    // Emit MOVZI Zero,0; CMP Cond, Zero; BNE Target.
+    LLT CondTy = MRI->getType(Cond);
+    unsigned Size = CondTy.getSizeInBits();
     const TargetRegisterClass *RC = getRCForType(CondTy);
     Register Zero = MRI->createVirtualRegister(RC);
     BuildMI(MBB, MI, MIMD, TII.get(getMovziOpc(Size)), Zero).addImm(0);
@@ -597,10 +619,12 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     // Emits CMP to set flags, then SELECT_Pseudo which is expanded by the
     // ETCASelectExpand pass into proper branches + MOVZ sequences.
     //
-    // Two cases:
-    //   1. Cond from G_ICMP: consume G_ICMP, emit CMP with its LHS/RHS,
-    //      set pred to encode the matching branch (1=EQ, 2=NE, etc.).
-    //   2. Otherwise: CMP cond, 0; pred=0 (BNE).
+    // Three cases:
+    //   1. Cond from ICMP_Pseudo (G_ICMP already selected):
+    //      CMP already emitted, extract pred from ICMP_Pseudo.
+    //   2. Cond from G_ICMP (reverse-order traversal):
+    //      emit CMP, replace G_ICMP with ICMP_Pseudo, extract pred.
+    //   3. Otherwise: CMP cond, 0; pred=0 (BNE).
     //===----------------------------------------------------------------===//
 
   case TargetOpcode::G_SELECT: {
@@ -613,59 +637,38 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     const TargetRegisterClass *DstRC = getRCForType(DstTy);
 
     int64_t PredVal = 0;
-    bool IsICMP = false;
+    bool CMPEmitted = false;
 
     if (auto *DefMI = MRI->getVRegDef(Cond)) {
-      if (DefMI->getOpcode() == TargetOpcode::G_ICMP) {
-        IsICMP = true;
+      // Case 1: CMP already emitted by G_ICMP handler.
+      if (DefMI->getOpcode() == ETCA::ICMP_Pseudo) {
+        PredVal = DefMI->getOperand(3).getImm();
+        CMPEmitted = true;
+      }
+      // Case 2: G_ICMP not yet selected (reverse-order traversal).
+      else if (DefMI->getOpcode() == TargetOpcode::G_ICMP) {
         CmpInst::Predicate P = static_cast<CmpInst::Predicate>(
             DefMI->getOperand(1).getPredicate());
         Register LHS = DefMI->getOperand(2).getReg();
         Register RHS = DefMI->getOperand(3).getReg();
 
         BuildMI(MBB, MI, MIMD, TII.get(ETCA::CMP)).addReg(LHS).addReg(RHS);
+        PredVal = encodeICMPPred(P);
+        CMPEmitted = true;
 
-        switch (P) {
-        case CmpInst::ICMP_EQ:
-          PredVal = 1;
-          break;
-        case CmpInst::ICMP_NE:
-          PredVal = 2;
-          break;
-        case CmpInst::ICMP_UGT:
-          PredVal = 3;
-          break;
-        case CmpInst::ICMP_UGE:
-          PredVal = 4;
-          break;
-        case CmpInst::ICMP_ULT:
-          PredVal = 5;
-          break;
-        case CmpInst::ICMP_ULE:
-          PredVal = 6;
-          break;
-        case CmpInst::ICMP_SGT:
-          PredVal = 7;
-          break;
-        case CmpInst::ICMP_SGE:
-          PredVal = 8;
-          break;
-        case CmpInst::ICMP_SLT:
-          PredVal = 9;
-          break;
-        case CmpInst::ICMP_SLE:
-          PredVal = 10;
-          break;
-        default:
-          PredVal = 1;
-          break;
-        }
-
+        // Replace G_ICMP with ICMP_Pseudo so the G_ICMP handler is a
+        // no-op when encountered later in the traversal.
+        Register GICMPDst = DefMI->getOperand(0).getReg();
+        BuildMI(MBB, *DefMI, MIMD, TII.get(ETCA::ICMP_Pseudo), GICMPDst)
+            .addReg(LHS)
+            .addReg(RHS)
+            .addImm(PredVal);
         DefMI->eraseFromParent();
       }
     }
 
-    if (!IsICMP) {
+    if (!CMPEmitted) {
+      // Case 3: Free-floating condition.
       Register Zero = MRI->createVirtualRegister(DstRC);
       BuildMI(MBB, MI, MIMD, TII.get(getMovziOpc(Size)), Zero).addImm(0);
       if (!constrainReg(Zero, DstTy, RBI, *MRI))
@@ -851,30 +854,40 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
   }
 
     //===----------------------------------------------------------------===//
-    // G_ICMP: integer comparison — emit CMP, erase G_ICMP.
+    // G_ICMP: integer comparison
     //
-    // G_BRCOND and G_SELECT emit their own CMP instructions inline and
-    // do NOT rely on this one (due to reverse-order iteration in the
-    // selector: G_SELECT is processed BEFORE G_ICMP, so the CMP emitted
-    // here would be placed after the G_SELECT's CMP/branch, which is too
-    // late).  Both G_BRCOND and G_SELECT check for the original G_ICMP
-    // instruction directly (which still exists since it hasn't been
-    // selected yet in reverse order) and consume it themselves.
+    // Always emits CMP (sets flags) + ICMP_Pseudo (carries the predicate).
+    // G_BRCOND and G_SELECT check for ICMP_Pseudo via MRI and extract the
+    // predicate to emit the matching branch or select sequence.
     //
-    // This handler is reached only if the G_ICMP was NOT consumed by
-    // G_BRCOND or G_SELECT (i.e., the icmp result is unused).  In that
-    // case we still emit CMP for correctness, but it will likely be
-    // eliminated as dead code.
+    // ICMP_Pseudo is a non-pre-isel target opcode, so the main select
+    // loop skips it.  If the G_ICMP result has no consumers (dead code),
+    // the ICMP_Pseudo is still emitted; it will be cleaned up later by
+    // dead code elimination.
     //===----------------------------------------------------------------===//
 
   case TargetOpcode::G_ICMP: {
     Register Dst = MI.getOperand(0).getReg();
+    CmpInst::Predicate Pred = static_cast<CmpInst::Predicate>(
+        MI.getOperand(1).getPredicate());
     Register LHS = MI.getOperand(2).getReg();
     Register RHS = MI.getOperand(3).getReg();
 
+    // Emit CMP instruction that sets the flags.
     BuildMI(MBB, MI, MIMD, TII.get(ETCA::CMP)).addReg(LHS).addReg(RHS);
 
-    // Constrain the result register (even though it's unused).
+    // Emit ICMP_Pseudo as a marker carrying the predicate.
+    // Consumers (G_BRCOND, G_SELECT) check for ICMP_Pseudo via MRI and
+    // extract the predicate to emit the matching branch/select sequence.
+    // ICMP_Pseudo is a non-pre-isel opcode, so the main select loop
+    // will skip it.
+    int64_t EncPred = encodeICMPPred(Pred);
+    BuildMI(MBB, MI, MIMD, TII.get(ETCA::ICMP_Pseudo), Dst)
+        .addReg(LHS)
+        .addReg(RHS)
+        .addImm(EncPred);
+
+    // Constrain the result register.
     if (!constrainReg(Dst, LLT::scalar(16), RBI, *MRI))
       return false;
     MI.eraseFromParent();
