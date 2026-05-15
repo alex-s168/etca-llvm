@@ -59,12 +59,6 @@ bool ETCAInstrInfo::isMoveInstr(const TargetRegisterInfo &TRI,
   case MOVS16:
   case MOVS32:
   case MOVS64:
-  case MOVZI16:
-  case MOVZI32:
-  case MOVZI64:
-  case MOVSI16:
-  case MOVSI32:
-  case MOVSI64:
     return true;
   }
 }
