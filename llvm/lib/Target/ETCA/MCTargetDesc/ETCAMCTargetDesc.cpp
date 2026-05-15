@@ -629,13 +629,13 @@ void ETCAMCCodeEmitter::encodeInstruction(const MCInst &MI,
     Encoding = 0x008F;
     break;
 
-  // === Pseudo-instructions (lowered before emission, but emit NOP if seen) ===
+  // === Pseudo-instructions (must be lowered before emission) ===
+  // If any pseudo reaches the MC layer, it's a bug in pass ordering or ISel.
   case ETCA::RET_Pseudo:
   case ETCA::CALL_Pseudo:
   case ETCA::SELECT_Pseudo:
   case ETCA::ICMP_Pseudo:
-    Encoding = 0x008F;
-    break;
+    llvm_unreachable("pseudo-instruction leaked to MC layer");
 
   // === SAF: PUSH register (RR format) ===
   // Encoding: (sp << 13) | (Reg << 10) | (SS << 4) | 0xD
