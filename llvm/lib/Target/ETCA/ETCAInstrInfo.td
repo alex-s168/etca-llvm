@@ -336,10 +336,11 @@ let hasSideEffects = 1, isPseudo = 1, isCodeGenOnly = 1 in {
   def ADJCALLSTACKDOWN : EInst<(outs), (ins i16imm:$amt), "", []>;
 }
 
-// NOP: add r0, r0 encoded as 0x0010 (00_01_0000_000_000_00)
+// NOP: encoded as 0x008F (base ISA 2-byte NOP per binutils etca_build_nop:
+//   byte0 = 0x8F (10001111), byte1 = 0x00)
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
   def NOP : EInst<(outs), (ins), "nop", []> {
-    let Inst{15-0} = 0x0010;
+    let Inst{15-0} = 0x008F;
   }
 }
 

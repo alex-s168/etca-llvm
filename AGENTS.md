@@ -65,6 +65,13 @@ The real `AsmBackend` is in `MCTargetDesc/ETCAMCTargetDesc.cpp`. `MCTargetDesc/E
 ### CMP-RI disassembler conflict
 TableGen `-gen-disassembler` fails because CMP-RI and TEST-RI encodings overlap with other RR instructions. The disassembler is **manually implemented** in `Disassembler/ETCADisassembler.cpp`.
 
+### NOP encoding: 0x008F
+All NOP emission paths use `0x008F` ([0x8F, 0x00] LE) — the canonical 2-byte base-ISA NOP per binutils `etca_build_nop`:
+- `ETCAInstrInfo.td: NOP Inst{15-0}` = `0x008F`
+- `ETCAMCTargetDesc.cpp: encodeInstruction` case ETCA::NOP → `0x008F`
+- `ETCAMCTargetDesc.cpp: writeNopData` → writes `"\x8F\x00"`
+- `ETCADisassembler.cpp` → checks for `0x008F`
+
 ### LLVM 21+ API notes
 - `copyPhysReg` uses 8-param signature (`RenamableDest`, `RenamableSrc`)
 - `getPointerRegClass` uses 1-param signature (`Kind` only)

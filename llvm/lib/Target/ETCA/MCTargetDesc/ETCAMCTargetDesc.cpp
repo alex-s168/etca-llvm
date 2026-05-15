@@ -829,11 +829,11 @@ public:
 
   bool writeNopData(raw_ostream &OS, uint64_t Count,
                     const MCSubtargetInfo *STI) const override {
-    // NOP = add r0, r0 (0x0010)
+    // NOP = 2-byte NOP (0x008F LE: [0x8F, 0x00]) per binutils etca_build_nop
     if ((Count % 2) != 0)
       return false;
     for (uint64_t i = 0; i < Count; i += 2)
-      OS.write("\x10\x00", 2);
+      OS.write("\x8F\x00", 2);
     return true;
   }
 };
