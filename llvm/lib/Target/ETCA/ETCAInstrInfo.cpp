@@ -135,7 +135,7 @@ void ETCAInstrInfo::storeRegToStackSlot(
   unsigned StoreOpc;
   switch (Size) {
   case 8:
-    StoreOpc = STORE8;
+    StoreOpc = STORE64;
     break;
   case 4:
     StoreOpc = STORE32;
@@ -168,7 +168,7 @@ void ETCAInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
   unsigned LoadOpc;
   switch (Size) {
   case 8:
-    LoadOpc = LOAD8;
+    LoadOpc = LOAD64;
     break;
   case 4:
     LoadOpc = LOAD32;

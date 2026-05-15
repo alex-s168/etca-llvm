@@ -182,12 +182,21 @@ ETCAFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
   if (ST.hasSAF()) {
     int StackSize = MFI.getStackSize();
     int ObjectOffset = MFI.getObjectOffset(FI);
-    int Offset = ObjectOffset - StackSize;
-    // For fixed objects (arguments), the offset is already relative to SP
-    // before the prologue, so we need to add back the saved bp.
+
     if (MFI.isFixedObjectIndex(FI)) {
-      Offset += 2; // adjust for pushed bp
+      // Fixed objects (incoming arguments) are at offsets from the initial
+      // SP (before the prologue).  After the prologue, bp = initial_SP - 2
+      // (pushed old bp), so the offset from bp is:
+      //   addr = initial_SP + ObjectOffset = (bp + 2) + ObjectOffset
+      //   offset_from_bp = ObjectOffset + 2
+      return StackOffset::getFixed(ObjectOffset + 2);
     }
+
+    // Non-fixed objects (locals, spills) are below SP after prologue:
+    //   sp = initial_SP - 2 - StackSize  (after push bp + sub sp, N)
+    //   object at sp + ObjectOffset
+    //   offset from bp = ObjectOffset - StackSize
+    int Offset = ObjectOffset - StackSize;
     return StackOffset::getFixed(Offset);
   }
 
