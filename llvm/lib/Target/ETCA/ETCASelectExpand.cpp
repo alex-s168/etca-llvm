@@ -25,14 +25,27 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
+#include "llvm/Support/Debug.h"
+#include "ETCASubtarget.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/PassRegistry.h"
-#include "llvm/Support/Debug.h"
 
 #define GET_INSTRINFO_ENUM
 #include "ETCAGenInstrInfo.inc"
 
 using namespace llvm;
+
+/// Return the MOVZ opcode for the given register width.
+static unsigned getMovzOpcForRegWidth(unsigned RegWidth) {
+  switch (RegWidth) {
+  case 64:
+    return ETCA::MOVZ64;
+  case 32:
+    return ETCA::MOVZ32;
+  default:
+    return ETCA::MOVZ16;
+  }
+}
 
 #define DEBUG_TYPE "etca-select-expand"
 
@@ -160,11 +173,17 @@ bool ETCASelectExpand::runOnMachineFunction(MachineFunction &MF) {
     BuildMI(MBB, *MI, DL, TII.get(ETCA::BR)).addMBB(FalseBB);
 
     // FalseBB: MOVZ dst, falseval; BR MBBCont
-    BuildMI(FalseBB, DL, TII.get(ETCA::MOVZ16), Dst).addReg(FalseVal);
+    BuildMI(FalseBB, DL, TII.get(getMovzOpcForRegWidth(
+                MF.getSubtarget<ETCASubtarget>().getRegWidth())),
+            Dst)
+        .addReg(FalseVal);
     BuildMI(FalseBB, DL, TII.get(ETCA::BR)).addMBB(MBBCont);
 
     // TrueBB: MOVZ dst, trueval (fall-through to MBBCont)
-    BuildMI(TrueBB, DL, TII.get(ETCA::MOVZ16), Dst).addReg(TrueVal);
+    BuildMI(TrueBB, DL, TII.get(getMovzOpcForRegWidth(
+                MF.getSubtarget<ETCASubtarget>().getRegWidth())),
+            Dst)
+        .addReg(TrueVal);
 
     // Erase SELECT_Pseudo.
     MI->eraseFromParent();
