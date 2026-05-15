@@ -283,9 +283,9 @@ let isCommutable = 1, hasSideEffects = 0, mayLoad = 0, mayStore = 0,
 //===----------------------------------------------------------------------===//
 
 let Predicates = [HasSAF], hasSideEffects = 1, mayLoad = 1, mayStore = 1 in {
-  // POP register
+  // POP register — loads from [sp], increments sp (r6)
   def POP   : EInstPOP16<"pop $dst", []>;
-  // PUSH register
+  // PUSH register — decrements sp (r6), stores to [sp]
   def PUSH  : EInstPUSHR16<"push $src", []>;
   // PUSH immediate
   def PUSHI : EInstPUSHI16<"push $imm", []>;

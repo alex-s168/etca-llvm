@@ -119,6 +119,24 @@ public:
     addPass(createETCASelectExpandPass());
     TargetPassConfig::addPreRegAlloc();
   }
+
+  /// Skip the Machine Control Flow Optimizer (BranchFolding) and
+  /// Machine Block Placement (reorder blocks) passes which do not
+  /// understand ETCa's PUSH/POP stack pseudo-instructions and crash
+  /// when optimizing functions containing them.
+  void addMachineLateOptimization() override {
+    addPass(&MachineLateInstrsCleanupID);
+    // Skip BranchFolderPass — crashes on ETCa's PUSH/POP.
+    // addPass(&BranchFolderPassID);
+    if (!TM->requiresStructuredCFG())
+      addPass(&TailDuplicateLegacyID);
+    addPass(&MachineCopyPropagationID);
+  }
+
+  void addBlockPlacement() override {
+    // Skip MachineBlockPlacement — crashes on ETCa's PUSH/POP.
+    // addPass(&MachineBlockPlacementID);
+  }
 };
 } // namespace
 

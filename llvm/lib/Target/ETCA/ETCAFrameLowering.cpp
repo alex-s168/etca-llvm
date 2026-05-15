@@ -68,10 +68,10 @@ void ETCAFrameLowering::emitPrologue(MachineFunction &MF,
   //   mov r5, r6       ; bp = sp
   //   sub r6, N        ; allocate N bytes for locals (if N > 0)
 
+  unsigned RegWidth = ST.getRegWidth();
+
   // 1. push r5
   BuildMI(MBB, MBBI, DL, TII.get(PUSH)).addReg(R5);
-
-  unsigned RegWidth = ST.getRegWidth();
   unsigned MovOpc;
   switch (RegWidth) {
   case 64:
@@ -155,32 +155,30 @@ ETCAFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
   FrameReg = TRI.getFrameRegister(MF);
 
   // With SAF:
-  //   bp = sp (after prologue)
-  //   Stack frame layout (grows down):
-  //     [old bp]      <- bp + 0
-  //     [locals...]   <- bp - local_offset
+  //   bp = sp (after prologue: push r5, mov r5, r6)
+  //   sp = bp - StackSize (after: sub r6, StackSize)
   //
-  //   FrameIndex offset: negative offset from bp for locals.
+  // Stack frame layout (grows down):
+  //     [old bp]      <- bp + 0     (saved by push r5)
+  //     [spills/locals] <- bp - 2 .. bp - StackSize
+  //                       <- sp = bp - StackSize
   //
-  // The offset from bp to the local:
-  //   offset = -(MFI.getObjectOffset(FI) + adjustment_for_saved_regs)
+  // The PEI pass assigns ObjectOffset = -Offset where Offset is the
+  // distance from SP (after prologue) going downward.  But for ETCa we
+  // want objects to live WITHIN the allocated region [sp, bp], i.e. at
+  // bp-2, bp-4, ..., bp-StackSize.  Since the PEI assigns -
+  // sequentially-increasing values, those values happen to be exactly
+  // the bp-relative offsets we need (negated).
   //
-  // Since we push r5 (2 bytes) and set bp=sp, the actual frame offset
-  // is: bp - object_offset - 2 (for pushed bp)
-  //
-  // With SAF prologue, bp = old_sp, and sp = bp - StackSize.
-  // Objects are allocated at SP + object_offset.
-  // So relative to BP: bp - StackSize + object_offset = bp - (StackSize -
-  // object_offset)
-  //
-  // In practice, the frame info's getObjectOffset returns offset from SP.
-  // So: FrameIndex ref = bp + (object_offset - StackSize)
-  // But since bp = sp + StackSize (after prologue):
-  //   object addr = sp + object_offset = bp - StackSize + object_offset = bp +
-  //   (object_offset - StackSize)
+  // Example: 3 objects of size 2 → offsets -2, -4, -6 from SP.
+  //   StackSize = 6, sp = bp - 6.
+  //   Using Offset = ObjectOffset (not ObjectOffset - StackSize):
+  //     object at SP-2 → bp-2   (bp + (-2))
+  //     object at SP-4 → bp-4   (bp + (-4))
+  //     object at SP-6 → bp-6   (bp + (-6))
+  //   All within [bp-6, bp-0].
 
   if (ST.hasSAF()) {
-    int StackSize = MFI.getStackSize();
     int ObjectOffset = MFI.getObjectOffset(FI);
 
     if (MFI.isFixedObjectIndex(FI)) {
@@ -192,11 +190,13 @@ ETCAFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
       return StackOffset::getFixed(ObjectOffset + 2);
     }
 
-    // Non-fixed objects (locals, spills) are below SP after prologue:
-    //   sp = initial_SP - 2 - StackSize  (after push bp + sub sp, N)
-    //   object at sp + ObjectOffset
-    //   offset from bp = ObjectOffset - StackSize
-    int Offset = ObjectOffset - StackSize;
+    // Non-fixed objects (locals, spills):
+    //   PEI assigns ObjectOffset = -distance_from_SP (downward).
+    //   These values directly give the bp-relative offset since
+    //   sp = bp - StackSize and the offsets are sequential:
+    //     bp_offset = ObjectOffset  (no StackSize subtraction)
+    //   This places all objects within [bp-StackSize, bp-0].
+    int Offset = ObjectOffset;
     return StackOffset::getFixed(Offset);
   }
 

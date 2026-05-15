@@ -81,20 +81,24 @@ bool ETCACallLowering::lowerReturn(MachineIRBuilder &MIRBuilder,
     MIRBuilder.buildCopy(Register(getRetReg(ST.getWordSize())),
                          Register(VRegs[0]));
   }
-  // Emit JMPR r7 directly instead of RET_Pseudo to avoid late expansion.
+  // Use RET_Pseudo which has isReturn=1 so PEI inserts the epilogue.
+  // The expander (ETCAInstrInfo::expandPostRAPseudo) converts RET_Pseudo
+  // to JMPR after all MI passes (including the Control Flow Optimizer)
+  // have run.  This avoids confusing non-ETCA passes with stack
+  // operations in the epilogue.
+  //
   // If there is a return value, also add an implicit use of the return
   // register so that the COPY to it (emitted above) is not eliminated by
   // DeadMachineInstructionElimination.  For void functions, no implicit
   // register is needed — $r0 would be undefined and cause verifier errors.
-  if (MIRBuilder.getMF().getSubtarget<ETCASubtarget>().hasSAF()) {
-    auto Jmp = MIRBuilder.buildInstr(ETCA::JMPR).addReg(ETCA::R7);
+  {
+    auto Ret = MIRBuilder.buildInstr(ETCA::RET_Pseudo);
     if (Val && !VRegs.empty()) {
       const auto &ST = MIRBuilder.getMF().getSubtarget<ETCASubtarget>();
       MCRegister RetReg = getRetReg(ST.getWordSize());
-      Jmp.addReg(RetReg, RegState::Implicit);
+      Ret.addReg(RetReg, RegState::Implicit);
     }
-  } else
-    MIRBuilder.buildInstr(ETCA::RET_Pseudo);
+  }
   return true;
 }
 

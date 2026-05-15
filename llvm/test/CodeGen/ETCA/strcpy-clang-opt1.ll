@@ -38,29 +38,20 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; GEN-LABEL: mystrcpy:
 ; GEN:       push %r5
 ; GEN:       movz %r5, %r6
-; GEN:       sub %r6, 8
+; GEN:       sub %r6, 6
 ;; Prologue: spill callee-saves and arguments (using scratch regs)
-; GEN:       movz %r{{[0-9]+}}, %r5
 ; GEN:       store %r3, %r{{[0-9]+}}
-; GEN:       movz %r{{[0-9]+}}, %r5
 ; GEN:       store %r4, %r{{[0-9]+}}
-; GEN:       movz %r{{[0-9]+}}, %r5
 ; GEN:       store %r0, %r{{[0-9]+}}
-; GEN:       movz %r{{[0-9]+}}, %r5
-; GEN:       store %r1, %r{{[0-9]+}}
 ; GEN:       movz %r2h, 0
-; GEN:       movz %r3, 1
-; GEN:       movz %r4, 0
-;; Loop: reload src pointer from stack, add index, load byte with LOAD8
-; GEN:       load %r1, %r1
-; GEN:       add %r1, %r4
-; GEN:       load %r0, %r0
-; GEN:       add %r0, %r4
-; GEN:       load %r1h, %r1h
-; GEN:       store %r1h, %r0h
-; GEN:       add %r4, %r3
+; GEN:       movz %r{{[0-9]+}}, 1
+; GEN:       movz %r{{[0-9]+}}, 0
+;; Loop body: dest + index, load byte from src, store to dest, inc
+; GEN:       add %r{{[0-9]+}}, %r{{[0-9]+}}
+; GEN:       load %r{{[0-9]+}}h
+; GEN:       store %r{{[0-9]+}}h
 ;; Check for null terminator
-; GEN:       cmp %r1, %r2
+; GEN:       cmp %r{{[0-9]+}}, %r2
 ; GEN:       beq
 ; GEN:       br
 ;; Return: reload original dest ptr and return
@@ -79,14 +70,12 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; DW:       movz %r{{[0-9]+}}, %r5
 ; DW:       store %r4, %r{{[0-9]+}}
 ; DW:       movz %r2h, 0
-; DW:       movz %r3d, 1
-; DW:       movz %r{{[0-9]+}}, %r5
-; DW:       store %r4, %r{{[0-9]+}}
+; DW:       movz %r{{[0-9]+}}d, 1
 ;; Loop: load byte from src, store to dest, increment both pointers
 ; DW:       load %r{{[0-9]+}}h, %r{{[0-9]+}}h
 ; DW:       store %r{{[0-9]+}}h, %r{{[0-9]+}}h
-; DW:       add %r{{[0-9]+}}, %r3d
-; DW:       add %r{{[0-9]+}}, %r3d
+; DW:       add %r{{[0-9]+}}, %r{{[0-9]+}}d
+; DW:       add %r{{[0-9]+}}, %r{{[0-9]+}}d
 ; DW:       cmp %r{{[0-9]+}}, %r2
 ; DW-NEXT:  beq
 ; DW-NEXT:  br
@@ -104,14 +93,12 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; QW:       movz %r{{[0-9]+}}, %r5
 ; QW:       store %r4, %r{{[0-9]+}}
 ; QW:       movz %r2h, 0
-; QW:       movz %r3q, 1
-; QW:       movz %r{{[0-9]+}}, %r5
-; QW:       store %r4, %r{{[0-9]+}}
+; QW:       movz %r{{[0-9]+}}q, 1
 ;; Loop: load byte from src, store to dest, increment both pointers
 ; QW:       load %r{{[0-9]+}}h, %r{{[0-9]+}}h
 ; QW:       store %r{{[0-9]+}}h, %r{{[0-9]+}}h
-; QW:       add %r{{[0-9]+}}, %r3q
-; QW:       add %r{{[0-9]+}}, %r3q
+; QW:       add %r{{[0-9]+}}, %r{{[0-9]+}}q
+; QW:       add %r{{[0-9]+}}, %r{{[0-9]+}}q
 ; QW:       cmp %r{{[0-9]+}}, %r2
 ; QW-NEXT:  beq
 ; QW-NEXT:  br

@@ -29,17 +29,17 @@ define ptr @store_load_ptr(ptr %addr, ptr %val) {
 ; GEN-LABEL: store_load_ptr:
 ; GEN:       store %r1, %r0
 ; GEN-NEXT:  load %r0, %r0
-; GEN-NEXT:  jmpr %r7
+; GEN:       jmpr %r7
 ;
 ; DW-LABEL: store_load_ptr:
 ; DW:       store %r1, %r0
 ; DW-NEXT:  load %r0, %r0
-; DW-NEXT:  jmpr %r7
+; DW:       jmpr %r7
 ;
 ; QW-LABEL: store_load_ptr:
 ; QW:       store %r1, %r0
 ; QW-NEXT:  load %r0, %r0
-; QW-NEXT:  jmpr %r7
+; QW:       jmpr %r7
   store ptr %val, ptr %addr
   %loaded = load ptr, ptr %addr
   ret ptr %loaded

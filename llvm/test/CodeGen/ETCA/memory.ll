@@ -86,10 +86,9 @@ define i16 @multi_alloca(i16 %a, i16 %b) {
 ; CHECK-LABEL: multi_alloca:
 ; CHECK:       sub %r6
 ; CHECK:       movz %r{{[0-9]+}}, %r5
-; CHECK:       store %r3, %r{{[0-9]+}}
-; CHECK:       movz
-; CHECK:       store
-; CHECK:       store
+; CHECK:       add %r{{[0-9]+}}, -2
+; CHECK:       store %r0
+; CHECK:       store %r1
 ; CHECK:       load
 ; CHECK:       load
 ; CHECK:       add

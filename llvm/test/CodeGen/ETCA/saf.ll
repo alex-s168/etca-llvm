@@ -79,8 +79,7 @@ define void @multi_call() {
 
 define i16 @branch_eq(i16 %a, i16 %b) {
 ; CHECK-LABEL: branch_eq:
-; CHECK:       movz %r{{[0-9]+}}, %r5
-; CHECK:       store %r3, %r{{[0-9]+}}
+; CHECK:       movz %r5, %r6
 ; CHECK:       cmp
 ; CHECK:       beq
 ; CHECK-NOT:   cmp
