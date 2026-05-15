@@ -71,7 +71,8 @@ bool ETCAInstrInfo::isMoveInstr(const TargetRegisterInfo &TRI,
 
 Register ETCAInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
                                             int &FrameIndex) const {
-  if (MI.getOpcode() == LOAD16) {
+  unsigned Opc = MI.getOpcode();
+  if (Opc == LOAD8 || Opc == LOAD16 || Opc == LOAD32 || Opc == LOAD64) {
     if (MI.getOperand(1).isFI()) {
       FrameIndex = MI.getOperand(1).getIndex();
       return MI.getOperand(0).getReg();
@@ -82,7 +83,8 @@ Register ETCAInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
 
 Register ETCAInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
                                            int &FrameIndex) const {
-  if (MI.getOpcode() == STORE16) {
+  unsigned Opc = MI.getOpcode();
+  if (Opc == STORE8 || Opc == STORE16 || Opc == STORE32 || Opc == STORE64) {
     if (MI.getOperand(1).isFI()) {
       FrameIndex = MI.getOperand(1).getIndex();
       return MI.getOperand(0).getReg();
