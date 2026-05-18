@@ -36,6 +36,18 @@ public:
   /// Return the ETCASubtarget object.
   const ETCASubtarget &getSubtarget() const { return STI; }
 
+  /// Return true if the immediate can be used directly in a CMPI instruction.
+  /// ETCa RI format uses a 5-bit sign-extended immediate ([-16, 15]).
+  bool isLegalICmpImmediate(int64_t Imm) const override {
+    return isInt<5>(Imm);
+  }
+
+  /// Return true if the immediate can be used directly in an ADDI instruction.
+  /// ETCa RI format uses a 5-bit sign-extended immediate ([-16, 15]).
+  bool isLegalAddImmediate(int64_t Imm) const override {
+    return isInt<5>(Imm);
+  }
+
   /// Return true if the addressing mode is legal for ETCA.
   bool isLegalAddressingMode(const DataLayout &DL, const AddrMode &AM,
                              Type *Ty, unsigned AS,

@@ -29,6 +29,10 @@ public:
 
   bool isMoveInstr(const TargetRegisterInfo &TRI, const MachineInstr &MI) const;
 
+  /// Recognize MOVZ/MOVS as copy instructions for the register coalescer.
+  std::optional<DestSourcePair>
+  isCopyInstrImpl(const MachineInstr &MI) const override;
+
   Register isLoadFromStackSlot(const MachineInstr &MI,
                                int &FrameIndex) const override;
 

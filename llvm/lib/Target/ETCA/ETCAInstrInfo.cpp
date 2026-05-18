@@ -250,3 +250,20 @@ bool ETCAInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   }
   }
 }
+
+std::optional<DestSourcePair>
+ETCAInstrInfo::isCopyInstrImpl(const MachineInstr &MI) const {
+  switch (MI.getOpcode()) {
+  default:
+    break;
+  case ETCA::MOVZ16:
+  case ETCA::MOVZ32:
+  case ETCA::MOVZ64:
+  case ETCA::MOVS16:
+  case ETCA::MOVS32:
+  case ETCA::MOVS64:
+    // MOVZ/MOVS are non-tied: [dst, src].
+    return DestSourcePair{MI.getOperand(0), MI.getOperand(1)};
+  }
+  return std::nullopt;
+}
