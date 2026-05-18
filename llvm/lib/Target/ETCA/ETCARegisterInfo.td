@@ -43,6 +43,7 @@ class ETCAReg<bits<3> num, string n, list<Register> subregs = [],
                list<string> altNames = []> : Register<n, altNames> {
   field bits<3> Num;
   let Num = num;
+  let HWEncoding{2-0} = num;
   let Namespace = "ETCA";
   let SubRegs = subregs;
 }

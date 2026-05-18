@@ -209,9 +209,11 @@ namespace {
 
 class ETCAMCCodeEmitter : public MCCodeEmitter {
   const MCInstrInfo &MCII;
+  MCContext &Ctx;
 
 public:
-  ETCAMCCodeEmitter(const MCInstrInfo &MII, MCContext &Ctx) : MCII(MII) {
+  ETCAMCCodeEmitter(const MCInstrInfo &MII, MCContext &Ctx)
+      : MCII(MII), Ctx(Ctx) {
     (void)MCII;
   }
 
@@ -258,31 +260,18 @@ unsigned ETCAMCCodeEmitter::getRegisterOpValue(const MCInst &MI,
                                                unsigned OpNo) const {
   const MCOperand &MO = MI.getOperand(OpNo);
   assert(MO.isReg() && "Expected register operand");
-  // Register encoding: extract the 3-bit index (0-7) for each register class.
-  unsigned Reg = MO.getReg();
-  if (Reg >= ETCA::R0 && Reg <= ETCA::R7)
-    return Reg - ETCA::R0;
-  if (Reg >= ETCA::D0 && Reg <= ETCA::D7)
-    return Reg - ETCA::D0;
-  if (Reg >= ETCA::Q0 && Reg <= ETCA::Q7)
-    return Reg - ETCA::Q0;
-  llvm_unreachable("Unknown ETCA register in encoder");
+  // Register encoding: use the HWEncoding from the target register info.
+  // All register classes (R0-R7, D0-D7, Q0-Q7) share the same 3-bit encoding
+  // for the same index (e.g., R0/D0/Q0 all encode to 0).
+  return Ctx.getRegisterInfo()->getEncodingValue(MO.getReg()) & 0x7;
 }
 
 unsigned ETCAMCCodeEmitter::getMachineOpValue(const MCInst &MI,
                                                const MCOperand &MO,
                                                SmallVectorImpl<MCFixup> &Fixups,
                                                const MCSubtargetInfo &STI) const {
-  if (MO.isReg()) {
-    unsigned Reg = MO.getReg();
-    if (Reg >= ETCA::R0 && Reg <= ETCA::R7)
-      return Reg - ETCA::R0;
-    if (Reg >= ETCA::D0 && Reg <= ETCA::D7)
-      return Reg - ETCA::D0;
-    if (Reg >= ETCA::Q0 && Reg <= ETCA::Q7)
-      return Reg - ETCA::Q0;
-    llvm_unreachable("Unknown ETCA register in encoder");
-  }
+  if (MO.isReg())
+    return Ctx.getRegisterInfo()->getEncodingValue(MO.getReg()) & 0x7;
   if (MO.isImm())
     return static_cast<unsigned>(MO.getImm());
   if (MO.isExpr()) {
