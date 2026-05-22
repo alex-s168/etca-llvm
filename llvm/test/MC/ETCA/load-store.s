@@ -42,10 +42,10 @@ cmp %r6, %r3
 test %r7, %r0
 # CHECK: test %r7, %r0              ; encoding: [0x17,0xe0]
 
-# --- mov psedo-instruction (maps to movs/movsi, or lowers to LOAD/STORE) ---
-# movx %r0, 0 → MOVSI16 rA=0, imm=0 → 0x0059 → [0x59,0x00]
+# --- mov psedo-instruction (maps to movz/movzi, or lowers to LOAD/STORE) ---
+# movx %r0, 0 → MOVZI16 rA=0, imm=0 → 0x0058 → [0x58,0x00]
 movx %r0, 0
-# CHECK: movs %r0, 0                ; encoding: [0x59,0x00]
+# CHECK: movz %r0, 0                ; encoding: [0x58,0x00]
 
 # movx [%r1], %r0 → STORE16 rA=0, rB=1 → 0x041B → [0x1b,0x04]
 movx [%r1], %r0
@@ -55,10 +55,10 @@ movx [%r1], %r0
 movx %r2, [%r1]
 # CHECK: load %r2, %r1             ; encoding: [0x1a,0x44]
 
-# mov %r0, 15 → MOVSI16 rA=0, imm=15 → 0x0F59 → [0x59,0x0f]
+# mov %r0, 15 → MOVZI16 rA=0, imm=15 → 0x0F58 → [0x58,0x0f]
 mov %r0, 15
-# CHECK: movs %r0, 15               ; encoding: [0x59,0x0f]
+# CHECK: movz %r0, 15               ; encoding: [0x58,0x0f]
 
-# movx %r5, %r3 → MOVS16 rA=5, rB=3 → 0xAC19 → [0x19,0xac]
+# movx %r5, %r3 → MOVZ16 rA=5, rB=3 → 0xAC18 → [0x18,0xac]
 movx %r5, %r3
-# CHECK: movs %r5, %r3              ; encoding: [0x19,0xac]
+# CHECK: movz %r5, %r3              ; encoding: [0x18,0xac]

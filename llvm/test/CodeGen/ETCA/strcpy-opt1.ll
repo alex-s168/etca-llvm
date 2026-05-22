@@ -58,7 +58,7 @@ define ptr @astrcpy(ptr %dest, ptr %src) {
 ; GEN:       load %r{{[0-9]+}}, %r{{[0-9]+}}
 ; GEN-NEXT:  load %r{{[0-9]+}}h
 ;; Compare byte with 0 and branch
-; GEN:       cmp %r{{[0-9]+}}, %r{{[0-9]+}}
+; GEN:       cmp %r{{[0-9]+}}{{h?}}, %r{{[0-9]+}}{{h?}}
 ; GEN-NEXT:  bne
 ; GEN:       br
 ;; Copy byte from src to dest
@@ -85,7 +85,7 @@ define ptr @astrcpy(ptr %dest, ptr %src) {
 ; DW:       load %r{{[0-9]+}}, %r{{[0-9]+}}
 ; DW-NEXT:  load %r{{[0-9]+}}h
 ;; Compare byte with 0
-; DW:       cmp %r{{[0-9]+}}, %r{{[0-9]+}}
+; DW:       cmp %r{{[0-9]+}}{{h?}}, %r{{[0-9]+}}{{h?}}
 ; DW-NEXT:  bne
 ; DW:       br
 ;; Copy: load byte from src, store to dest
@@ -113,7 +113,7 @@ define ptr @astrcpy(ptr %dest, ptr %src) {
 ; QW:       load %r{{[0-9]+}}, %r{{[0-9]+}}
 ; QW-NEXT:  load %r{{[0-9]+}}h
 ;; Compare byte with 0
-; QW:       cmp %r{{[0-9]+}}, %r{{[0-9]+}}
+; QW:       cmp %r{{[0-9]+}}{{h?}}, %r{{[0-9]+}}{{h?}}
 ; QW-NEXT:  bne
 ; QW:       br
 ;; Copy: load byte from src, store to dest

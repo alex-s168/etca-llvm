@@ -144,9 +144,9 @@ define i16 @and_ri_small(i16 %a) {
 
 define i16 @shift_left(i16 %a) {
 ; CHECK-LABEL: shift_left:
+; CHECK:       add %r0, %r0
+; CHECK:       add %r0, %r0
 ; CHECK:       movz %r0, %r0
-; CHECK:       add %r0, %r0
-; CHECK:       add %r0, %r0
 ; CHECK:       jmpr %r7
   %r = shl i16 %a, 2
   ret i16 %r
@@ -162,8 +162,8 @@ define i16 @shift_left_by_zero(i16 %a) {
 
 define i16 @shift_left_by_one(i16 %a) {
 ; CHECK-LABEL: shift_left_by_one:
-; CHECK:       movz %r0, %r0
 ; CHECK:       add %r0, %r0
+; CHECK:       movz %r0, %r0
 ; CHECK:       jmpr %r7
   %r = shl i16 %a, 1
   ret i16 %r

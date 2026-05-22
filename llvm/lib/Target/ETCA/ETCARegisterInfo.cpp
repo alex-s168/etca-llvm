@@ -190,8 +190,7 @@ bool ETCARegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
             .addImm(Step);
         Remaining -= Step;
       }
-      MI.getOperand(FIOperandNum)
-          .ChangeToRegister(FrameReg, /*isDef=*/false);
+      MI.getOperand(FIOperandNum).ChangeToRegister(FrameReg, /*isDef=*/false);
       for (int64_t Step : llvm::reverse(Steps)) {
         BuildMI(MBB, std::next(II), DL, TII.get(AddiOpc), FrameReg)
             .addReg(FrameReg)
@@ -211,8 +210,7 @@ bool ETCARegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
       Remaining -= Step;
     }
 
-    MI.getOperand(FIOperandNum)
-        .ChangeToRegister(ScratchReg, /*isDef=*/false);
+    MI.getOperand(FIOperandNum).ChangeToRegister(ScratchReg, /*isDef=*/false);
     return false;
   }
 
@@ -261,18 +259,15 @@ bool ETCARegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     int64_t Remaining = Off;
     while (Remaining != 0) {
       int64_t Step = std::clamp<int64_t>(Remaining, -16, 15);
-      BuildMI(MBB, NextII, DL, TII.get(AddiOpc), Dst)
-          .addReg(Dst)
-          .addImm(Step);
+      BuildMI(MBB, NextII, DL, TII.get(AddiOpc), Dst).addReg(Dst).addImm(Step);
       Remaining -= Step;
     }
     return false;
   }
 
   // MOVZI with FrameIndex (G_GLOBAL_VALUE path — handled by fixup/relocation)
-  if (Opc == MOVZI16 || Opc == MOVZI32 || Opc == MOVZI64 ||
-      Opc == MOVZI8 || Opc == MOVSI16 || Opc == MOVSI32 || Opc == MOVSI64 ||
-      Opc == MOVSI8) {
+  if (Opc == MOVZI16 || Opc == MOVZI32 || Opc == MOVZI64 || Opc == MOVZI8 ||
+      Opc == MOVSI16 || Opc == MOVSI32 || Opc == MOVSI64 || Opc == MOVSI8) {
     // For MOVZI, the immediate will be resolved via a fixup/relocation.
     // Just replace the FrameIndex with an immediate 0 placeholder.
     // The actual resolution happens in the AsmBackend.
@@ -297,8 +292,16 @@ const uint32_t *
 ETCARegisterInfo::getCallPreservedMask(const MachineFunction &MF,
                                        CallingConv::ID CC) const {
   // SAF ABI: R3(s0), R4(s1), R5(bp), R6(sp) are callee-saved.
-  // The CSR_ETCA_RegMask is auto-generated from the CalleeSavedRegs definition
-  // in ETCACallingConv.td.
+  // The CSR mask is auto-generated from CalleeSavedRegs definitions
+  // in ETCACallingConv.td.  Select the right mask based on word size.
+  // getRegMasks() returns masks in the order they appear in the .td file:
+  //   [0] = CSR_ETCA_RegMask (16-bit)
+  //   [1] = CSR_ETCA_GPR32_RegMask (32-bit)
+  //   [2] = CSR_ETCA_GPR64_RegMask (64-bit)
+  if (ST.getWordSize() >= 64)
+    return getRegMasks()[2];
+  if (ST.getWordSize() >= 32)
+    return getRegMasks()[1];
   return getRegMasks()[0];
 }
 

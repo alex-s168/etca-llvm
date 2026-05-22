@@ -406,7 +406,7 @@ const ETCAAsmParser::FixedEntry ETCAAsmParser::FixedOps[] = {
     {"jmpr", ETCA::JMPR, 1, false, false},
     {"callr", ETCA::CALLR, 1, false, false},
     {"nop", ETCA::NOP, 0, false, false},
-    {"mov", ETCA::MOVS16, 0, false,
+    {"mov", ETCA::MOVZ16, 0, false,
      true}, // mov pseudo: width determined by suffix/register
 };
 
@@ -444,14 +444,11 @@ unsigned ETCAAsmParser::selectWidth(const RrRiEntry &E, bool IsRR,
                                     unsigned Width) {
   switch (Width) {
   case 64:
-    return IsRR ? (E.Opcode64RR ? E.Opcode64RR : E.Opcode16RR)
-                : (E.Opcode64RI ? E.Opcode64RI : E.Opcode16RI);
+    return IsRR ? E.Opcode64RR : E.Opcode64RI;
   case 32:
-    return IsRR ? (E.Opcode32RR ? E.Opcode32RR : E.Opcode16RR)
-                : (E.Opcode32RI ? E.Opcode32RI : E.Opcode16RI);
+    return IsRR ? E.Opcode32RR : E.Opcode32RI;
   case 8:
-    return IsRR ? (E.Opcode8RR ? E.Opcode8RR : E.Opcode16RR)
-                : (E.Opcode8RI ? E.Opcode8RI : E.Opcode16RI);
+    return IsRR ? E.Opcode8RR : E.Opcode8RI;
   default: // 16
     return IsRR ? E.Opcode16RR : E.Opcode16RI;
   }
@@ -993,16 +990,16 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
         if (Op2.isReg()) {
           switch (W) {
           case 8:
-            Inst.setOpcode(ETCA::MOVS8);
+            Inst.setOpcode(ETCA::MOVZ8);
             break;
           case 32:
-            Inst.setOpcode(ETCA::MOVS32);
+            Inst.setOpcode(ETCA::MOVZ32);
             break;
           case 64:
-            Inst.setOpcode(ETCA::MOVS64);
+            Inst.setOpcode(ETCA::MOVZ64);
             break;
           default:
-            Inst.setOpcode(ETCA::MOVS16);
+            Inst.setOpcode(ETCA::MOVZ16);
             break;
           }
           Inst.addOperand(MCOperand::createReg(Op1.getReg()));
@@ -1040,7 +1037,6 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
                 Inst.setLoc(IDLoc);
                 Inst.setOpcode(ETCA::SLO16);
                 Inst.addOperand(MCOperand::createReg(RegNum));
-                Inst.addOperand(MCOperand::createReg(RegNum));
                 Inst.addOperand(MCOperand::createImm(Chunks.back()));
                 Chunks.pop_back();
                 Out.emitInstruction(Inst, getSTI());
@@ -1052,16 +1048,16 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
             // MOVS/MOVZ
             switch (W) {
             case 8:
-              Inst.setOpcode(ETCA::MOVSI8);
+              Inst.setOpcode(ETCA::MOVZI8);
               break;
             case 32:
-              Inst.setOpcode(ETCA::MOVSI32);
+              Inst.setOpcode(ETCA::MOVZI32);
               break;
             case 64:
-              Inst.setOpcode(ETCA::MOVSI64);
+              Inst.setOpcode(ETCA::MOVZI64);
               break;
             default:
-              Inst.setOpcode(ETCA::MOVSI16);
+              Inst.setOpcode(ETCA::MOVZI16);
               break;
             }
             Inst.addOperand(MCOperand::createReg(RegNum));
@@ -1142,8 +1138,15 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
       // PUSH <reg> or PUSH <imm> — distinguish by operand type.
       auto &Op = static_cast<ETCAOperand &>(*Operands[1]);
       if (Op.isReg()) {
-        Inst.setOpcode(ETCA::PUSH);
-        Inst.addOperand(MCOperand::createReg(Op.getReg()));
+        unsigned Reg = Op.getReg();
+        // Select width-specific PUSH based on register class.
+        if (Reg >= ETCA::D0 && Reg <= ETCA::D7)
+          Inst.setOpcode(ETCA::PUSH32);
+        else if (Reg >= ETCA::Q0 && Reg <= ETCA::Q7)
+          Inst.setOpcode(ETCA::PUSH64);
+        else
+          Inst.setOpcode(ETCA::PUSH);
+        Inst.addOperand(MCOperand::createReg(Reg));
       } else if (Op.isImm()) {
         Inst.setOpcode(ETCA::PUSHI);
         Inst.addOperand(MCOperand::createImm(Op.getImm()));
@@ -1154,8 +1157,22 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
         return Error(IDLoc, "push operand must be register or immediate");
       }
 
+    } else if (FE->Opcode == ETCA::POP) {
+      // POP <reg> — select width-specific POP based on register class.
+      auto &Op = static_cast<ETCAOperand &>(*Operands[1]);
+      if (!Op.isReg())
+        return Error(IDLoc, "pop operand must be a register");
+      unsigned Reg = Op.getReg();
+      if (Reg >= ETCA::D0 && Reg <= ETCA::D7)
+        Inst.setOpcode(ETCA::POP32);
+      else if (Reg >= ETCA::Q0 && Reg <= ETCA::Q7)
+        Inst.setOpcode(ETCA::POP64);
+      else
+        Inst.setOpcode(ETCA::POP);
+      Inst.addOperand(MCOperand::createReg(Reg));
+
     } else {
-      // Register operands: POP, JMPR, CALLR
+      // Register operands: JMPR, CALLR
       for (size_t I = 1; I <= FE->NumOps; ++I) {
         auto &Op = static_cast<ETCAOperand &>(*Operands[I]);
         if (!Op.isReg())
@@ -1226,6 +1243,7 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
         (Opc == ETCA::MOVZI8 || Opc == ETCA::MOVSI8 || Opc == ETCA::MOVZI16 ||
          Opc == ETCA::MOVSI16 || Opc == ETCA::MOVZI32 || Opc == ETCA::MOVSI32 ||
          Opc == ETCA::MOVZI64 || Opc == ETCA::MOVSI64);
+    bool IsSloRI = (Opc == ETCA::SLO16);
     bool IsCmpRR =
         (Opc == ETCA::CMP8 || Opc == ETCA::CMP || Opc == ETCA::CMP32 ||
          Opc == ETCA::CMP64 || Opc == ETCA::TEST8 || Opc == ETCA::TEST ||
@@ -1239,7 +1257,7 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
       // 2-operand layout for MOVZ/MOVS RR: [dst, src]
       Inst.addOperand(MCOperand::createReg(Op1.getReg())); // dst
       Inst.addOperand(MCOperand::createReg(Op2.getReg())); // src
-    } else if (IsMovRI) {
+    } else if (IsMovRI || IsSloRI) {
       // 2-operand layout for MOVZI/MOVSI RI: [dst, imm]
       Inst.addOperand(MCOperand::createReg(Op1.getReg())); // dst
       if (Op2.isImm())

@@ -293,7 +293,7 @@ echo 'define i16 @add(i16 %a, i16 %b) {
 }' | build-etca/bin/llc -march=etca -mcpu=generic -filetype=asm
 
 # Run all ETCA tests
-llvm-lit build-etca/test/MC/ETCA/ build-etca/test/CodeGen/ETCA/
+llvm-lit build-etca/test/*/ETCA/
 ```
 
 **Compiler note**: Clang 22.1.4 + libc++ has `abi_tag` incompatibility with `libDebugInfoGSYM`. GCC works but is slower.

@@ -80,6 +80,10 @@ rsub %r5d, %r2d
 # CHECK: rsub %r5d, %r2d           ; encoding: [0x22,0xa8]
 # DIS: rsub %r5d, %r2d
 
+cmp %r6d, %r3d
+# CHECK: cmp %r6d, %r3d            ; encoding: [0x23,0xcc]
+# DIS: cmp %r6d, %r3d
+
 or %r5d, %r2d
 # CHECK: or %r5d, %r2d             ; encoding: [0x24,0xa8]
 # DIS: or %r5d, %r2d
@@ -91,6 +95,10 @@ xor %r6d, %r4d
 and %r1d, %r7d
 # CHECK: and %r1d, %r7d            ; encoding: [0x26,0x3c]
 # DIS: and %r1d, %r7d
+
+test %r6d, %r3d
+# CHECK: test %r6d, %r3d           ; encoding: [0x27,0xcc]
+# DIS: test %r6d, %r3d
 
 movz %r7d, %r6d
 # CHECK: movz %r7d, %r6d           ; encoding: [0x28,0xf8]
@@ -122,6 +130,10 @@ rsub %r5q, %r2q
 # CHECK: rsub %r5q, %r2q           ; encoding: [0x32,0xa8]
 # DIS: rsub %r5q, %r2q
 
+cmp %r6q, %r3q
+# CHECK: cmp %r6q, %r3q            ; encoding: [0x33,0xcc]
+# DIS: cmp %r6q, %r3q
+
 or %r5q, %r2q
 # CHECK: or %r5q, %r2q             ; encoding: [0x34,0xa8]
 # DIS: or %r5q, %r2q
@@ -133,6 +145,10 @@ xor %r6q, %r4q
 and %r1q, %r7q
 # CHECK: and %r1q, %r7q            ; encoding: [0x36,0x3c]
 # DIS: and %r1q, %r7q
+
+test %r6q, %r3q
+# CHECK: test %r6q, %r3q           ; encoding: [0x37,0xcc]
+# DIS: test %r6q, %r3q
 
 movz %r7q, %r6q
 # CHECK: movz %r7q, %r6q           ; encoding: [0x38,0xf8]
@@ -352,6 +368,14 @@ push %r7
 # CHECK: push %r7                  ; encoding: [0x1d,0xdc]
 # DIS: push %r7
 
+push %r3d
+# CHECK: push %r3d                 ; encoding: [0x2d,0xcc]
+# DIS: push %r3d
+
+push %r3q
+# CHECK: push %r3q                 ; encoding: [0x3d,0xcc]
+# DIS: push %r3q
+
 pop %r0
 # CHECK: pop %r0                   ; encoding: [0x1c,0x18]
 # DIS: pop %r0
@@ -359,6 +383,14 @@ pop %r0
 pop %r7
 # CHECK: pop %r7                   ; encoding: [0x1c,0xf8]
 # DIS: pop %r7
+
+pop %r0d
+# CHECK: pop %r0d                  ; encoding: [0x2c,0x18]
+# DIS: pop %r0d
+
+pop %r0q
+# CHECK: pop %r0q                  ; encoding: [0x3c,0x18]
+# DIS: pop %r0q
 
 push 5
 # CHECK: push 5                    ; encoding: [0x5d,0xc5]

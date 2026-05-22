@@ -14,7 +14,7 @@ using namespace llvm;
 void anchor() {}
 
 ETCAMCAsmInfo::ETCAMCAsmInfo(const Triple &TT, const MCTargetOptions &Options,
-                               unsigned PtrSize)
+                             unsigned PtrSize)
     : MCAsmInfoELF(Options) {
   // Pointer size is determined by the caller (see createETCAMCAsmInfo).
   // The triple OS name suffix encodes the desired pointer size:

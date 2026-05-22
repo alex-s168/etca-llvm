@@ -205,8 +205,10 @@ bool ETCAInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   case ETCA::RET_Pseudo: {
     assert(ST.hasSAF() && "RET_Pseudo requires SAF extension");
     auto Jmp = BuildMI(MBB, MI, DL, TII.get(ETCA::JMPR)).addReg(R7);
-    // Copy implicit operands (e.g., return value register) from the pseudo
-    for (unsigned i = 1, e = MI.getNumOperands(); i < e; ++i)
+    // Copy implicit operands (e.g., return value register) from the pseudo.
+    // Start at i = 0 since RET_Pseudo has 0 explicit operands and the first
+    // operand (index 0) is the first implicit use (the return value register).
+    for (unsigned i = 0, e = MI.getNumOperands(); i < e; ++i)
       if (MI.getOperand(i).isReg() && MI.getOperand(i).isImplicit())
         Jmp.add(MI.getOperand(i));
     MI.eraseFromParent();

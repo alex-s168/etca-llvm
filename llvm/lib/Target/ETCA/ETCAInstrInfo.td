@@ -127,16 +127,13 @@ let isCommutable = 1, hasSideEffects = 0, mayLoad = 0, mayStore = 0,
   def MOVSI16 : EInstRI16_NT<9, "movs $dst, $imm", []>;
 }
 
-// SLO — shift left + OR low bits
-// Marked commutable for TwoAddress pass compatibility (see comment below).
+// SLO — shift left by imm5, OR with low bits
+// Uses non-tied format (no $src1 constraint) to avoid TwoAddress pass
+// confusion with the immediate operand.  SLO16 always reads the dest
+// register as the shift source, so tied-def is semantically accurate but
+// causes TwoAddress to hang when it can't commute an immediate operand.
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, SchedRW = [WriteALU] in {
-  def SLO16   : EInstRI16<12, "slo $dst, $imm", []> {
-    // isCommutable must be 1: without it the TwoAddress pass may hang on SLO16.
-    // Even though SLO16 has an immediate operand (which can't actually be
-    // commuted), the isCommutable flag prevents the pass from trying other
-    // transformations that can cause infinite loops.
-    let isCommutable = 1;
-  }
+  def SLO16   : EInstRI16_NT<12, "slo $dst, $imm", []>;
 }
 
 // Control register access
@@ -377,7 +374,11 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1, hasSideEffects = 0,
 
 let Predicates = [HasSAF], isCall = 1, isTerminator = 1, isBarrier = 1,
     hasSideEffects = 1, SchedRW = [WriteALU] in {
-  def CALL  : EInstSAFCall<"call $target", []>;
+  def CALL  : EInstSAFCall<"call $target", []> {
+    // R7 (link register) is implicitly defined by CALL (stores return addr).
+    // Must match CALL_Pseudo's Defs so the expander can copy operands safely.
+    let Defs = [R7];
+  }
 }
 
 //===----------------------------------------------------------------------===//
@@ -386,12 +387,12 @@ let Predicates = [HasSAF], isCall = 1, isTerminator = 1, isBarrier = 1,
 
 let Predicates = [HasSAF], isBranch = 1, isTerminator = 1, isBarrier = 1,
     hasSideEffects = 0, SchedRW = [WriteALU] in {
-  def JMPR  : EInstSAFJmp<0b1110, "jmpr $rs", []>;
+  def JMPR  : EInstSAFJmp<0b1110, GPR, "jmpr $rs", []>;
 }
 
 let Predicates = [HasSAF], isCall = 1, isTerminator = 1, isBarrier = 1,
     hasSideEffects = 1, SchedRW = [WriteALU] in {
-  def CALLR : EInstSAFCallReg<0b1110, "callr $rs", []>;
+  def CALLR : EInstSAFCallReg<0b1110, GPR, "callr $rs", []>;
 }
 
 //===----------------------------------------------------------------------===//

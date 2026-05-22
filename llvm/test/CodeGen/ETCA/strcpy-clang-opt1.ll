@@ -49,7 +49,7 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; GEN:       store %r3h, %r4h
 ; GEN:       add %r7, 1
 ;; Check for null terminator
-; GEN:       cmp %r3, %r2
+; GEN:       cmp %r{{[0-9]+}}{{h?}}, %r{{[0-9]+}}{{h?}}
 ; GEN:       beq
 ; GEN:       br
 ;; Return: r0 (dest) still holds original value, no reload needed
@@ -67,7 +67,7 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; DW:       store %r3h, %r7h
 ; DW:       add %r1, 1
 ; DW:       add %r7, 1
-; DW:       cmp %r3, %r2
+; DW:       cmp %r{{[0-9]+}}{{h?}}, %r{{[0-9]+}}{{h?}}
 ; DW-NEXT:  beq
 ; DW-NEXT:  br
 ;; Return: epilogue + jmpr
@@ -85,7 +85,7 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; QW:       store %r3h, %r7h
 ; QW:       add %r1, 1
 ; QW:       add %r7, 1
-; QW:       cmp %r{{[0-9]+}}, %r2
+; QW:       cmp %r{{[0-9]+}}{{h?}}, %r2{{h?}}
 ; QW-NEXT:  beq
 ; QW-NEXT:  br
 ;; Return

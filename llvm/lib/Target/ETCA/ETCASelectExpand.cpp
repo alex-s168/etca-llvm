@@ -19,16 +19,16 @@
 
 #include "ETCA.h"
 #include "ETCAInstrInfo.h"
+#include "ETCASubtarget.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
-#include "llvm/Support/Debug.h"
-#include "ETCASubtarget.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/PassRegistry.h"
+#include "llvm/Support/Debug.h"
 
 #define GET_INSTRINFO_ENUM
 #include "ETCAGenInstrInfo.inc"
@@ -173,14 +173,16 @@ bool ETCASelectExpand::runOnMachineFunction(MachineFunction &MF) {
     BuildMI(MBB, *MI, DL, TII.get(ETCA::BR)).addMBB(FalseBB);
 
     // FalseBB: MOVZ dst, falseval; BR MBBCont
-    BuildMI(FalseBB, DL, TII.get(getMovzOpcForRegWidth(
+    BuildMI(FalseBB, DL,
+            TII.get(getMovzOpcForRegWidth(
                 MF.getSubtarget<ETCASubtarget>().getRegWidth())),
             Dst)
         .addReg(FalseVal);
     BuildMI(FalseBB, DL, TII.get(ETCA::BR)).addMBB(MBBCont);
 
     // TrueBB: MOVZ dst, trueval (fall-through to MBBCont)
-    BuildMI(TrueBB, DL, TII.get(getMovzOpcForRegWidth(
+    BuildMI(TrueBB, DL,
+            TII.get(getMovzOpcForRegWidth(
                 MF.getSubtarget<ETCASubtarget>().getRegWidth())),
             Dst)
         .addReg(TrueVal);

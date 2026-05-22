@@ -335,9 +335,9 @@ class EInstSAFCall<string asmstr, list<dag> pattern>
 // bits [3:0]   = CCCC (condition code)
 //===----------------------------------------------------------------------===//
 
-// Conditional absolute register jump
-class EInstSAFJmp<bits<4> cond_val, string asmstr, list<dag> pattern>
-    : EInst<(outs), (ins GPR:$rs), asmstr, pattern> {
+// Conditional absolute register jump — register class matches pointer width
+class EInstSAFJmp<bits<4> cond_val, RegisterClass RC, string asmstr, list<dag> pattern>
+    : EInst<(outs), (ins RC:$rs), asmstr, pattern> {
   bits<3> rs;
   // Actual encoding (16-bit LE):
   //   Byte 0 (low): 0xAF = 0b10101111
@@ -356,9 +356,9 @@ class EInstSAFJmp<bits<4> cond_val, string asmstr, list<dag> pattern>
   let isBarrier = 1;
 }
 
-// Conditional absolute register call
-class EInstSAFCallReg<bits<4> cond_val, string asmstr, list<dag> pattern>
-    : EInst<(outs), (ins GPR:$rs), asmstr, pattern> {
+// Conditional absolute register call — register class matches pointer width
+class EInstSAFCallReg<bits<4> cond_val, RegisterClass RC, string asmstr, list<dag> pattern>
+    : EInst<(outs), (ins RC:$rs), asmstr, pattern> {
   bits<3> rs;
   // Actual encoding (16-bit LE):
   //   Byte 0 (low): 0xAF = 0b10101111
@@ -485,8 +485,12 @@ class EInstPUSHI16<string asmstr, list<dag> pattern>
 //===----------------------------------------------------------------------===//
 
 // Generic RR-format load: loads from MEM[addr] into dst
-class EInstLoadRR<bits<2> ss, dag outs, string asmstr, list<dag> pattern>
-    : EInst<outs, (ins GPR:$addr), asmstr, pattern> {
+// Takes both destination and address register classes so the address
+// register can match the pointer width (GPR for 16-bit ptr, GPR32 for
+// 32-bit ptr, GPR64 for 64-bit ptr).
+class EInstLoadRR<bits<2> ss, RegisterClass DstRC, RegisterClass AddrRC,
+                  string asmstr, list<dag> pattern>
+    : EInst<(outs DstRC:$dst), (ins AddrRC:$addr), asmstr, pattern> {
   bits<3> dst;
   bits<3> addr;
   // Actual encoding (16-bit LE, RR format):
@@ -503,25 +507,27 @@ class EInstLoadRR<bits<2> ss, dag outs, string asmstr, list<dag> pattern>
   let SchedRW = [WriteLD];
 }
 
-// Convenience: 8-bit load (SS=00)
+// Convenience: 8-bit load (SS=00) — 8-bit data, 16-bit addr
 class EInstLoadRR8<string asmstr, list<dag> pattern>
-    : EInstLoadRR<0b00, (outs GPR:$dst), asmstr, pattern>;
+    : EInstLoadRR<0b00, GPR, GPR, asmstr, pattern>;
 
-// Convenience: 16-bit load (SS=01)
+// Convenience: 16-bit load (SS=01) — 16-bit data, 16-bit addr
 class EInstLoadRR16<string asmstr, list<dag> pattern>
-    : EInstLoadRR<0b01, (outs GPR:$dst), asmstr, pattern>;
+    : EInstLoadRR<0b01, GPR, GPR, asmstr, pattern>;
 
-// Convenience: 32-bit load (SS=10)
+// Convenience: 32-bit load (SS=10) — 32-bit data, 32-bit addr
 class EInstLoadRR32<string asmstr, list<dag> pattern>
-    : EInstLoadRR<0b10, (outs GPR32:$dst), asmstr, pattern>;
+    : EInstLoadRR<0b10, GPR32, GPR32, asmstr, pattern>;
 
-// Convenience: 64-bit load (SS=11)
+// Convenience: 64-bit load (SS=11) — 64-bit data, 64-bit addr
 class EInstLoadRR64<string asmstr, list<dag> pattern>
-    : EInstLoadRR<0b11, (outs GPR64:$dst), asmstr, pattern>;
+    : EInstLoadRR<0b11, GPR64, GPR64, asmstr, pattern>;
 
-// Generic RR-format store base (no address in ins list yet)
-class EInstStoreRRBase<bits<2> ss, dag outs, dag ins, string asmstr, list<dag> pattern>
-    : EInst<outs, ins, asmstr, pattern> {
+// Generic RR-format store base — parameterized by value and address register
+// classes so the address register can match the pointer width.
+class EInstStoreRRBase<bits<2> ss, RegisterClass ValRC, RegisterClass AddrRC,
+                       string asmstr, list<dag> pattern>
+    : EInst<(outs), (ins ValRC:$val, AddrRC:$addr), asmstr, pattern> {
   bits<3> val;
   bits<3> addr;
   // Actual encoding (16-bit LE, RR format):
@@ -538,27 +544,32 @@ class EInstStoreRRBase<bits<2> ss, dag outs, dag ins, string asmstr, list<dag> p
   let SchedRW = [WriteST];
 }
 
-// 8-bit store (SS=00)
+// 8-bit store (SS=00) — 8-bit value, 16-bit addr
 class EInstStoreRR8<string asmstr, list<dag> pattern>
-    : EInstStoreRRBase<0b00, (outs), (ins GPR:$val, GPR:$addr), asmstr, pattern>;
+    : EInstStoreRRBase<0b00, GPR, GPR, asmstr, pattern>;
 
-// 16-bit store (SS=01)
+// 16-bit store (SS=01) — 16-bit value, 16-bit addr
 class EInstStoreRR16<string asmstr, list<dag> pattern>
-    : EInstStoreRRBase<0b01, (outs), (ins GPR:$val, GPR:$addr), asmstr, pattern>;
+    : EInstStoreRRBase<0b01, GPR, GPR, asmstr, pattern>;
 
-// 32-bit store (SS=10)
+// 32-bit store (SS=10) — 32-bit value, 32-bit addr
 class EInstStoreRR32<string asmstr, list<dag> pattern>
-    : EInstStoreRRBase<0b10, (outs), (ins GPR32:$val, GPR:$addr), asmstr, pattern>;
+    : EInstStoreRRBase<0b10, GPR32, GPR32, asmstr, pattern>;
 
-// 64-bit store (SS=11)
+// 64-bit store (SS=11) — 64-bit value, 64-bit addr
 class EInstStoreRR64<string asmstr, list<dag> pattern>
-    : EInstStoreRRBase<0b11, (outs), (ins GPR64:$val, GPR:$addr), asmstr, pattern>;
+    : EInstStoreRRBase<0b11, GPR64, GPR64, asmstr, pattern>;
 
 // Compare/test instruction format — takes SS parameter for width.
 // SS=01 (word, base), SS=10 (dword, DW), SS=11 (qword, QW)
 // Byte0 bits [7:6]=00 (RR format), [5:4]=SS (size), [3:0]=CCCC (opcode)
-class EInstCmp<bits<2> ss, bits<4> opcod, string asmstr, list<dag> pattern>
-    : EInst<(outs), (ins GPR:$src1, GPR:$src2), asmstr, pattern> {
+//
+// The register class is parameterized so width-specific CMP/TEST variants
+// use the correct register class (GPR for 8/16-bit, GPR32 for 32-bit,
+// GPR64 for 64-bit).
+class EInstCmp<bits<2> ss, bits<4> opcod, RegisterClass RC,
+               string asmstr, list<dag> pattern>
+    : EInst<(outs), (ins RC:$src1, RC:$src2), asmstr, pattern> {
   bits<3> src1;
   bits<3> src2;
   let Inst{15-13} = src1;
@@ -570,18 +581,18 @@ class EInstCmp<bits<2> ss, bits<4> opcod, string asmstr, list<dag> pattern>
   let hasSideEffects = 0;
 }
 
-// Convenience: byte CMP/TEST (SS=00)
+// Convenience: byte CMP/TEST (SS=00) — uses GPR (8-bit via GPR class)
 class EInstCmp8<bits<4> opcod, string asmstr, list<dag> pattern>
-    : EInstCmp<0b00, opcod, asmstr, pattern>;
+    : EInstCmp<0b00, opcod, GPR, asmstr, pattern>;
 
-// Convenience: word CMP/TEST (SS=01)
+// Convenience: word CMP/TEST (SS=01) — uses GPR (16-bit)
 class EInstCmp16<bits<4> opcod, string asmstr, list<dag> pattern>
-    : EInstCmp<0b01, opcod, asmstr, pattern>;
+    : EInstCmp<0b01, opcod, GPR, asmstr, pattern>;
 
-// Convenience: dword CMP/TEST (SS=10)
+// Convenience: dword CMP/TEST (SS=10) — uses GPR32 (32-bit DW)
 class EInstCmp32<bits<4> opcod, string asmstr, list<dag> pattern>
-    : EInstCmp<0b10, opcod, asmstr, pattern>;
+    : EInstCmp<0b10, opcod, GPR32, asmstr, pattern>;
 
-// Convenience: qword CMP/TEST (SS=11)
+// Convenience: qword CMP/TEST (SS=11) — uses GPR64 (64-bit QW)
 class EInstCmp64<bits<4> opcod, string asmstr, list<dag> pattern>
-    : EInstCmp<0b11, opcod, asmstr, pattern>;
+    : EInstCmp<0b11, opcod, GPR64, asmstr, pattern>;

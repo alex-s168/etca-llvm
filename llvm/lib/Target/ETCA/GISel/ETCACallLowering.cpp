@@ -126,6 +126,11 @@ bool ETCACallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
     return true;
 
   unsigned Idx = 0;
+  // Track the current stack offset for incoming stack arguments.
+  // The first stack argument (Arg 5) begins at offset 0 from the
+  // initial SP (before the prologue).  Each subsequent argument
+  // is placed at the next naturally-aligned offset.
+  unsigned StackOffset = 0;
   for (auto &Arg : F.args()) {
     if (Idx >= VRegs.size())
       break;
@@ -140,16 +145,26 @@ bool ETCACallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
       MIRBuilder.getMBB().addLiveIn(ArgRegs[Idx]);
       MIRBuilder.buildCopy(VReg, Register(ArgRegs[Idx]));
     } else {
-      // Stack argument: create frame index and load
-      int FI = MF.getFrameInfo().CreateFixedObject(RegBytes,
-                                                   RegBytes * (Idx - 4), true);
+      // Stack argument: create frame index at the current stack offset,
+      // then advance the offset by the argument's actual size (padded
+      // to register-width alignment for simplicity).
+      Type *ArgTy = Arg.getType();
+      unsigned ArgSize =
+          ArgTy ? (MF.getDataLayout().getTypeAllocSize(ArgTy) * 8) : RegWidth;
+      // Align to register width (natural alignment for the stack)
+      unsigned ArgBytes = (ArgSize + 7) / 8;
+      unsigned AlignedBytes = alignTo(ArgBytes, RegBytes);
+
+      int FI = MF.getFrameInfo().CreateFixedObject(ArgBytes, StackOffset, true);
       LLT PtrTy = LLT::pointer(0, ST.getPtrSize());
       Register AddrReg = MRI.createGenericVirtualRegister(PtrTy);
       MIRBuilder.buildFrameIndex(AddrReg, FI);
       auto MMO = MF.getMachineMemOperand(
           MachinePointerInfo::getFixedStack(MF, FI), MachineMemOperand::MOLoad,
-          RegBytes, Align(RegBytes));
+          ArgBytes, Align(RegBytes));
       MIRBuilder.buildLoad(VReg, AddrReg, *MMO);
+
+      StackOffset += AlignedBytes;
     }
 
     ++Idx;
@@ -163,14 +178,74 @@ bool ETCACallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
   MachineRegisterInfo &MRI = MF.getRegInfo();
   const auto &ST = MF.getSubtarget<ETCASubtarget>();
   unsigned RegWidth = ST.getRegWidth();
+  unsigned RegBytes = RegWidth / 8;
   const MCPhysReg *ArgRegs = getArgRegs(RegWidth);
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
 
-  // Build the call instruction.
+  // --- Handle stack arguments (args 5+) ---
+  size_t NumArgs = Info.OrigArgs.size();
+  size_t NumStackArgs = (NumArgs > 4) ? (NumArgs - 4) : 0;
+  unsigned StackArgSize = NumStackArgs * RegBytes;
+
+  if (StackArgSize > 0) {
+    // Allocate stack space for excess arguments.
+    int64_t Remaining = static_cast<int64_t>(StackArgSize);
+    while (Remaining > 0) {
+      int64_t Step = std::min<int64_t>(Remaining, 15);
+      auto Sub = MIRBuilder.buildInstr(ETCA::SUBI16);
+      Sub.addDef(Register(ETCA::R6));
+      Sub.addUse(Register(ETCA::R6));
+      Sub.addImm(Step);
+      Remaining -= Step;
+    }
+
+    // Store each excess argument at the correct stack offset.
+    for (size_t i = 4; i < NumArgs; ++i) {
+      Register ArgReg = Info.OrigArgs[i].Regs[0];
+      if (!ArgReg)
+        continue;
+
+      unsigned Offset = (i - 4) * RegBytes;
+
+      if (Offset == 0) {
+        auto Store = MIRBuilder.buildInstr(ETCA::STORE16);
+        Store.addUse(ArgReg);
+        Store.addUse(Register(ETCA::R6));
+      } else {
+        // Create address register using pointer-type LLT.
+        LLT PtrTy = LLT::pointer(0, ST.getPtrSize());
+        Register AddrReg = MRI.createGenericVirtualRegister(PtrTy);
+        unsigned MovOpc = ST.getPtrSize() >= 64   ? ETCA::MOVZ64
+                          : ST.getPtrSize() >= 32 ? ETCA::MOVZ32
+                                                  : ETCA::MOVZ16;
+        auto Mov = MIRBuilder.buildInstr(MovOpc);
+        Mov.addDef(AddrReg);
+        Mov.addUse(Register(ETCA::R6));
+
+        int64_t RemOff = static_cast<int64_t>(Offset);
+        while (RemOff > 0) {
+          int64_t Step = std::min<int64_t>(RemOff, 15);
+          unsigned AddiOpc = ST.getPtrSize() >= 64   ? ETCA::ADDI64
+                             : ST.getPtrSize() >= 32 ? ETCA::ADDI32
+                                                     : ETCA::ADDI16;
+          auto Add = MIRBuilder.buildInstr(AddiOpc);
+          Add.addDef(AddrReg);
+          Add.addUse(AddrReg);
+          Add.addImm(Step);
+          RemOff -= Step;
+        }
+
+        auto Store = MIRBuilder.buildInstr(ETCA::STORE16);
+        Store.addUse(ArgReg);
+        Store.addUse(AddrReg);
+      }
+    }
+  }
+
+  // --- Build the call instruction ---
   MachineInstrBuilder CallInst =
       MIRBuilder.buildInstrNoInsert(ETCA::CALL_Pseudo);
 
-  // Add callee operand.
   if (Info.Callee.isReg())
     CallInst.addReg(Info.Callee.getReg());
   else if (Info.Callee.isGlobal())
@@ -178,8 +253,7 @@ bool ETCACallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
   else if (Info.Callee.isSymbol())
     CallInst.addExternalSymbol(Info.Callee.getSymbolName());
 
-  // Set up argument registers (first 4 args).
-  for (unsigned i = 0, e = Info.OrigArgs.size(); i < e && i < 4; ++i) {
+  for (unsigned i = 0, e = std::min(NumArgs, size_t(4)); i < e; ++i) {
     Register ArgReg = Info.OrigArgs[i].Regs[0];
     if (ArgReg) {
       MIRBuilder.buildCopy(Register(ArgRegs[i]), ArgReg);
@@ -187,13 +261,24 @@ bool ETCACallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
     }
   }
 
-  // Add implicit defs/uses for caller-saved regs and return reg.
   MCRegister RetReg = getRetReg(RegWidth);
   CallInst.addDef(RetReg, RegState::ImplicitDefine);
 
   MIRBuilder.insertInstr(CallInst);
 
-  // Copy return value from return register.
+  // --- Deallocate stack space for excess args (after the call) ---
+  if (StackArgSize > 0) {
+    int64_t Remaining = static_cast<int64_t>(StackArgSize);
+    while (Remaining > 0) {
+      int64_t Step = std::min<int64_t>(Remaining, 15);
+      auto Add = MIRBuilder.buildInstr(ETCA::ADDI16);
+      Add.addDef(Register(ETCA::R6));
+      Add.addUse(Register(ETCA::R6));
+      Add.addImm(Step);
+      Remaining -= Step;
+    }
+  }
+
   if (!Info.OrigRet.Regs.empty()) {
     Register RetVReg = Info.OrigRet.Regs[0];
     if (RetVReg)

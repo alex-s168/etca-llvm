@@ -146,34 +146,67 @@ static bool constrainReg(Register Reg, LLT Ty, const RegisterBankInfo &RBI,
 // These values match the encoding used by SELECT_Pseudo and ETCASelectExpand.
 static int64_t encodeICMPPred(CmpInst::Predicate P) {
   switch (P) {
-  case CmpInst::ICMP_EQ:  return 1;
-  case CmpInst::ICMP_NE:  return 2;
-  case CmpInst::ICMP_UGT: return 3;
-  case CmpInst::ICMP_UGE: return 4;
-  case CmpInst::ICMP_ULT: return 5;
-  case CmpInst::ICMP_ULE: return 6;
-  case CmpInst::ICMP_SGT: return 7;
-  case CmpInst::ICMP_SGE: return 8;
-  case CmpInst::ICMP_SLT: return 9;
-  case CmpInst::ICMP_SLE: return 10;
-  default:                return 2; // NE (conservative fallback)
+  case CmpInst::ICMP_EQ:
+    return 1;
+  case CmpInst::ICMP_NE:
+    return 2;
+  case CmpInst::ICMP_UGT:
+    return 3;
+  case CmpInst::ICMP_UGE:
+    return 4;
+  case CmpInst::ICMP_ULT:
+    return 5;
+  case CmpInst::ICMP_ULE:
+    return 6;
+  case CmpInst::ICMP_SGT:
+    return 7;
+  case CmpInst::ICMP_SGE:
+    return 8;
+  case CmpInst::ICMP_SLT:
+    return 9;
+  case CmpInst::ICMP_SLE:
+    return 10;
+  default:
+    return 2; // NE (conservative fallback)
   }
+}
+
+// Map a size in bits to an ETCA CMP opcode.
+static unsigned getCmpOpcForSize(unsigned Size) {
+  if (Size == 64)
+    return ETCA::CMP64;
+  if (Size == 32)
+    return ETCA::CMP32;
+  if (Size == 8)
+    return ETCA::CMP8;
+  return ETCA::CMP; // 16-bit
 }
 
 // Map an ICMP_Pseudo pred value (1-10) to a branch opcode.
 static unsigned getBranchOpcForPred(int64_t Pred) {
   switch (Pred) {
-  case 1:  return ETCA::BEQ;
-  case 2:  return ETCA::BNE;
-  case 3:  return ETCA::BGTU;
-  case 4:  return ETCA::BGEU;
-  case 5:  return ETCA::BLTU;
-  case 6:  return ETCA::BLEU;
-  case 7:  return ETCA::BGT;
-  case 8:  return ETCA::BGE;
-  case 9:  return ETCA::BLT;
-  case 10: return ETCA::BLE;
-  default: return ETCA::BNE;
+  case 1:
+    return ETCA::BEQ;
+  case 2:
+    return ETCA::BNE;
+  case 3:
+    return ETCA::BGTU;
+  case 4:
+    return ETCA::BGEU;
+  case 5:
+    return ETCA::BLTU;
+  case 6:
+    return ETCA::BLEU;
+  case 7:
+    return ETCA::BGT;
+  case 8:
+    return ETCA::BGE;
+  case 9:
+    return ETCA::BLT;
+  case 10:
+    return ETCA::BLE;
+  default:
+    return ETCA::BNE;
   }
 }
 
@@ -254,7 +287,6 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
         // Remaining chunks: SLO
         while (!Chunks.empty()) {
           BuildMI(MBB, MI, MIMD, TII.get(ETCA::SLO16), Dst)
-              .addReg(Dst)
               .addImm(Chunks.back());
           Chunks.pop_back();
         }
@@ -393,9 +425,7 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
         break;
       }
       // ADDI/SUBI dst, src, imm — not tied (no COPY needed).
-      BuildMI(MBB, MI, MIMD, TII.get(ImmOpc), Dst)
-          .addReg(Src1)
-          .addImm(ImmVal);
+      BuildMI(MBB, MI, MIMD, TII.get(ImmOpc), Dst).addReg(Src1).addImm(ImmVal);
       if (!constrainReg(Dst, DstTy, RBI, *MRI))
         return false;
       MI.eraseFromParent();
@@ -437,28 +467,81 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     if (!HasConst)
       return false;
 
-    // Expand as repeated ADD: each iteration doubles via ADD (tied-def).
-    // MOVZ initial copy is non-tied.  The ADD tied-def is handled by
-    // TwoAddressInstructionPass (same conventional approach as above).
+    // Shift by 0 is a no-op.
+    if (ShiftAmt == 0) {
+      BuildMI(MBB, MI, MIMD, TII.get(getMovzOpc(Size)), Dst).addReg(Src1);
+      if (!constrainReg(Dst, DstTy, RBI, *MRI))
+        return false;
+      MI.eraseFromParent();
+      return true;
+    }
+
+    // Use power-of-2 decomposition to avoid O(N) code for large shifts.
+    //
+    // Precompute powers[0..MaxBit] where:
+    //   powers[0] = Src1 << 1   (one ADD)
+    //   powers[1] = Src1 << 2   (one ADD: powers[0]+powers[0])
+    //   powers[2] = Src1 << 4   (one ADD: powers[1]+powers[1])
+    //   powers[3] = Src1 << 8   (one ADD)
+    //   powers[4] = Src1 << 16  (one ADD)
+    //   powers[5] = Src1 << 32  (one ADD)
+    //
+    // Then for each set bit b in ShiftAmt, accumulate powers[b].
+    // Max: 5 powers + 5 adds = 10 instructions (vs 63 for O(N)).
+
+    unsigned MaxBit = 0;
+    uint64_t Tmp = ShiftAmt;
+    while (Tmp >>= 1)
+      ++MaxBit;
+    if (MaxBit > 5)
+      MaxBit = 5;
+
     unsigned AddOpc = getETCAAluOpcode(TargetOpcode::G_ADD, Size);
-    Register Val = ShiftAmt == 0 ? Dst : MRI->createVirtualRegister(RC);
-    BuildMI(MBB, MI, MIMD, TII.get(getMovzOpc(Size)), Val).addReg(Src1);
-    if (!constrainReg(Val, DstTy, RBI, *MRI))
+    SmallVector<Register, 6> Powers(MaxBit + 1);
+
+    // powers[0] = Src1 + Src1 = Src1 << 1
+    Powers[0] = MRI->createVirtualRegister(RC);
+    BuildMI(MBB, MI, MIMD, TII.get(AddOpc), Powers[0])
+        .addReg(Src1)
+        .addReg(Src1);
+    if (!constrainReg(Powers[0], DstTy, RBI, *MRI))
       return false;
 
-    for (int64_t i = 0; i < ShiftAmt; ++i) {
-      Register Next =
-          (i == ShiftAmt - 1) ? Dst : MRI->createVirtualRegister(RC);
-      // ADD tied-def: TwoAddress inserts COPY when Next != Val.
-      BuildMI(MBB, MI, MIMD, TII.get(AddOpc), Next).addReg(Val).addReg(Val);
-      if (!constrainReg(Next, DstTy, RBI, *MRI))
+    for (unsigned i = 1; i <= MaxBit; ++i) {
+      Powers[i] = MRI->createVirtualRegister(RC);
+      BuildMI(MBB, MI, MIMD, TII.get(AddOpc), Powers[i])
+          .addReg(Powers[i - 1])
+          .addReg(Powers[i - 1]);
+      if (!constrainReg(Powers[i], DstTy, RBI, *MRI))
         return false;
-      Val = Next;
     }
 
-    if (ShiftAmt == 0 && Dst != Val) {
-      BuildMI(MBB, MI, MIMD, TII.get(TargetOpcode::COPY), Dst).addReg(Val);
+    // Accumulate set bits into Dst.
+    unsigned FirstBit = 0;
+    while (FirstBit <= MaxBit && !(ShiftAmt & (1ULL << FirstBit)))
+      ++FirstBit;
+
+    assert(FirstBit <= MaxBit && "ShiftAmt > 0 must have at least one set bit");
+
+    Register Acc = Powers[FirstBit];
+    for (unsigned i = FirstBit + 1; i <= MaxBit; ++i) {
+      if (ShiftAmt & (1ULL << i)) {
+        Register Next = MRI->createVirtualRegister(RC);
+        BuildMI(MBB, MI, MIMD, TII.get(AddOpc), Next)
+            .addReg(Acc)
+            .addReg(Powers[i]);
+        if (!constrainReg(Next, DstTy, RBI, *MRI))
+          return false;
+        Acc = Next;
+      }
     }
+
+    // Copy Acc to Dst.
+    if (Dst != Acc)
+      BuildMI(MBB, MI, MIMD, TII.get(getMovzOpc(Size)), Dst).addReg(Acc);
+
+    if (!constrainReg(Dst, DstTy, RBI, *MRI))
+      return false;
     MI.eraseFromParent();
     return true;
   }
@@ -576,9 +659,13 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
             DefMI->getOperand(1).getPredicate());
         Register LHS = DefMI->getOperand(2).getReg();
         Register RHS = DefMI->getOperand(3).getReg();
+        LLT OpTy = MRI->getType(LHS);
+        unsigned OpSize = OpTy.getSizeInBits();
 
-        // Emit CMP lhs, rhs to set flags.
-        BuildMI(MBB, MI, MIMD, TII.get(ETCA::CMP)).addReg(LHS).addReg(RHS);
+        // Emit width-specific CMP lhs, rhs to set flags.
+        BuildMI(MBB, MI, MIMD, TII.get(getCmpOpcForSize(OpSize)))
+            .addReg(LHS)
+            .addReg(RHS);
 
         // Emit matching branch.
         int64_t EncPred = encodeICMPPred(Pred);
@@ -600,12 +687,10 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
 
     // Case 3: Free-floating condition.
     // Emit MOVZI Zero,0; CMP Cond, Zero; BNE Target.
-    LLT CondTy = MRI->getType(Cond);
-    unsigned Size = CondTy.getSizeInBits();
-    const TargetRegisterClass *RC = getRCForType(CondTy);
-    Register Zero = MRI->createVirtualRegister(RC);
-    BuildMI(MBB, MI, MIMD, TII.get(getMovziOpc(Size)), Zero).addImm(0);
-    if (!constrainReg(Zero, CondTy, RBI, *MRI))
+    // Zero must be in GPR (16-bit) register class for CMP compatibility.
+    Register Zero = MRI->createVirtualRegister(&ETCA::GPRRegClass);
+    BuildMI(MBB, MI, MIMD, TII.get(ETCA::MOVZI16), Zero).addImm(0);
+    if (!constrainReg(Zero, LLT::scalar(16), RBI, *MRI))
       return false;
     BuildMI(MBB, MI, MIMD, TII.get(ETCA::CMP)).addReg(Cond).addReg(Zero);
     BuildMI(MBB, MI, MIMD, TII.get(ETCA::BNE)).addMBB(Target);
@@ -651,8 +736,12 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
             DefMI->getOperand(1).getPredicate());
         Register LHS = DefMI->getOperand(2).getReg();
         Register RHS = DefMI->getOperand(3).getReg();
+        LLT OpTy = MRI->getType(LHS);
+        unsigned OpSize = OpTy.getSizeInBits();
 
-        BuildMI(MBB, MI, MIMD, TII.get(ETCA::CMP)).addReg(LHS).addReg(RHS);
+        BuildMI(MBB, MI, MIMD, TII.get(getCmpOpcForSize(OpSize)))
+            .addReg(LHS)
+            .addReg(RHS);
         PredVal = encodeICMPPred(P);
         CMPEmitted = true;
 
@@ -669,9 +758,11 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
 
     if (!CMPEmitted) {
       // Case 3: Free-floating condition.
-      Register Zero = MRI->createVirtualRegister(DstRC);
-      BuildMI(MBB, MI, MIMD, TII.get(getMovziOpc(Size)), Zero).addImm(0);
-      if (!constrainReg(Zero, DstTy, RBI, *MRI))
+      // Create Zero in GPR (16-bit) register class for CMP compatibility.
+      // CMP always expects GPR operands (the condition is always 16-bit).
+      Register Zero = MRI->createVirtualRegister(&ETCA::GPRRegClass);
+      BuildMI(MBB, MI, MIMD, TII.get(ETCA::MOVZI16), Zero).addImm(0);
+      if (!constrainReg(Zero, LLT::scalar(16), RBI, *MRI))
         return false;
       BuildMI(MBB, MI, MIMD, TII.get(ETCA::CMP)).addReg(Cond).addReg(Zero);
     }
@@ -733,8 +824,8 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
 
     // Fall back to RR form (tied-def: $src1 = $dst).
     // TwoAddressInstructionPass handles SSA-to-non-SSA conversion.
-    BuildMI(MBB, MI, MIMD,
-            TII.get(getETCAAluOpcode(TargetOpcode::G_ADD, Size)), Dst)
+    BuildMI(MBB, MI, MIMD, TII.get(getETCAAluOpcode(TargetOpcode::G_ADD, Size)),
+            Dst)
         .addReg(Src1)
         .addReg(Src2);
     if (!constrainReg(Dst, DstTy, RBI, *MRI))
@@ -868,13 +959,19 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
 
   case TargetOpcode::G_ICMP: {
     Register Dst = MI.getOperand(0).getReg();
-    CmpInst::Predicate Pred = static_cast<CmpInst::Predicate>(
-        MI.getOperand(1).getPredicate());
+    CmpInst::Predicate Pred =
+        static_cast<CmpInst::Predicate>(MI.getOperand(1).getPredicate());
     Register LHS = MI.getOperand(2).getReg();
     Register RHS = MI.getOperand(3).getReg();
+    LLT OpTy = MRI->getType(LHS);
+    unsigned OpSize = OpTy.getSizeInBits();
 
-    // Emit CMP instruction that sets the flags.
-    BuildMI(MBB, MI, MIMD, TII.get(ETCA::CMP)).addReg(LHS).addReg(RHS);
+    // Emit width-specific CMP instruction that sets the flags.
+    // Use CMP32/CMP64 for wider operands so the register class matches
+    // (CMP16 expects GPR, but 32/64-bit operands are GPR32/GPR64).
+    BuildMI(MBB, MI, MIMD, TII.get(getCmpOpcForSize(OpSize)))
+        .addReg(LHS)
+        .addReg(RHS);
 
     // Emit ICMP_Pseudo as a marker carrying the predicate.
     // Consumers (G_BRCOND, G_SELECT) check for ICMP_Pseudo via MRI and
@@ -887,7 +984,7 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
         .addReg(RHS)
         .addImm(EncPred);
 
-    // Constrain the result register.
+    // Constrain the result register (result is always 16-bit condition).
     if (!constrainReg(Dst, LLT::scalar(16), RBI, *MRI))
       return false;
     MI.eraseFromParent();

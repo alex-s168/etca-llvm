@@ -248,23 +248,23 @@ movs %r0d, 5
 movs %r1d, -8
 # CHECK: movs %r1d, -8             ; encoding: [0x69,0x38]
 
-# SLO (word only): SS=01
-slo %r0d, 1
-# CHECK: slo %r0d, 1               ; encoding: [0x5c,0x01]
-slo %r1d, 7
-# CHECK: slo %r1d, 7               ; encoding: [0x5c,0x27]
+# SLO (word only): SS=01, 16-bit registers only
+slo %r0, 1
+# CHECK: slo %r0, 1               ; encoding: [0x5c,0x01]
+slo %r1, 7
+# CHECK: slo %r1, 7               ; encoding: [0x5c,0x27]
 
-# READCR (word only): SS=01
-readcr %r0d, 3
-# CHECK: readcr %r0d, 3            ; encoding: [0x5e,0x03]
-readcr %r2d, 0
-# CHECK: readcr %r2d, 0            ; encoding: [0x5e,0x40]
+# READCR (word only): SS=01, 16-bit registers only
+readcr %r0, 3
+# CHECK: readcr %r0, 3            ; encoding: [0x5e,0x03]
+readcr %r2, 0
+# CHECK: readcr %r2, 0            ; encoding: [0x5e,0x40]
 
-# WRITECR (word only): SS=01
-writecr %r0d, 7
-# CHECK: writecr %r0d, 7           ; encoding: [0x5f,0x07]
-writecr %r4d, 5
-# CHECK: writecr %r4d, 5           ; encoding: [0x5f,0x85]
+# WRITECR (word only): SS=01, 16-bit registers only
+writecr %r0, 7
+# CHECK: writecr %r0, 7           ; encoding: [0x5f,0x07]
+writecr %r4, 5
+# CHECK: writecr %r4, 5           ; encoding: [0x5f,0x85]
 
 
 # ==================== QWORD RI Instructions (SS=11) ====================
@@ -332,23 +332,23 @@ movs %r0q, 5
 movs %r1q, -8
 # CHECK: movs %r1q, -8             ; encoding: [0x79,0x38]
 
-# SLO (word only): SS=01
-slo %r0q, 1
-# CHECK: slo %r0q, 1               ; encoding: [0x5c,0x01]
-slo %r1q, 7
-# CHECK: slo %r1q, 7               ; encoding: [0x5c,0x27]
+# SLO (word only): SS=01, 16-bit registers only
+slo %r0, 1
+# CHECK: slo %r0, 1               ; encoding: [0x5c,0x01]
+slo %r1, 7
+# CHECK: slo %r1, 7               ; encoding: [0x5c,0x27]
 
-# READCR (word only): SS=01
-readcr %r0q, 3
-# CHECK: readcr %r0q, 3            ; encoding: [0x5e,0x03]
-readcr %r2q, 0
-# CHECK: readcr %r2q, 0            ; encoding: [0x5e,0x40]
+# READCR (word only): SS=01, 16-bit registers only
+readcr %r0, 3
+# CHECK: readcr %r0, 3            ; encoding: [0x5e,0x03]
+readcr %r2, 0
+# CHECK: readcr %r2, 0            ; encoding: [0x5e,0x40]
 
-# WRITECR (word only): SS=01
-writecr %r0q, 7
-# CHECK: writecr %r0q, 7           ; encoding: [0x5f,0x07]
-writecr %r4q, 5
-# CHECK: writecr %r4q, 5           ; encoding: [0x5f,0x85]
+# WRITECR (word only): SS=01, 16-bit registers only
+writecr %r0, 7
+# CHECK: writecr %r0, 7           ; encoding: [0x5f,0x07]
+writecr %r4, 5
+# CHECK: writecr %r4, 5           ; encoding: [0x5f,0x85]
 
 
 # ==================== Edge Cases ====================

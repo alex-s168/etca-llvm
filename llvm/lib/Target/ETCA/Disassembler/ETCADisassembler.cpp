@@ -191,15 +191,37 @@ ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
   if (Bits76 == 0) { // RR format (bits [7:6] = 00)
     // SAF PUSH/POP: CCCC = 1100 or 1101
     if (CCCC == 0xC) {
-      // POP: rA=Reg (dst), rB=6(sp)
-      Instr.setOpcode(ETCA::POP);
-      Instr.addOperand(MCOperand::createReg(ETCA::R0 + RegA));
+      // POP: rA=Reg (dst), rB must be 6 (sp)
+      if (RegB != 6)
+        return MCDisassembler::Fail;
+      // Select opcode based on SS bits (stack increment size).
+      if (SS == 0b10) {
+        Instr.setOpcode(ETCA::POP32);
+        Instr.addOperand(MCOperand::createReg(ETCA::D0 + RegA));
+      } else if (SS == 0b11) {
+        Instr.setOpcode(ETCA::POP64);
+        Instr.addOperand(MCOperand::createReg(ETCA::Q0 + RegA));
+      } else {
+        Instr.setOpcode(ETCA::POP);
+        Instr.addOperand(MCOperand::createReg(ETCA::R0 + RegA));
+      }
       return MCDisassembler::Success;
     }
     if (CCCC == 0xD) {
-      // PUSH: rA=6(sp), rB=Reg (src)
-      Instr.setOpcode(ETCA::PUSH);
-      Instr.addOperand(MCOperand::createReg(ETCA::R0 + RegB));
+      // PUSH: rA must be 6 (sp), rB=Reg (src)
+      if (RegA != 6)
+        return MCDisassembler::Fail;
+      // Select opcode based on SS bits (stack increment size).
+      if (SS == 0b10) {
+        Instr.setOpcode(ETCA::PUSH32);
+        Instr.addOperand(MCOperand::createReg(ETCA::D0 + RegB));
+      } else if (SS == 0b11) {
+        Instr.setOpcode(ETCA::PUSH64);
+        Instr.addOperand(MCOperand::createReg(ETCA::Q0 + RegB));
+      } else {
+        Instr.setOpcode(ETCA::PUSH);
+        Instr.addOperand(MCOperand::createReg(ETCA::R0 + RegB));
+      }
       return MCDisassembler::Success;
     }
 
@@ -305,8 +327,9 @@ ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
       Instr.addOperand(MCOperand::createReg(Base + RegB));
       break;
     case FormCmpTest:
-      Instr.addOperand(MCOperand::createReg(ETCA::R0 + RegA));
-      Instr.addOperand(MCOperand::createReg(ETCA::R0 + RegB));
+      // CMP/TEST register class must match SS bits (like all other RR ops).
+      Instr.addOperand(MCOperand::createReg(Base + RegA));
+      Instr.addOperand(MCOperand::createReg(Base + RegB));
       break;
     case FormTied3:
     default:
@@ -390,9 +413,11 @@ ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
       break;
     case 12:
       Opc = ETCA::SLO16;
+      IsNonTied = true;
       break;
     case 13:
       Opc = ETCA::SLO16;
+      IsNonTied = true;
       break; // PUSHI uses this via RI format
     case 14:
       Opc = ETCA::READCR;

@@ -69,13 +69,23 @@ def RetCC_ETCA : CallingConv<[
   // Return values in r0 or r0-r1 pair
   CCIfType<[i16], CCAssignToReg<[R0]>>,
   CCIfType<[i32], CCAssignToReg<[D0]>>,
-  CCIfType<[i64], CCAssignToReg<[Q0, Q1]>>
+  // i64 fits in a single Q0 register on 64-bit machines.
+  // [Q0, Q1] would allocate two 64-bit registers for one 64-bit value.
+  CCIfType<[i64], CCAssignToReg<[Q0]>>
 ]>;
 
 //===----------------------------------------------------------------------===//
 // Callee-saved registers (CSR) masks
 //
 // SAF ABI callee-saved: R3, R4, R5 (bp), R6 (sp)
+//   - 16-bit machines: R3, R4 (GPR class)
+//   - 32-bit machines: D3, D4 (GPR32 class)
+//   - 64-bit machines: Q3, Q4 (GPR64 class)
+//
+// R5 (bp) and R6 (sp) are always reserved and never allocated, but LLVM's
+// CSR mask still includes them for proper save/restore ordering.
 //===----------------------------------------------------------------------===//
 
 def CSR_ETCA_RegMask : CalleeSavedRegs<(add R3, R4, R5, R6)>;
+def CSR_ETCA_GPR32_RegMask : CalleeSavedRegs<(add D3, D4, D5, D6)>;
+def CSR_ETCA_GPR64_RegMask : CalleeSavedRegs<(add Q3, Q4, Q5, Q6)>;

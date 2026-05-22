@@ -266,10 +266,10 @@ unsigned ETCAMCCodeEmitter::getRegisterOpValue(const MCInst &MI,
   return Ctx.getRegisterInfo()->getEncodingValue(MO.getReg()) & 0x7;
 }
 
-unsigned ETCAMCCodeEmitter::getMachineOpValue(const MCInst &MI,
-                                               const MCOperand &MO,
-                                               SmallVectorImpl<MCFixup> &Fixups,
-                                               const MCSubtargetInfo &STI) const {
+unsigned
+ETCAMCCodeEmitter::getMachineOpValue(const MCInst &MI, const MCOperand &MO,
+                                     SmallVectorImpl<MCFixup> &Fixups,
+                                     const MCSubtargetInfo &STI) const {
   if (MO.isReg())
     return Ctx.getRegisterInfo()->getEncodingValue(MO.getReg()) & 0x7;
   if (MO.isImm())
@@ -322,10 +322,9 @@ ETCAMCCodeEmitter::encodeBranchTarget(const MCInst &MI, unsigned OpNo,
   return 0;
 }
 
-unsigned
-ETCAMCCodeEmitter::encodeCallTarget(const MCInst &MI, unsigned OpNo,
-                                    SmallVectorImpl<MCFixup> &Fixups,
-                                    const MCSubtargetInfo &STI) const {
+unsigned ETCAMCCodeEmitter::encodeCallTarget(const MCInst &MI, unsigned OpNo,
+                                             SmallVectorImpl<MCFixup> &Fixups,
+                                             const MCSubtargetInfo &STI) const {
   const MCOperand &MO = MI.getOperand(OpNo);
   if (MO.isImm()) {
     int64_t Offset = MO.getImm();
@@ -348,12 +347,20 @@ void ETCAMCCodeEmitter::encodeInstruction(const MCInst &MI,
                                           SmallVectorImpl<char> &CB,
                                           SmallVectorImpl<MCFixup> &Fixups,
                                           const MCSubtargetInfo &STI) const {
-  // Let the auto-generated getBinaryCodeForInstr build the 16-bit encoding.
+  // Let the auto-generated getBinaryCodeForInstr build the encoding.
   uint64_t Binary = getBinaryCodeForInstr(MI, Fixups, STI);
 
-  // ETCA is little-endian: write low byte first, then high byte.
-  CB.push_back(static_cast<char>(Binary & 0xFF));
-  CB.push_back(static_cast<char>((Binary >> 8) & 0xFF));
+  // Determine instruction size from the opcode descriptor.
+  // Currently all ETCA instructions are 2 bytes, but future extensions
+  // (VWI prefix for full immediates) may add multi-word instructions.
+  // Using getSize() from MCInstrDesc ensures forward compatibility.
+  unsigned Size = MCII.get(MI.getOpcode()).getSize();
+  if (Size == 0)
+    Size = 2;
+
+  // Write bytes in little-endian order.
+  for (unsigned i = 0; i < Size; ++i)
+    CB.push_back(static_cast<char>((Binary >> (i * 8)) & 0xFF));
 }
 
 MCCodeEmitter *llvm::createETCAMCCodeEmitter(const MCInstrInfo &MCII,

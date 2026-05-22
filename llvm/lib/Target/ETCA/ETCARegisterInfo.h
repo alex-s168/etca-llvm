@@ -53,7 +53,7 @@ public:
   /// is folded into the instruction itself, so the LocalStackSlotAllocation
   /// pass will not attempt offset folding.
   int64_t getFrameIndexInstrOffset(const MachineInstr *MI,
-                                    int Idx) const override {
+                                   int Idx) const override {
     return 0;
   }
 

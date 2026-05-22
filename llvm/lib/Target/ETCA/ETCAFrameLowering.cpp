@@ -257,9 +257,7 @@ void ETCAFrameLowering::emitEpilogue(MachineFunction &MF,
     int64_t Remaining = CSRPushSize;
     while (Remaining > 0) {
       int64_t Step = std::min<int64_t>(Remaining, 15);
-      BuildMI(MBB, MBBI, DL, TII.get(SubOpc), R6)
-          .addReg(R6)
-          .addImm(Step);
+      BuildMI(MBB, MBBI, DL, TII.get(SubOpc), R6).addReg(R6).addImm(Step);
       Remaining -= Step;
     }
   }
@@ -315,11 +313,13 @@ ETCAFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
 
     if (MFI.isFixedObjectIndex(FI)) {
       // Fixed objects (incoming arguments) are at offsets from the initial
-      // SP (before the prologue).  After the prologue, bp = initial_SP - 2
-      // (pushed old bp), so the offset from bp is:
-      //   addr = initial_SP + ObjectOffset = (bp + 2) + ObjectOffset
-      //   offset_from_bp = ObjectOffset + 2
-      return StackOffset::getFixed(ObjectOffset + 2);
+      // SP (before the prologue).  After the prologue, bp = initial_SP -
+      // SlotSize (pushed old bp), so the offset from bp is:
+      //   addr = initial_SP + ObjectOffset = (bp + SlotSize) + ObjectOffset
+      //   offset_from_bp = ObjectOffset + SlotSize
+      unsigned RegWidth = ST.getRegWidth();
+      unsigned SlotSize = RegWidth / 8;
+      return StackOffset::getFixed(ObjectOffset + SlotSize);
     }
 
     // Non-fixed objects (locals, spills):
@@ -349,7 +349,6 @@ bool ETCAFrameLowering::assignCalleeSavedSpillSlots(
 
   for (auto &CS : CSI) {
     unsigned Reg = CS.getReg();
-    (void)TRI->getMinimalPhysRegClassLLT(Reg, LLT::scalar(RegWidth));
     int FI = MFI.CreateStackObject(SlotSize, Align(SlotSize), true);
     CS.setFrameIdx(FI);
   }
