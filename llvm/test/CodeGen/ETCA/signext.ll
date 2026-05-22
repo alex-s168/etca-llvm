@@ -107,17 +107,20 @@ define i16 @trunc_i32_to_i16(i32 %a) {
 define i32 @add_i16_sext_i32(i16 %a, i16 %b) {
 ; CHECK16-LABEL: add_i16_sext_i32:
 ; CHECK16:       add %r1, %r0
-; CHECK16:       movs %r0, %r1
+; CHECK16:       movs %r1, %r1
+; CHECK16:       movz %r0d, %r1
 ; CHECK16:       jmpr %r7
 ;
 ; CHECK32-LABEL: add_i16_sext_i32:
 ; CHECK32:       add %r1, %r0
-; CHECK32:       movs %r0, %r1
+; CHECK32:       movs %r1, %r1
+; CHECK32:       movz %r0d, %r1
 ; CHECK32:       jmpr %r7
 ;
 ; CHECK64-LABEL: add_i16_sext_i32:
 ; CHECK64:       add %r1, %r0
-; CHECK64:       movs %r0, %r1
+; CHECK64:       movs %r1, %r1
+; CHECK64:       movz %r0d, %r1
 ; CHECK64:       jmpr %r7
   %sum = add i16 %a, %b
   %ext = sext i16 %sum to i32
@@ -127,17 +130,20 @@ define i32 @add_i16_sext_i32(i16 %a, i16 %b) {
 define i32 @add_i16_zext_i32(i16 %a, i16 %b) {
 ; CHECK16-LABEL: add_i16_zext_i32:
 ; CHECK16:       add %r1, %r0
-; CHECK16:       movz %r0, %r1
+; CHECK16:       movz %r1, %r1
+; CHECK16:       movz %r0d, %r1
 ; CHECK16:       jmpr %r7
 ;
 ; CHECK32-LABEL: add_i16_zext_i32:
 ; CHECK32:       add %r1, %r0
-; CHECK32:       movz %r0, %r1
+; CHECK32:       movz %r1, %r1
+; CHECK32:       movz %r0d, %r1
 ; CHECK32:       jmpr %r7
 ;
 ; CHECK64-LABEL: add_i16_zext_i32:
 ; CHECK64:       add %r1, %r0
-; CHECK64:       movz %r0, %r1
+; CHECK64:       movz %r1, %r1
+; CHECK64:       movz %r0d, %r1
 ; CHECK64:       jmpr %r7
   %sum = add i16 %a, %b
   %ext = zext i16 %sum to i32

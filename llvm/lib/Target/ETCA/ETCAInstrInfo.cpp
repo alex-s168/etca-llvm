@@ -262,8 +262,11 @@ ETCAInstrInfo::isCopyInstrImpl(const MachineInstr &MI) const {
   case ETCA::MOVS16:
   case ETCA::MOVS32:
   case ETCA::MOVS64:
-    // MOVZ/MOVS are non-tied: [dst, src].
-    return DestSourcePair{MI.getOperand(0), MI.getOperand(1)};
+    // Only recognize as copy when BOTH operands are registers.
+    // MOVZ/MOVS with FrameIndex/GlobalAddress operands are NOT copies.
+    if (MI.getOperand(0).isReg() && MI.getOperand(1).isReg())
+      return DestSourcePair{MI.getOperand(0), MI.getOperand(1)};
+    break;
   }
   return std::nullopt;
 }

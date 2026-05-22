@@ -90,7 +90,31 @@ void ETCATargetInfo::fillValidCPUList(SmallVectorImpl<StringRef> &Values) const 
   Values.emplace_back("etca64");
 }
 
+void ETCATargetInfo::updateDataLayoutString() {
+  // Compute the DataLayout string from the current WordSize/PtrSize.
+  // We cannot call resetDataLayout() because Triple.computeDataLayout doesn't
+  // know about ETCA's variable-width architecture.
+  std::string DL;
+  llvm::raw_string_ostream OS(DL);
+
+  OS << "e-m:e"                             // little-endian, ELF mangling
+     << "-p:" << PtrSize << ":" << PtrSize; // pointer: size, ABI align
+
+  OS << "-i8:8"
+     << "-i16:16"
+     << "-i32:" << (WordSize >= 32 ? 32 : 16)
+     << "-i64:" << (WordSize >= 64 ? 64 : (WordSize >= 32 ? 32 : 16));
+
+  OS << "-a:0"                               // aggregate: natural alignment
+     << "-n8:16"                             // native integer widths
+     << "-S" << WordSize;                    // stack alignment in bits
+
+  DataLayoutString = DL;
+}
+
 void ETCATargetInfo::setWidthsFromCPU() {
+  // Note: setWidthsFromCPU() is called before updateDataLayoutString() by
+  // both the constructor and setCPU(), so WordSize/PtrSize are current.
   switch (CPU) {
   case CK_Generic:
     WordSize = 16;
@@ -189,22 +213,7 @@ bool ETCATargetInfo::setCPU(const std::string &Name) {
   setWidthsFromCPU();
 
   // Recompute the data layout string for this CPU variant.
-  std::string DL;
-  llvm::raw_string_ostream OS(DL);
-
-  OS << "e-m:e"                                // little-endian, ELF mangling
-     << "-p:" << PtrSize << ":" << PtrSize;    // pointer: size, ABI align
-
-  OS << "-i8:8"
-     << "-i16:16"
-     << "-i32:" << (WordSize >= 32 ? 32 : 16)
-     << "-i64:" << (WordSize >= 64 ? 64 : (WordSize >= 32 ? 32 : 16));
-
-  OS << "-a:0"                                 // aggregate: natural alignment
-     << "-n8:16"                               // native integer widths
-     << "-S" << WordSize;                      // stack alignment in bits
-
-  DataLayoutString = DL;
+  updateDataLayoutString();
 
   return true;
 }

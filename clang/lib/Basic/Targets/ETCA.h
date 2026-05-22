@@ -48,15 +48,18 @@ class LLVM_LIBRARY_VISIBILITY ETCATargetInfo : public TargetInfo {
 
   void setWidthsFromCPU();
 
+  /// Build the DataLayout string from the current WordSize/PtrSize.
+  void updateDataLayoutString();
+
 public:
   ETCATargetInfo(const llvm::Triple &Triple, const TargetOptions &)
       : TargetInfo(Triple) {
     // Default: base ISA (16-bit word, 16-bit pointer)
     CPU = CK_Generic;
     setWidthsFromCPU();
-    // Don't call resetDataLayout() — Triple.computeDataLayout doesn't know
-    // about ETCA. Set the data layout string directly.
-    DataLayoutString = "e-m:e-p16:16-i8:8-i16:16-i32:16-i64:16-a:0-n8:16-S16";
+    // Don't call resetDataLayout() — Triple.computeDataLayout doesn't know about
+    // ETCA. Compute the data layout string directly.
+    updateDataLayoutString();
   }
 
   void getTargetDefines(const LangOptions &Opts,

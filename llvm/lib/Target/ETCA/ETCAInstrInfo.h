@@ -30,6 +30,8 @@ public:
   bool isMoveInstr(const TargetRegisterInfo &TRI, const MachineInstr &MI) const;
 
   /// Recognize MOVZ/MOVS as copy instructions for the register coalescer.
+  /// Only returns a result when BOTH operands are registers (non-register
+  /// operands like FrameIndex or GlobalAddress are NOT copies).
   std::optional<DestSourcePair>
   isCopyInstrImpl(const MachineInstr &MI) const override;
 
