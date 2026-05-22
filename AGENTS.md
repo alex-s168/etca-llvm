@@ -6,7 +6,6 @@
 - Specification of future vendor extensions: `../etca-vnd-extensions/`
 - Existing binutils fork: `../etca-binutils-gdb/`
 - Compiled target binutil binaries: `../etca-binutils-gdb/install/bin/`
-- WIP capstone disassembler fork: `../etca-capstone/`
 
 ## Requirements
 
@@ -190,51 +189,6 @@ generated code to call.
 | `simple.s` | Basic instruction encodings |
 | `word-instructions.s` | Word-level instruction tests |
 
-## Remaining Issues
-
-### 1. Legalizer should be subtarget-aware ✅ FIXED
-The legalizer now gates s32/s64 legality on HasDW/HasQW for computation ops (G_ADD, G_SUB, G_AND, G_OR, G_XOR, G_SHL, G_ICMP, G_SELECT). Data-flow ops (G_ZEXT, G_SEXT, G_TRUNC, G_MERGE_VALUES, G_UNMERGE_VALUES, G_CONSTANT, G_LOAD, G_STORE, G_PHI, G_IMPLICIT_DEF) remain s32/s64-legal because the instruction selector handles them manually. Helper narrowing ops (G_UADDE, G_UADDO, G_UMULH, etc.) are also always-legal since the legalizer creates them during narrowing.
-
-Key design: Three tiers of type legality:
-- **Tier 1 (data-flow)**: Always legal for s8/s16/s32/s64 (with HasByte gate for s8)
-- **Tier 2 (computation)**: Conditioned on HasDW (s32) / HasQW (s64)
-- **Tier 3 (narrow helpers)**: Always legal, types match the narrow computation types plus s1 carry
-
-### 2. Redundant bridging COPYs after extension ✅ FIXED
-`G_ZEXT`/`G_SEXT` emit a two-step sequence (narrow MOVZ + COPY). When the source and destination share the same register number (e.g., `MOVZ16 %r0, %r0d` + `COPY %r0d, %r0`), `copyPhysReg()` now detects that both registers map to the same underlying ETCa register number and skips the copy as a no-op.
-**Impact**: Eliminated — only the correct narrow MOVZ/MOVS instruction remains.
-
-### 3. MC tests: byte roundtrip ✅ FIXED
-The InstPrinter now prints `%rNh` suffix for byte-width register operands. Full roundtrip is verified:
-  - `disassembler.s`: byte instructions disassembled and reassembled (encode→decode→check)
-  - `roundtrip-all.s` + `.dis`: byte instructions in comprehensive roundtrip
-  - `byte.s`: encoding verification (show-encoding)
-
-### 4. CSR save/restore via PUSH/POP ✅ FIXED (2026-05-15)
-CSR save/restore now uses the native PUSH/POP instructions instead of the
-default per-register `storeRegToStackSlot`/`loadRegFromStackSlot` path.
-
-**Changes made**:
-  - Added multi-width `PUSH32`/`PUSH64` and `POP32`/`POP64` instruction
-    variants with correct SS bits (SS=10 for 32-bit/4-byte, SS=11 for
-    64-bit/8-byte stack increment).
-  - Overrode `spillCalleeSavedRegisters`/`restoreCalleeSavedRegisters`
-    in `ETCAFrameLowering` to suppress the default store-based save/restore.
-  - `emitPrologue` now emits PUSH instructions for each callee-saved
-    register (excluding r5=reserved bp and r6=sp) after `push r5; movz r5, r6`
-    and before the stack allocation (`sub r6, N`). The sub amount is
-    reduced by the CSR push size to avoid double allocation.
-  - `emitEpilogue` emits POP instructions (in reverse push order) after
-    `movz r6, r5` and before `pop r5`.
-  - Added `getFrameIndexInstrOffset` override to `ETCARegisterInfo`
-    returning 0 (ETCa LOAD/STORE have no immediate offset field).
-  - Updated `stack-frame.ll`, `strcpy-opt1.ll`, and
-    `strcpy-clang-opt1.ll` tests for new codegen patterns.
-
-**Impact**: CSR saves go from 3+ instructions (MOVZ+ADDI+STORE, ~6 bytes)
-to a single PUSH instruction (2 bytes). Same for restore. Code size
-reduction is significant for leaf functions with callee-saved register use.
-
 
 ## TODO — Extension Improvements
 
@@ -293,7 +247,7 @@ echo 'define i16 @add(i16 %a, i16 %b) {
 }' | build-etca/bin/llc -march=etca -mcpu=generic -filetype=asm
 
 # Run all ETCA tests
-llvm-lit build-etca/test/*/ETCA/
+build-etca/bin/llvm-lit llvm/test/*/ETCA/ clang/test/*/ETCA/  clang/test/*/etca-*
 ```
 
 **Compiler note**: Clang 22.1.4 + libc++ has `abi_tag` incompatibility with `libDebugInfoGSYM`. GCC works but is slower.
