@@ -6,9 +6,10 @@ tablegen(LLVM ETCAGenAsmMatcher.inc -gen-asm-matcher)
 tablegen(LLVM ETCAGenAsmWriter.inc -gen-asm-writer)
 tablegen(LLVM ETCAGenCallingConv.inc -gen-callingconv)
 # DAGISel not needed — ETCA uses GlobalISel only
-# Disassembler tables not auto-generated — manual decoder in ETCADisassembler.cpp
-# The CMP format (LOAD/STORE/CMP/TEST) conflicts with RI format for certain
-# operand combinations, so TableGen fails on -gen-disassembler.
+# Disassembler tables are auto-generated via -gen-disassembler.
+# The manual decoder in ETCADisassembler.cpp wraps the generated table
+# to add REX prefix handling (extended r8-r15/d8-d15/q8-q15 registers).
+tablegen(LLVM ETCAGenDisassemblerTables.inc -gen-disassembler)
 tablegen(LLVM ETCAGenMCCodeEmitter.inc -gen-emitter)
 tablegen(LLVM ETCAGenGlobalISel.inc -gen-global-isel -gisel-extended-llt)
 tablegen(LLVM ETCAGenInstrInfo.inc -gen-instr-info)

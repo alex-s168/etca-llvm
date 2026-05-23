@@ -355,8 +355,7 @@ bool ETCAFrameLowering::assignCalleeSavedSpillSlots(
   return true;
 }
 
-MachineBasicBlock::iterator
-ETCAFrameLowering::eliminateCallFramePseudoInstr(
+MachineBasicBlock::iterator ETCAFrameLowering::eliminateCallFramePseudoInstr(
     MachineFunction &MF, MachineBasicBlock &MBB,
     MachineBasicBlock::iterator MI) const {
   const auto &ST = MF.getSubtarget<ETCASubtarget>();

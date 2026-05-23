@@ -38,11 +38,13 @@ def uimm5 : Operand<i16> {
 // Branch target operand
 def brtarget : Operand<OtherVT> {
   let EncoderMethod = "encodeBranchTarget";
+  let DecoderMethod = "decodeBranchTarget";
 }
 
 // SAF call target (12-bit displacement)
 def calltarget : Operand<OtherVT> {
   let EncoderMethod = "encodeCallTarget";
+  let DecoderMethod = "decodeCallTarget";
 }
 
 //===----------------------------------------------------------------------===//

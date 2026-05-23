@@ -6,52 +6,7 @@
 
 ---
 
-## 🔴 Critical Issues
-
-
-### 6. Disassembler: CCCC=13 (SLO16) is Wrong in RI Switch (ETCADisassembler.cpp)
-
-**File**: `llvm/lib/Target/ETCA/Disassembler/ETCADisassembler.cpp`
-
-```cpp
-case 13:
-    Opc = ETCA::SLO16;   // BUG: Should not be reached — PUSHI handles CCCC=13
-    IsNonTied = true;
-    break;
-```
-
-CCCC=13 (`0b1101`) in RI format is PUSHI when `RegA == 6` (sp register). PUSHI IS handled by a separate check before the switch:
-```cpp
-if (CCCC == 0xD && RegA == 6) {
-    Instr.setOpcode(ETCA::PUSHI);
-    ...
-}
-```
-
-But when `CCCC=13` and `RegA != 6`, the code falls through to the switch `case 13` which emits `SLO16` — but `SLO16` uses CCCC=12 (`0b1100`), not 13. The case 13 entry is dead/wrong. CCCC=13 with `RegA != 6` is an invalid instruction encoding and should return `Fail`.
-
-**Impact**: A malformed byte sequence that has CCCC=13 and RegA≠6 would be decoded as SLO16 instead of rejected as invalid.
-
----
-
 ## 🔴 High Severity Issues
-
-### 7. No `-gen-disassembler` TableGen — Manual Decoder Drifts (CMakeLists.txt)
-
-**File**: `llvm/lib/Target/ETCA/CMakeLists.txt`
-```cmake
-# Disassembler tables not auto-generated — manual decoder in ETCADisassembler.cpp
-# The CMP format (LOAD/STORE/CMP/TEST) conflicts with RI format for certain
-# operand combinations, so TableGen fails on -gen-disassembler.
-```
-
-The manual disassembler has no automated connection to the instruction definitions. Any new instruction added to `ETCAInstrInfo.td` must also be manually added to the disassembler. This makes the target fragile and hard to maintain.
-
-The root cause — overlapping encodings between CMP-RI and other RR instructions — should be addressed in the instruction format definitions rather than worked around by skipping the tablegen.
-
-### 8. No Disassembler Tests
-
-There are ZERO disassembler test files anywhere in the test tree. The disassembler is entirely untested.
 
 ### 9. `lowerCall` Doesn't Mark R7 as Clobbered (ETCACallLowering.cpp)
 
