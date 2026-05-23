@@ -64,9 +64,11 @@ bool ETCATargetLowering::isLegalAddressingMode(const DataLayout &DL,
                                                const AddrMode &AM, Type *Ty,
                                                unsigned AS,
                                                Instruction *I) const {
-  // ETCA only supports [reg] or [reg+small_imm] addressing.
-  // Small immediates (within [-16, 15]) can be folded into ADDI+LOAD/STORE.
-  // No GV references, no scaling, no complex scaling, no complex addressing.
+  // ETCA only supports [reg] addressing.
+  // LOAD/STORE instructions have NO immediate offset field — the single
+  // register operand provides the full address. Any non-zero offset must
+  // be computed via a separate ADDI instruction before the load/store.
+  // No GV references, no scaling, no complex addressing.
   return AM.BaseGV == nullptr && AM.HasBaseReg && AM.Scale == 0 &&
-         AM.BaseOffs >= -16 && AM.BaseOffs <= 15;
+         AM.BaseOffs == 0;
 }

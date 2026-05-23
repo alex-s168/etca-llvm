@@ -8,31 +8,6 @@
 
 ## 🟡 Medium Severity Issues
 
-### 11. `computeDataLayout` Duplicates `buildDataLayoutString` Logic (ETCATargetMachine.cpp)
-
-**File**: `llvm/lib/Target/ETCA/ETCATargetMachine.cpp`
-
-The `computeDataLayout` function re-implements the CPU-name→(WordSize,PtrSize) mapping that the subtarget features already define. This creates TWO sources of truth for the same mapping. ETCASubtarget has `buildDataLayoutString` which is authoritative.
-
-**Risk**: When a new CPU model is added to `ETCA.td`, the developer must remember to also update `computeDataLayout`. This is error-prone and has already resulted in the `etca32p64` mismatch (Issue #1).
-
-**Recommendation**: The `computeDataLayout` function should be removed and replaced by creating a temporary `ETCASubtarget` to compute the DataLayout, or by parsing the feature string in both places from the same table.
-
-### 12. `isLegalAddressingMode` Incorrectly Claims Offset Support (ETCAISelLowering.cpp)
-
-**File**: `llvm/lib/Target/ETCA/ETCAISelLowering.cpp`
-
-```cpp
-bool ETCATargetLowering::isLegalAddressingMode(...) const {
-    return AM.BaseGV == nullptr && AM.HasBaseReg && AM.Scale == 0 &&
-           AM.BaseOffs >= -16 && AM.BaseOffs <= 15;
-}
-```
-
-ETCA's LOAD/STORE instructions have **zero immediate offset** — the address is a pure register (`[reg]`). There is no offset field in the instruction encoding. Any non-zero offset requires a separate ADDI instruction. By returning `true` for `BaseOffs` in `[-16, 15]`, this function tells LLVM's DAGCombiner/LSR that addressing with small offsets is "free" when it actually requires an extra instruction. This can lead to suboptimal code.
-
-**Impact**: LSR may choose suboptimal addressing, preferring base+offset where plain base+ADDI would be needed, potentially costing an extra instruction.
-
 ### 13. `isLoadFromStackSlot` / `isStoreToStackSlot` Only Checks FI on Operand 1 (ETCAInstrInfo.cpp)
 
 ```cpp
