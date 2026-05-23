@@ -1,6 +1,6 @@
-# RUN: llvm-mc -arch=etca -mattr=+saf -show-encoding < %s | FileCheck %s
+# RUN: llvm-mc -arch=etca -mattr=+saf,+byte -show-encoding < %s | FileCheck %s
 
-# Test SAF extension instructions.
+# Test SAF extension instructions (with BYTE extension for 8-bit PUSH/POP).
 
 # === PUSH register (RR format: rA=6(sp), rB=Reg, CCCC=0xD) ===
 push %r0
@@ -12,6 +12,13 @@ push %r7
 push %r3
 # CHECK: push %r3                  ; encoding: [0x1d,0xcc]
 
+# === PUSH register 8-bit (SS=00, requires +byte) ===
+pushh %r0
+# CHECK: push %r0                  ; encoding: [0x0d,0xc0]
+
+pushh %r7
+# CHECK: push %r7                  ; encoding: [0x0d,0xdc]
+
 # === POP register (RR format: rA=Reg, rB=6(sp), CCCC=0xC) ===
 pop %r0
 # CHECK: pop %r0                   ; encoding: [0x1c,0x18]
@@ -19,12 +26,23 @@ pop %r0
 pop %r7
 # CHECK: pop %r7                   ; encoding: [0x1c,0xf8]
 
+# === POP register 8-bit (SS=00, requires +byte) ===
+poph %r0
+# CHECK: pop %r0                   ; encoding: [0x0c,0x18]
+
+poph %r7
+# CHECK: pop %r7                   ; encoding: [0x0c,0xf8]
+
 # === PUSH immediate (RI format: rA=6(sp), imm, CCCC=0xD) ===
 push 5
 # CHECK: push 5                    ; encoding: [0x5d,0xc5]
 
 push 31
 # CHECK: push 31                   ; encoding: [0x5d,0xdf]
+
+# === PUSH immediate 8-bit (SS=00, requires +byte) ===
+pushh 12
+# CHECK: push 12                   ; encoding: [0x4d,0xcc]
 
 # === CALL (12-bit displacement) ===
 call 0

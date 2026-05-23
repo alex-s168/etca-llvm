@@ -140,11 +140,23 @@ ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
     case 1:
       Opc = ETCA::BNE;
       break;
+    case 2:
+      Opc = ETCA::BN;
+      break;
+    case 3:
+      Opc = ETCA::BNN;
+      break;
     case 4:
       Opc = ETCA::BLTU;
       break;
     case 5:
       Opc = ETCA::BGEU;
+      break;
+    case 6:
+      Opc = ETCA::BOV;
+      break;
+    case 7:
+      Opc = ETCA::BNOV;
       break;
     case 8:
       Opc = ETCA::BLEU;
@@ -202,7 +214,10 @@ ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
     if (CCCC == 0xC) {
       if (RegB != 6)
         return MCDisassembler::Fail;
-      if (SS == 0b10) {
+      if (SS == 0b00) {
+        Instr.setOpcode(ETCA::POP8);
+        Instr.addOperand(MCOperand::createReg(ETCA::R0 + FullA));
+      } else if (SS == 0b10) {
         Instr.setOpcode(ETCA::POP32);
         Instr.addOperand(MCOperand::createReg(ETCA::D0 + FullA));
       } else if (SS == 0b11) {
@@ -217,7 +232,10 @@ ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
     if (CCCC == 0xD) {
       if (RegA != 6)
         return MCDisassembler::Fail;
-      if (SS == 0b10) {
+      if (SS == 0b00) {
+        Instr.setOpcode(ETCA::PUSH8);
+        Instr.addOperand(MCOperand::createReg(ETCA::R0 + FullB));
+      } else if (SS == 0b10) {
         Instr.setOpcode(ETCA::PUSH32);
         Instr.addOperand(MCOperand::createReg(ETCA::D0 + FullB));
       } else if (SS == 0b11) {
@@ -426,7 +444,10 @@ ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
 
     // PUSHI: CCCC=13 (0xD), rA=6(sp), imm=Imm5
     if (CCCC == 0xD && RegA == 6) {
-      Instr.setOpcode(ETCA::PUSHI);
+      if (SS == 0b00)
+        Instr.setOpcode(ETCA::PUSHI8);
+      else
+        Instr.setOpcode(ETCA::PUSHI);
       Instr.addOperand(MCOperand::createImm(Imm5));
       return MCDisassembler::Success;
     }

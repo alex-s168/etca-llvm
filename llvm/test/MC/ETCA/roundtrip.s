@@ -59,14 +59,25 @@ beq 8
 # CHECK: beq 8                     ; encoding: [0x80,0x04]
 bne 6
 # CHECK: bne 6                     ; encoding: [0x81,0x03]
-blt 4
-# CHECK: blt 4                     ; encoding: [0x8a,0x02]
-bge 12
-# CHECK: bge 12                    ; encoding: [0x8b,0x06]
-bltu 8
-# CHECK: bltu 8                    ; encoding: [0x84,0x04]
-bgtu 4
-# CHECK: bgtu 4                    ; encoding: [0x89,0x02]
+
+# Direct flag tests
+bn 4
+# CHECK: bn 4                      ; encoding: [0x82,0x02]
+bnn 6
+# CHECK: bnn 6                     ; encoding: [0x83,0x03]
+bov 8
+# CHECK: bov 8                     ; encoding: [0x86,0x04]
+bnov 10
+# CHECK: bnov 10                   ; encoding: [0x87,0x05]
+
+blt 12
+# CHECK: blt 12                    ; encoding: [0x8a,0x06]
+bge 14
+# CHECK: bge 14                    ; encoding: [0x8b,0x07]
+bltu 16
+# CHECK: bltu 16                   ; encoding: [0x84,0x08]
+bgtu 18
+# CHECK: bgtu 18                   ; encoding: [0x89,0x09]
 
 # === SAF instructions ===
 push %r3

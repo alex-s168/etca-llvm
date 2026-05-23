@@ -359,8 +359,8 @@ unsigned ETCAMCCodeEmitter::computeRexPrefix(const MCInst &MI) const {
   // PUSH/PUSH32/PUSH64: the single register operand is in the BBB field
   // (bits 12-10), NOT the AAA field.  AAA is hardwired to sp (6) in the
   // instruction encoding.
-  bool IsPUSH =
-      (Opc == ETCA::PUSH || Opc == ETCA::PUSH32 || Opc == ETCA::PUSH64);
+  bool IsPUSH = (Opc == ETCA::PUSH || Opc == ETCA::PUSH8 ||
+                 Opc == ETCA::PUSH32 || Opc == ETCA::PUSH64);
 
   unsigned RegIdx = 0;
   for (unsigned i = 0; i < MI.getNumOperands(); ++i) {
