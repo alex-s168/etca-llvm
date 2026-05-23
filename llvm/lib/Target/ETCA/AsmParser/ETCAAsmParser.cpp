@@ -1104,8 +1104,10 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
                 Inst = MCInst();
                 Inst.setLoc(IDLoc);
                 Inst.setOpcode(ETCA::SLO16);
-                Inst.addOperand(MCOperand::createReg(RegNum));
-                Inst.addOperand(MCOperand::createImm(Chunks.back()));
+                Inst.addOperand(MCOperand::createReg(RegNum)); // dst
+                Inst.addOperand(
+                    MCOperand::createReg(RegNum)); // src1 = dst (tied)
+                Inst.addOperand(MCOperand::createImm(Chunks.back())); // imm
                 Chunks.pop_back();
                 Out.emitInstruction(Inst, getSTI());
               }
@@ -1343,9 +1345,17 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
       // 2-operand layout for MOVZ/MOVS RR: [dst, src]
       Inst.addOperand(MCOperand::createReg(Op1.getReg())); // dst
       Inst.addOperand(MCOperand::createReg(Op2.getReg())); // src
-    } else if (IsMovRI || IsSloRI) {
+    } else if (IsMovRI) {
       // 2-operand layout for MOVZI/MOVSI RI: [dst, imm]
       Inst.addOperand(MCOperand::createReg(Op1.getReg())); // dst
+      if (Op2.isImm())
+        Inst.addOperand(MCOperand::createImm(Op2.getImm()));
+      else
+        Inst.addOperand(MCOperand::createExpr(Op2.getExpr()));
+    } else if (IsSloRI) {
+      // 3-operand layout for SLO RI (tied-def): [dst, src1=dst, imm]
+      Inst.addOperand(MCOperand::createReg(Op1.getReg())); // dst
+      Inst.addOperand(MCOperand::createReg(Op1.getReg())); // src1 = dst (tied)
       if (Op2.isImm())
         Inst.addOperand(MCOperand::createImm(Op2.getImm()));
       else

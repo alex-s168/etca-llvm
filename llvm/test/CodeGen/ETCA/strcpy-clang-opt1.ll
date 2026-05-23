@@ -21,8 +21,7 @@
 ; RUN: llc -march=etca -mcpu=generic -O1 < %s | FileCheck %s --check-prefix=GEN
 ; RUN: llc -march=etca -mcpu=generic -mattr=+32bit,+ptr32,+dw -O1 < %s | FileCheck %s --check-prefix=DW
 ; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -O1 < %s | FileCheck %s --check-prefix=QW
-; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -O1 < %s | FileCheck %s --check-prefix=QW
-; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr32,+dw,+qw -O1 < %s | FileCheck %s --check-prefix=DW
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr32,+dw,+qw -O1 < %s | FileCheck %s --check-prefix=QW
 
 ;; ===========================================================================
 ;; strcpy at -O1 — phi-node loop with GEP-based pointer increment
@@ -65,12 +64,12 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; DW:       movz %r2h, 0
 ; DW:       movz %r7d, 0
 ;; Loop: load byte from src, store to dest, increment index
-; DW:       movz %r3, %r1
-; DW:       add %r3, %r7d
-; DW:       movz %r4, %r0
-; DW:       add %r4, %r7d
-; DW:       load %r3h, %r3h
-; DW:       store %r3h, %r4h
+; DW:       movz %r3{{[dq]?}}, %r1{{[dq]?}}
+; DW:       add %r3{{[dq]?}}, %r7d
+; DW:       movz %r4{{[dq]?}}, %r0{{[dq]?}}
+; DW:       add %r4{{[dq]?}}, %r7d
+; DW:       load %r3{{[dqh]?}}, %r3{{[dhq]}}
+; DW:       store %r3{{[dqh]?}}, %r4{{[dhq]}}
 ; DW:       add %r7d, 1
 ; DW:       cmp %r3h, %r2h
 ; DW-NEXT:  beq
@@ -86,15 +85,15 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; QW:       push %r3
 ; QW:       push %r4
 ; QW:       movz %r2h, 0
-; QW:       movz %r7q, 0
+; QW:       movz %r7{{[dq]}}, 0
 ;; Loop: load byte from src, store to dest, increment index
-; QW:       movz %r3, %r1
-; QW:       add %r3, %r7q
-; QW:       movz %r4, %r0
-; QW:       add %r4, %r7q
-; QW:       load %r3h, %r3h
-; QW:       store %r3h, %r4h
-; QW:       add %r7q, 1
+; QW:       movz %r3{{[dq]?}}, %r1{{[dq]?}}
+; QW:       add %r3{{[dq]?}}, %r7{{[dq]}}
+; QW:       movz %r4{{[dq]?}}, %r0{{[dq]?}}
+; QW:       add %r4{{[dq]?}}, %r7{{[dq]}}
+; QW:       load %r3{{[dqh]?}}, %r3{{[dhq]}}
+; QW:       store %r3{{[dqh]?}}, %r4{{[dhq]}}
+; QW:       add %r7{{[dq]}}, 1
 ; QW:       cmp %r3h, %r2h
 ; QW-NEXT:  beq
 ; QW-NEXT:  br

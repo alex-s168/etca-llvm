@@ -79,8 +79,21 @@ bool ETCACallLowering::lowerReturn(MachineIRBuilder &MIRBuilder,
   if (Val && !VRegs.empty()) {
     assert(VRegs.size() == 1 && "ETCa only supports single-register returns");
     const auto &ST = MIRBuilder.getMF().getSubtarget<ETCASubtarget>();
-    MIRBuilder.buildCopy(Register(getRetReg(ST.getWordSize())),
-                         Register(VRegs[0]));
+    MachineRegisterInfo &MRI = MIRBuilder.getMF().getRegInfo();
+    unsigned WordSize = ST.getWordSize();
+    Register RetVal = Register(VRegs[0]);
+    unsigned ValSize = MRI.getType(RetVal).getSizeInBits();
+    // If the return value is narrower than the register width, sign-extend
+    // it to the full register width (ETCa ABI convention).
+    // If the return value is narrower than the register width, sign-extend
+    // it to the full register width (ETCa ABI convention).
+    // Only scalar types can be sign-extended; pointer types are copied
+    // directly (they already match the pointer size).
+    if (ValSize < WordSize && MRI.getType(RetVal).isScalar()) {
+      RetVal = MRI.createGenericVirtualRegister(LLT::scalar(WordSize));
+      MIRBuilder.buildSExt(RetVal, Register(VRegs[0]));
+    }
+    MIRBuilder.buildCopy(Register(getRetReg(WordSize)), RetVal);
   }
   // Use RET_Pseudo which has isReturn=1 so PEI inserts the epilogue.
   // The expander (ETCAInstrInfo::expandPostRAPseudo) converts RET_Pseudo
@@ -123,6 +136,13 @@ bool ETCACallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
   if (ST.hasSAF())
     MIRBuilder.getMBB().addLiveIn(ETCA::R7);
 
+  // R6 is the stack pointer and is reserved.  Mark it as live-in on the
+  // entry block so that ADJCALLSTACKDOWN instructions (used by libcalls)
+  // have a valid definition of $r6 on all paths.  $r6 is defined once at
+  // function entry (by the prologue) and then implicitly defined by each
+  // ADJCALLSTACKDOWN (via implicit-def).
+  MIRBuilder.getMBB().addLiveIn(ETCA::R6);
+
   if (F.arg_empty())
     return true;
 
@@ -142,9 +162,23 @@ bool ETCACallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
     Register VReg = VRegs[Idx][0];
 
     if (Idx < 4) {
-      // Register argument: add live-in and copy to vreg
+      // Register argument: add live-in and copy to vreg.
+      // If the vreg type is narrower than the physical register (e.g., s16
+      // argument in D0, which is 32-bit), copy to a temp of the full width
+      // first, then truncate.
       MIRBuilder.getMBB().addLiveIn(ArgRegs[Idx]);
-      MIRBuilder.buildCopy(VReg, Register(ArgRegs[Idx]));
+      LLT VRegTy = MRI.getType(VReg);
+      if (VRegTy.isScalar() && VRegTy.getSizeInBits() < RegWidth) {
+        // Narrow scalar argument in a wider register: copy to a temp of
+        // the full width first, then truncate.
+        Register WideVReg =
+            MRI.createGenericVirtualRegister(LLT::scalar(RegWidth));
+        MIRBuilder.buildCopy(WideVReg, Register(ArgRegs[Idx]));
+        MIRBuilder.buildTrunc(VReg, WideVReg);
+      } else {
+        // Same-width scalar or pointer: direct copy.
+        MIRBuilder.buildCopy(VReg, Register(ArgRegs[Idx]));
+      }
     } else {
       // Stack argument: create frame index at the current stack offset,
       // then advance the offset by the argument's actual size (padded
@@ -188,6 +222,12 @@ bool ETCACallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
   size_t NumStackArgs = (NumArgs > 4) ? (NumArgs - 4) : 0;
   unsigned StackArgSize = NumStackArgs * RegBytes;
 
+  // Ensure $r6 is live-in to this block so that ADJCALLSTACKDOWN's
+  // implicit use of $r6 is satisfied.  $r6 is reserved (SP) and not
+  // explicitly defined in the MIR; LiveRangeCalc requires it to be
+  // live-in to any block that uses it.
+  MIRBuilder.getMBB().addLiveIn(ETCA::R6);
+
   // Emit ADJCALLSTACKDOWN marker — the actual SUBI R6, Amount is
   // emitted later by eliminateCallFramePseudoInstr in PEI.
   auto CallSeqStart = MIRBuilder.buildInstr(ETCA::ADJCALLSTACKDOWN);
@@ -219,26 +259,32 @@ bool ETCACallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
       // Create address register by copying SP (R6).  Use a GPR COPY
       // (via buildCopy) rather than a target MOVZ instruction so that
       // the generic code (regbankselect, CSE) handles it correctly.
-      LLT AddrTy = LLT::scalar(ST.getPtrSize());
-      Register AddrReg = MRI.createGenericVirtualRegister(AddrTy);
-      MIRBuilder.buildCopy(AddrReg, Register(ETCA::R6));
+      // Use pointer type for G_PTR_ADD compatibility.
+      LLT AddrTy = LLT::pointer(0, ST.getPtrSize());
+      Register CurAddr = MRI.createGenericVirtualRegister(AddrTy);
+      MIRBuilder.buildCopy(CurAddr, Register(ETCA::R6));
 
       int64_t RemOff = static_cast<int64_t>(Offset);
       while (RemOff > 0) {
         int64_t Step = std::min<int64_t>(RemOff, 15);
-        unsigned AddiOpc = ST.getPtrSize() >= 64   ? ETCA::ADDI64
-                           : ST.getPtrSize() >= 32 ? ETCA::ADDI32
-                                                   : ETCA::ADDI16;
-        auto Add = MIRBuilder.buildInstr(AddiOpc);
-        Add.addDef(AddrReg);
-        Add.addUse(AddrReg);
-        Add.addImm(Step);
+        // Use G_PTR_ADD + G_CONSTANT for address arithmetic.
+        // Generic opcodes work correctly in SSA form before RegBankSelect.
+        // The instruction selector handles G_PTR_ADD natively.
+        LLT OffTy = LLT::scalar(ST.getPtrSize());
+        Register OffsetReg = MRI.createGenericVirtualRegister(OffTy);
+        MIRBuilder.buildConstant(OffsetReg, Step);
+        Register NextAddr = MRI.createGenericVirtualRegister(AddrTy);
+        MIRBuilder.buildInstr(TargetOpcode::G_PTR_ADD)
+            .addDef(NextAddr)
+            .addUse(CurAddr)
+            .addUse(OffsetReg);
         RemOff -= Step;
+        CurAddr = NextAddr;
       }
 
       auto Store = MIRBuilder.buildInstr(StoreOpc);
       Store.addUse(ArgReg);
-      Store.addUse(AddrReg);
+      Store.addUse(CurAddr);
     }
   }
 
@@ -261,7 +307,18 @@ bool ETCACallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
   for (unsigned i = 0, e = std::min(NumArgs, size_t(4)); i < e; ++i) {
     Register ArgReg = Info.OrigArgs[i].Regs[0];
     if (ArgReg) {
-      MIRBuilder.buildCopy(Register(ArgRegs[i]), ArgReg);
+      // If the argument is narrower than the register width, sign-extend
+      // it to the full register width before copying to the physreg.
+      // Only scalar types are sign-extended; pointer types are copied directly.
+      unsigned ArgSize = MRI.getType(ArgReg).getSizeInBits();
+      if (ArgSize < RegWidth && MRI.getType(ArgReg).isScalar()) {
+        Register WideArg =
+            MRI.createGenericVirtualRegister(LLT::scalar(RegWidth));
+        MIRBuilder.buildSExt(WideArg, ArgReg);
+        MIRBuilder.buildCopy(Register(ArgRegs[i]), WideArg);
+      } else {
+        MIRBuilder.buildCopy(Register(ArgRegs[i]), ArgReg);
+      }
       CallInst.addReg(ArgRegs[i], RegState::Implicit);
     }
   }
@@ -281,8 +338,20 @@ bool ETCACallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
 
   if (!Info.OrigRet.Regs.empty()) {
     Register RetVReg = Info.OrigRet.Regs[0];
-    if (RetVReg)
-      MIRBuilder.buildCopy(RetVReg, Register(RetReg));
+    if (RetVReg) {
+      // If the return vreg is narrower than the physical register,
+      // copy to a wide temp first, then truncate.
+      // Only scalar types can be truncated; pointer types are copied directly.
+      LLT RetTy = MRI.getType(RetVReg);
+      if (RetTy.getSizeInBits() < RegWidth && RetTy.isScalar()) {
+        Register WideRet =
+            MRI.createGenericVirtualRegister(LLT::scalar(RegWidth));
+        MIRBuilder.buildCopy(WideRet, Register(RetReg));
+        MIRBuilder.buildTrunc(RetVReg, WideRet);
+      } else {
+        MIRBuilder.buildCopy(RetVReg, Register(RetReg));
+      }
+    }
   }
 
   return true;

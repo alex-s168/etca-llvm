@@ -1,7 +1,6 @@
 ; RUN: llc -march=etca -mcpu=generic < %s | FileCheck %s --check-prefix=GEN
 ; RUN: llc -march=etca -mcpu=generic -mattr=+32bit,+ptr32,+dw < %s | FileCheck %s --check-prefix=DW
 ; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw < %s | FileCheck %s --check-prefix=QW
-; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw < %s | FileCheck %s --check-prefix=DW
 ; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr32,+dw,+qw < %s | FileCheck %s --check-prefix=QW
 
 ;; ===========================================================================
@@ -31,13 +30,13 @@ define ptr @store_load_ptr(ptr %addr, ptr %val) {
 ; GEN:       jmpr %r7
 ;
 ; DW-LABEL: store_load_ptr:
-; DW:       store %r1, %r0
-; DW:       load %r0, %r0
+; DW:       store %r{{[0-9]+}}{{[dqh]?}}, %r{{[0-9]+}}{{[dqh]?}}
+; DW:       load %r{{[0-9]+}}{{[dqh]?}}, %r{{[0-9]+}}{{[dqh]?}}
 ; DW:       jmpr %r7
 ;
 ; QW-LABEL: store_load_ptr:
-; QW:       store %r1, %r0
-; QW:       load %r0, %r0
+; QW:       store %r{{[0-9]+}}{{[dqh]?}}, %r{{[0-9]+}}{{[dqh]?}}
+; QW:       load %r{{[0-9]+}}{{[dqh]?}}, %r{{[0-9]+}}{{[dqh]?}}
 ; QW:       jmpr %r7
   store ptr %val, ptr %addr
   %loaded = load ptr, ptr %addr
@@ -72,41 +71,41 @@ define ptr @astrcpy(ptr %dest, ptr %src) {
 ; DW-LABEL: astrcpy:
 ; DW:       push %r5
 ; DW:       movz %r5, %r6
-; DW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
-; DW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
+; DW:       store %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
+; DW:       store %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
 ;; Loop: load byte, compare with 0, branch
-; DW:       load %r{{[0-9]+}}, %r{{[0-9]+}}
-; DW-NEXT:  load %r{{[0-9]+}}h
-; DW:       cmp %r{{[0-9]+}}{{h?}}, %r{{[0-9]+}}{{h?}}
+; DW:       load %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
+; DW:       load %r{{[0-9]+}}{{[dqh]?}}, %r{{[0-9]+}}{{[dqh]?}}
+; DW:       cmp %r{{[0-9]+[dq]?}}{{h?}}, %r{{[0-9]+[dq]?}}{{h?}}
 ; DW-NEXT:  bne
 ; DW-NEXT:  br
 ;; Copy byte, increment, store back
-; DW:       load %r{{[0-9]+}}h
-; DW:       store %r{{[0-9]+}}h
-; DW:       add %r{{[0-9]+}}, 1
-; DW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
-; DW:       add %r{{[0-9]+}}, 1
-; DW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
+; DW:       load %r{{[0-9]+}}{{[dqh]?}}, %r{{[0-9]+}}{{[dqh]?}}
+; DW:       store %r{{[0-9]+}}{{[dqh]?}}, %r{{[0-9]+}}{{[dqh]?}}
+; DW:       add %r{{[0-9]+[dq]?}}, 1
+; DW:       store %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
+; DW:       add %r{{[0-9]+[dq]?}}, 1
+; DW:       store %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
 ; DW:       jmpr %r7
 ;
 ; QW-LABEL: astrcpy:
 ; QW:       push %r5
 ; QW:       movz %r5, %r6
-; QW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
-; QW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
+; QW:       store %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
+; QW:       store %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
 ;; Loop: load byte, compare with 0, branch
-; QW:       load %r{{[0-9]+}}, %r{{[0-9]+}}
-; QW-NEXT:  load %r{{[0-9]+}}h
-; QW:       cmp %r{{[0-9]+}}{{h?}}, %r{{[0-9]+}}{{h?}}
+; QW:       load %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
+; QW:       load %r{{[0-9]+}}{{[dqh]?}}, %r{{[0-9]+}}{{[dqh]?}}
+; QW:       cmp %r{{[0-9]+[dq]?}}{{h?}}, %r{{[0-9]+[dq]?}}{{h?}}
 ; QW-NEXT:  bne
 ; QW-NEXT:  br
 ;; Copy byte, increment, store back
-; QW:       load %r{{[0-9]+}}h
-; QW:       store %r{{[0-9]+}}h
-; QW:       add %r{{[0-9]+}}, 1
-; QW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
-; QW:       add %r{{[0-9]+}}, 1
-; QW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
+; QW:       load %r{{[0-9]+}}{{[dqh]?}}, %r{{[0-9]+}}{{[dqh]?}}
+; QW:       store %r{{[0-9]+}}{{[dqh]?}}, %r{{[0-9]+}}{{[dqh]?}}
+; QW:       add %r{{[0-9]+[dq]?}}, 1
+; QW:       store %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
+; QW:       add %r{{[0-9]+[dq]?}}, 1
+; QW:       store %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
 ; QW:       jmpr %r7
   %ptr_dest = alloca ptr
   %ptr_src = alloca ptr

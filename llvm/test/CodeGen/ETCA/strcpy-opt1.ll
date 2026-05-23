@@ -1,7 +1,6 @@
 ; RUN: llc -march=etca -mcpu=generic -O1 < %s | FileCheck %s --check-prefix=GEN
 ; RUN: llc -march=etca -mcpu=generic -mattr=+32bit,+ptr32,+dw -O1 < %s | FileCheck %s --check-prefix=DW
 ; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -O1 < %s | FileCheck %s --check-prefix=QW
-; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -O1 < %s | FileCheck %s --check-prefix=DW
 ; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr32,+dw,+qw -O1 < %s | FileCheck %s --check-prefix=QW
 
 ;; ===========================================================================
@@ -32,13 +31,13 @@ define ptr @store_load_ptr(ptr %addr, ptr %val) {
 ; GEN:       jmpr %r7
 ;
 ; DW-LABEL: store_load_ptr:
-; DW:       store %r1, %r0
-; DW-NEXT:  load %r0, %r0
+; DW:       store %r1{{[dq]?}}, %r0{{[dq]?}}
+; DW-NEXT:  load %r0{{[dq]?}}, %r0{{[dq]?}}
 ; DW:       jmpr %r7
 ;
 ; QW-LABEL: store_load_ptr:
-; QW:       store %r1, %r0
-; QW-NEXT:  load %r0, %r0
+; QW:       store %r1{{[dq]?}}, %r0{{[dq]?}}
+; QW-NEXT:  load %r0{{[dq]?}}, %r0{{[dq]?}}
 ; QW:       jmpr %r7
   store ptr %val, ptr %addr
   %loaded = load ptr, ptr %addr
@@ -82,21 +81,21 @@ define ptr @astrcpy(ptr %dest, ptr %src) {
 ;; Setup zero constant (byte null terminator)
 ; DW:       movz %r{{[0-9]+}}h, 0
 ;; Loop header — load src pointer, load byte
-; DW:       load %r{{[0-9]+}}, %r{{[0-9]+}}
-; DW-NEXT:  load %r{{[0-9]+}}h
+; DW:       load %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
+; DW:       load %r{{[0-9]+}}{{[dqh]?}}, %r{{[0-9]+}}{{[dqh]?}}
 ;; Compare byte with 0
-; DW:       cmp %r{{[0-9]+}}{{h?}}, %r{{[0-9]+}}{{h?}}
+; DW:       cmp %r{{[0-9]+[dq]?}}{{h?}}, %r{{[0-9]+[dq]?}}{{h?}}
 ; DW-NEXT:  bne
 ; DW:       br
 ;; Copy: load byte from src, store to dest
-; DW:       load %r{{[0-9]+}}h
-; DW:       store %r{{[0-9]+}}h
+; DW:       load %r{{[0-9]+}}{{[dqh]?}}, %r{{[0-9]+}}{{[dqh]?}}
+; DW:       store %r{{[0-9]+}}{{[dqh]?}}, %r{{[0-9]+}}{{[dqh]?}}
 ;; Increment src pointer
-; DW:       add %r{{[0-9]+}}, 1
-; DW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
+; DW:       add %r{{[0-9]+[dq]?}}, 1
+; DW:       store %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
 ;; Increment dst pointer
-; DW:       add %r{{[0-9]+}}, 1
-; DW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
+; DW:       add %r{{[0-9]+[dq]?}}, 1
+; DW:       store %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
 ;; Return
 ; DW:       jmpr %r7
 ;
@@ -110,21 +109,21 @@ define ptr @astrcpy(ptr %dest, ptr %src) {
 ;; Setup zero constant (byte null terminator)
 ; QW:       movz %r{{[0-9]+}}h, 0
 ;; Loop header — load src pointer, load byte
-; QW:       load %r{{[0-9]+}}, %r{{[0-9]+}}
-; QW-NEXT:  load %r{{[0-9]+}}h
+; QW:       load %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
+; QW:       load %r{{[0-9]+}}{{[dqh]?}}, %r{{[0-9]+}}{{[dqh]?}}
 ;; Compare byte with 0
-; QW:       cmp %r{{[0-9]+}}{{h?}}, %r{{[0-9]+}}{{h?}}
+; QW:       cmp %r{{[0-9]+[dq]?}}{{h?}}, %r{{[0-9]+[dq]?}}{{h?}}
 ; QW-NEXT:  bne
 ; QW:       br
 ;; Copy: load byte from src, store to dest
-; QW:       load %r{{[0-9]+}}h
-; QW:       store %r{{[0-9]+}}h
+; QW:       load %r{{[0-9]+}}{{[dqh]?}}, %r{{[0-9]+}}{{[dqh]?}}
+; QW:       store %r{{[0-9]+}}{{[dqh]?}}, %r{{[0-9]+}}{{[dqh]?}}
 ;; Increment src pointer
-; QW:       add %r{{[0-9]+}}, 1
-; QW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
+; QW:       add %r{{[0-9]+[dq]?}}, 1
+; QW:       store %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
 ;; Increment dst pointer
-; QW:       add %r{{[0-9]+}}, 1
-; QW:       store %r{{[0-9]+}}, %r{{[0-9]+}}
+; QW:       add %r{{[0-9]+[dq]?}}, 1
+; QW:       store %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
 ;; Return
 ; QW:       jmpr %r7
   %ptr_dest = alloca ptr

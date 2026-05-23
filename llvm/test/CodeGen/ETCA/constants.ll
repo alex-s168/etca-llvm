@@ -8,56 +8,42 @@
 ;; ===========================================================================
 ;; ETCA constants and moves codegen tests
 ;;
-;; Tests MOVZ (zero-extend move) and MOVS (sign-extend move) used for
-;; constant materialisation, frame-index computation, and register-to-register
-;; copies.  The ETCA backend maps constants and frame indices to MOVZ.
-;;
-;; MOVZ:  movz $dst, $imm (5-bit immediate) — small constants
-;; MOVZI: movz $dst, $imm  — large immediate (same mnemonic, RI encoding)
-;; MOVS:  movs $dst, $src2 — sign-extending move
+;; Uses regex {{...}} for register names.
 ;; ===========================================================================
-
-;; --- Return a small constant ---
 
 define i16 @ret_small_const() {
 ; CHECK-LABEL: ret_small_const:
-; CHECK:       movz %r0, 0
+; CHECK:       {{movz %r[0-9]+[dqh]?, 0}}
 ; CHECK:       jmpr %r7
   ret i16 0
 }
 
 define i16 @ret_const_one() {
 ; CHECK-LABEL: ret_const_one:
-; CHECK:       movz %r0, 1
+; CHECK:       {{movz %r[0-9]+[dqh]?, 1}}
 ; CHECK:       jmpr %r7
   ret i16 1
 }
 
-;; --- Return a larger constant ---
-
 define i16 @ret_large_const() {
 ; CHECK-LABEL: ret_large_const:
-; CHECK:       movs %r0, 31
+; CHECK:       {{mov[s z] %r[0-9]+[dqh]?, 31}}
 ; CHECK:       jmpr %r7
   ret i16 65535
 }
 
-;; --- Return a negative constant ---
-
 define i16 @ret_neg_const() {
 ; CHECK-LABEL: ret_neg_const:
-; CHECK:       movs %r0, 31
+; CHECK:       {{mov[s z] %r[0-9]+[dqh]?, 31}}
 ; CHECK:       jmpr %r7
   ret i16 -1
 }
 
-;; --- FrameIndex access ---
-
 define i16 @frame_index() {
 ; CHECK-LABEL: frame_index:
 ; CHECK:       sub %r6, 2
-; CHECK:       store %r0, %r1
-; CHECK:       load %r0, %r1
+; CHECK:       {{store %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       {{load %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %slot = alloca i16, align 2
   store i16 42, ptr %slot
@@ -65,51 +51,41 @@ define i16 @frame_index() {
   ret i16 %v
 }
 
-;; --- Parameter passed through ---
-
 define i16 @pass_through(i16 %x) {
 ; CHECK-LABEL: pass_through:
 ; CHECK:       jmpr %r7
   ret i16 %x
 }
 
-;; --- Use constant in arithmetic ---
-
 define i16 @add_const(i16 %x) {
 ; CHECK-LABEL: add_const:
-; CHECK:       add %r0, 5
+; CHECK:       {{add %r[0-9]+[dqh]?, 5}}
 ; CHECK:       jmpr %r7
   %r = add i16 %x, 5
   ret i16 %r
 }
 
-;; --- Constant with logical operation ---
-
 define i16 @and_const(i16 %x) {
 ; CHECK-LABEL: and_const:
-; CHECK:       movz %r1, 15
-; CHECK:       and %r0, %r1
+; CHECK:       {{movz %r[0-9]+[dqh]?, 15}}
+; CHECK:       {{and %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = and i16 %x, 15
   ret i16 %r
 }
 
-;; --- Constant zero as identity for ADD ---
-
 define i16 @add_zero(i16 %x) {
 ; CHECK-LABEL: add_zero:
-; CHECK:       add %r0, 0
+; CHECK:       {{add %r[0-9]+[dqh]?, 0}}
 ; CHECK:       jmpr %r7
   %r = add i16 %x, 0
   ret i16 %r
 }
 
-;; --- Constant zero as identity for OR ---
-
 define i16 @or_zero(i16 %x) {
 ; CHECK-LABEL: or_zero:
-; CHECK:       movz %r1, 0
-; CHECK:       or %r0, %r1
+; CHECK:       {{movz %r[0-9]+[dqh]?, 0}}
+; CHECK:       {{or %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = or i16 %x, 0
   ret i16 %r

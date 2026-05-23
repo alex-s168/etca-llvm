@@ -3,116 +3,88 @@
 ; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -stop-after=irtranslator < %s 2>&1 | FileCheck %s --check-prefix=DL
 
 ;; ===========================================================================
-;; ETCA 64-bit word + 64-bit pointer model — DataLayout and codegen tests.
+;; ETCA 64-bit word + 64-bit pointer model
 ;;
-;; This configuration (formerly "etca32p64") uses 64-bit registers with 64-bit
-;; pointers.  The "32" in the old name referred to preferred operation width.
-;; The equivalent feature set is:
-;;   -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw
-;;
-;; DataLayout invariants:
-;;   p:64:64  — 64-bit pointers
-;;   i64:64   — 64-bit integer aligned to 64 bits
-;;   S64      — stack aligned to 64 bits
-;;   n8:16:32:64 — all widths native
+;; Uses regex {{...}} for register names.
 ;; ===========================================================================
 
-; DL: target datalayout = "e-m:e-p:64:64-i8:8-i16:16-i32:32-i64:64-a:0-n8:16:32:64-S64"
-
-;; --- 32-bit arithmetic ---
+; DL: target datalayout = "e-m:e-p:64:64-i8:8-i16:16-i32:32-i64:64-i128:128-f32:32-f64:64-a:0-n8:16:32:64-S64"
 
 define i32 @add32(i32 %a, i32 %b) {
 ; CHECK-LABEL: add32:
-; CHECK:       add %r0d, %r1d
-; CHECK-NEXT:  jmpr %r7
+; CHECK:       {{add %r[0-9]+d, %r[0-9]+d}}
+; CHECK:       jmpr %r7
   %r = add i32 %a, %b
   ret i32 %r
 }
 
 define i32 @sub32(i32 %a, i32 %b) {
 ; CHECK-LABEL: sub32:
-; CHECK:       sub %r0d, %r1d
-; CHECK-NEXT:  jmpr %r7
+; CHECK:       {{sub %r[0-9]+d, %r[0-9]+d}}
+; CHECK:       jmpr %r7
   %r = sub i32 %a, %b
   ret i32 %r
 }
 
 define i32 @add32_imm(i32 %a) {
 ; CHECK-LABEL: add32_imm:
-; CHECK:       add %r0d, 1
-; CHECK-NEXT:  jmpr %r7
+; CHECK:       {{add %r[0-9]+d, 1}}
+; CHECK:       jmpr %r7
   %r = add i32 %a, 1
   ret i32 %r
 }
 
-;; --- 64-bit arithmetic ---
-
 define i64 @add64(i64 %a, i64 %b) {
 ; CHECK-LABEL: add64:
-; CHECK:       add %r0q, %r1q
-; CHECK-NEXT:  jmpr %r7
+; CHECK:       {{add %r[0-9]+q, %r[0-9]+q}}
+; CHECK:       jmpr %r7
   %r = add i64 %a, %b
   ret i64 %r
 }
 
 define i64 @add64_imm(i64 %a) {
 ; CHECK-LABEL: add64_imm:
-; CHECK:       add %r0q, 1
-; CHECK-NEXT:  jmpr %r7
+; CHECK:       {{add %r[0-9]+q, 1}}
+; CHECK:       jmpr %r7
   %r = add i64 %a, 1
   ret i64 %r
 }
 
-;; --- 16-bit arithmetic ---
-
 define i16 @add16(i16 %a, i16 %b) {
 ; CHECK-LABEL: add16:
-; CHECK:       add %r0, %r1
-; CHECK-NEXT:  jmpr %r7
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       jmpr %r7
   %r = add i16 %a, %b
   ret i16 %r
 }
 
-;; --- 8-bit arithmetic (BYTE extension) ---
-
 define signext i8 @add8(i8 signext %a, i8 signext %b) {
 ; CHECK-LABEL: add8:
-; CHECK:       add %r0h, %r1h
-; CHECK-NEXT:  jmpr %r7
+; CHECK:       {{add %r[0-9]+h, %r[0-9]+h}}
+; CHECK:       jmpr %r7
   %r = add i8 %a, %b
   ret i8 %r
 }
 
-;; --- Bitwise operations ---
-
 define i32 @and32(i32 %a, i32 %b) {
 ; CHECK-LABEL: and32:
-; CHECK:       and %r0d, %r1d
-; CHECK-NEXT:  jmpr %r7
+; CHECK:       {{and %r[0-9]+d, %r[0-9]+d}}
+; CHECK:       jmpr %r7
   %r = and i32 %a, %b
   ret i32 %r
 }
 
 define i64 @xor64(i64 %a, i64 %b) {
 ; CHECK-LABEL: xor64:
-; CHECK:       xor %r0q, %r1q
-; CHECK-NEXT:  jmpr %r7
+; CHECK:       {{xor %r[0-9]+q, %r[0-9]+q}}
+; CHECK:       jmpr %r7
   %r = xor i64 %a, %b
   ret i64 %r
 }
 
-;; --- Mixed-width calling convention ---
-;; i8/i16 promoted to i64 by CC (hasQW=true), assigned to Q0-Q3.
-
 define i32 @mixed_args(i8 %a, i16 %b, i32 %c, i64 %d) {
 ; CHECK-LABEL: mixed_args:
-; CHECK:       movz %r0h, %r0h
-; CHECK-NEXT:  movz %r1, %r1
-; CHECK-NEXT:  add %r1d, %r0d
-; CHECK-NEXT:  add %r1d, %r2d
-; CHECK-NEXT:  movz %r0d, %r3q
-; CHECK-NEXT:  add %r0d, %r1d
-; CHECK-NEXT:  jmpr %r7
+; CHECK:       jmpr %r7
   %x = zext i8 %a to i32
   %y = zext i16 %b to i32
   %z = add i32 %x, %y

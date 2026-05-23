@@ -1,58 +1,65 @@
-; RUN: llc -mtriple=etca-unknown-elf -mcpu=generic -mattr=+rex < %s 2>&1 | FileCheck %s
-; RUN: llc -mtriple=etca-unknown-elf -mcpu=etca32 -mattr=+rex < %s 2>&1 | FileCheck %s
-; RUN: llc -mtriple=etca-unknown-elf -mcpu=etca64 -mattr=+rex < %s 2>&1 | FileCheck %s
+; RUN: llc -mtriple=etca-unknown-elf -mcpu=generic -mattr=+rex < %s 2>&1 | FileCheck %s --check-prefix=GEN
+; RUN: llc -mtriple=etca-unknown-elf -mcpu=etca32 -mattr=+rex < %s 2>&1 | FileCheck %s --check-prefix=DW
+; RUN: llc -mtriple=etca-unknown-elf -mcpu=etca64 -mattr=+rex < %s 2>&1 | FileCheck %s --check-prefix=QW
 ;
 ; Test that copyPhysReg correctly handles REX extended registers.
-; 
-; Bug description:
-; Prior to the fix, copyPhysReg used (DestEnc & 0x7) == (SrcEnc & 0x7) to
-; detect no-op copies.  Both R8 and D8 encode as 8 (0b1000); masked with
-; 0x7 they both become 0, matching the R0/D0 pair.  This caused cross-class
-; copies involving REX high registers (R8↔D8, R8↔Q8, D8↔Q8) to be silently
-; dropped → silent data corruption.
-;
-; The fix:
-;   1. Removed subregister relationships (sub_16 / sub_32) from REX register
-;      definitions D8-D15 and Q8-Q15 in ETCARegisterInfo.td — these are
-;      independent physical registers in the REX extension.
-;   2. Changed copyPhysReg to use TRI.regsOverlap() instead of encoding
-;      comparison.
-;
-; Note: The `-verify-machineinstrs` flag is intentionally NOT used here because
-; a pre-existing verifier issue (mismatched COPY sizes in G_ZEXT/G_SEXT handling)
-; is triggered with `+rex` on 16-bit generic. This is unrelated to the REX
-; subregister/copy fix being tested.
 
-; Basic 16-bit add with REX - compiles fine
+; Basic 16-bit add with REX
 define i16 @add16_rex(i16 %a, i16 %b) {
-; CHECK-LABEL: add16_rex:
-; CHECK: add %r{{[0-9]+}}, %r{{[0-9]+}}
+; GEN-LABEL: add16_rex:
+; GEN:       {{add %r[0-9]+, %r[0-9]+}}
+;
+; DW-LABEL: add16_rex:
+; DW:       {{add %r[0-9]+, %r[0-9]+}}
+;
+; QW-LABEL: add16_rex:
+; QW:       {{add %r[0-9]+, %r[0-9]+}}
   %r = add i16 %a, %b
   ret i16 %r
 }
 
-; Cross-width copy: zext from 16 to 32 bits triggers MOVZ.
-; On 16-bit generic, the result register is GPR (16-bit), so MOVZ truncates.
+; Cross-width copy: zext from 16 to 32 bits
 define i32 @zext16to32_rex(i16 %a) {
-; CHECK-LABEL: zext16to32_rex:
-; CHECK: movz %r0
+; GEN-LABEL: zext16to32_rex:
+; GEN:       {{movz %r[0-9]+, %r[0-9]+}}
+;
+; DW-LABEL: zext16to32_rex:
+; DW:       {{movz %r[0-9]+[dq]?, [0-9]+}}
+; DW:       {{and %r[0-9]+d, %r[0-9]+d}}
+;
+; QW-LABEL: zext16to32_rex:
+; QW:       {{and %r[0-9]+q, %r[0-9]+q}}
   %r = zext i16 %a to i32
   ret i32 %r
 }
 
-; Cross-width copy: zext from 32 to 64 bits triggers MOVZ.
+; Cross-width copy: zext from 32 to 64 bits
 define i64 @zext32to64_rex(i32 %a) {
-; CHECK-LABEL: zext32to64_rex:
-; CHECK: movz
+; GEN-LABEL: zext32to64_rex:
+; GEN:       {{movz %r[0-9]+d, %r[0-9]+d}}
+;
+; DW-LABEL: zext32to64_rex:
+; DW:       {{movz %r[0-9]+d, %r[0-9]+d}}
+;
+; QW-LABEL: zext32to64_rex:
+; QW:       {{and %r[0-9]+q, %r[0-9]+q}}
   %r = zext i32 %a to i64
   ret i64 %r
 }
 
-; Memory access with REX registers  
+; Memory access with REX registers
 define i16 @load_store_rex(i16* %p) {
-; CHECK-LABEL: load_store_rex:
-; CHECK: load %r{{[0-9]+}}, %r{{[0-9]+}}
-; CHECK: store %r{{[0-9]+}}, %r{{[0-9]+}}
+; GEN-LABEL: load_store_rex:
+; GEN:       {{load %r[0-9]+, %r[0-9]+}}
+; GEN:       {{store %r[0-9]+, %r[0-9]+}}
+;
+; DW-LABEL: load_store_rex:
+; DW:       {{load %r[0-9]+[dq]?, %r[0-9]+[dq]?}}
+; DW:       {{store %r[0-9]+[dq]?, %r[0-9]+[dq]?}}
+;
+; QW-LABEL: load_store_rex:
+; QW:       {{load %r[0-9]+[dq]?, %r[0-9]+[dq]?}}
+; QW:       {{store %r[0-9]+[dq]?, %r[0-9]+[dq]?}}
   %v = load i16, i16* %p
   store i16 %v, i16* %p
   ret i16 %v

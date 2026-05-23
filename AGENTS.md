@@ -192,12 +192,12 @@ generated code to call.
 ## Build Notes
 
 ```sh
-# Release build
 cmake -S llvm -B build-etca -G Ninja \
   -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=ETCA \
   -DLLVM_TARGETS_TO_BUILD="" \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_CXX_COMPILER=c++
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DLLVM_ENABLE_ASSERTIONS=ON \
+  -DLLVM_ENABLE_PROJECTS="clang;lld"
 
 # Build everything. NEVER build only individual targets!
 ninja -C build-etca

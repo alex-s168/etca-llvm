@@ -107,6 +107,72 @@ let mayStore = 1, hasSideEffects = 0, mayLoad = 0, Predicates = [HasQW] in {
 }
 
 //===----------------------------------------------------------------------===//
+// Mixed-width LOAD/STORE — data width differs from pointer width
+//
+// These have the same encoding as the standard variants (same SS and CCCC)
+// but constrain the address register to a different class for the correct
+// pointer width.  They are isCodeGenOnly so the auto-generated decoder
+// does not see encoding conflicts — the manual disassembler in
+// ETCADisassembler.cpp handles all decoding using the standard variants.
+//===----------------------------------------------------------------------===//
+
+// 8-bit load with 32-bit pointer (SS=00, BYTE extension)
+let mayLoad = 1, hasSideEffects = 0, mayStore = 0, isCodeGenOnly = 1,
+    Predicates = [HasByte] in {
+  def LOAD8_P32 : EInstLoadRR8P32<"load $dst, $addr", []>;
+}
+
+// 8-bit load with 64-bit pointer (SS=00, BYTE extension)
+let mayLoad = 1, hasSideEffects = 0, mayStore = 0, isCodeGenOnly = 1,
+    Predicates = [HasByte] in {
+  def LOAD8_P64 : EInstLoadRR8P64<"load $dst, $addr", []>;
+}
+
+// 8-bit store with 32-bit pointer (SS=00, BYTE extension)
+let mayStore = 1, hasSideEffects = 0, mayLoad = 0, isCodeGenOnly = 1,
+    Predicates = [HasByte] in {
+  def STORE8_P32 : EInstStoreRR8P32<"store $val, $addr", []>;
+}
+
+// 8-bit store with 64-bit pointer (SS=00, BYTE extension)
+let mayStore = 1, hasSideEffects = 0, mayLoad = 0, isCodeGenOnly = 1,
+    Predicates = [HasByte] in {
+  def STORE8_P64 : EInstStoreRR8P64<"store $val, $addr", []>;
+}
+
+// 16-bit load with 32-bit pointer (SS=01)
+let mayLoad = 1, hasSideEffects = 0, mayStore = 0, isCodeGenOnly = 1 in {
+  def LOAD16_P32 : EInstLoadRR16P32<"load $dst, $addr", []>;
+}
+
+// 16-bit load with 64-bit pointer (SS=01)
+let mayLoad = 1, hasSideEffects = 0, mayStore = 0, isCodeGenOnly = 1 in {
+  def LOAD16_P64 : EInstLoadRR16P64<"load $dst, $addr", []>;
+}
+
+// 16-bit store with 32-bit pointer (SS=01)
+let mayStore = 1, hasSideEffects = 0, mayLoad = 0, isCodeGenOnly = 1 in {
+  def STORE16_P32 : EInstStoreRR16P32<"store $val, $addr", []>;
+}
+
+// 16-bit store with 64-bit pointer (SS=01)
+let mayStore = 1, hasSideEffects = 0, mayLoad = 0, isCodeGenOnly = 1 in {
+  def STORE16_P64 : EInstStoreRR16P64<"store $val, $addr", []>;
+}
+
+// 32-bit load with 64-bit pointer (SS=10, DW extension)
+let mayLoad = 1, hasSideEffects = 0, mayStore = 0, isCodeGenOnly = 1,
+    Predicates = [HasDW] in {
+  def LOAD32_P64 : EInstLoadRR32P64<"load $dst, $addr", []>;
+}
+
+// 32-bit store with 64-bit pointer (SS=10, DW extension)
+let mayStore = 1, hasSideEffects = 0, mayLoad = 0, isCodeGenOnly = 1,
+    Predicates = [HasDW] in {
+  def STORE32_P64 : EInstStoreRR32P64<"store $val, $addr", []>;
+}
+
+//===----------------------------------------------------------------------===//
 // Base computation instructions — 16-bit register-immediate form
 //===----------------------------------------------------------------------===//
 
@@ -128,12 +194,13 @@ let isCommutable = 1, hasSideEffects = 0, mayLoad = 0, mayStore = 0,
 }
 
 // SLO — shift left by imm5, OR with low bits
-// Uses non-tied format (no $src1 constraint) to avoid TwoAddress pass
-// confusion with the immediate operand.  SLO16 always reads the dest
-// register as the shift source, so tied-def is semantically accurate but
-// causes TwoAddress to hang when it can't commute an immediate operand.
+// Uses tied-def format (has $src1 = $dst constraint) since the hardware
+// always reads from the destination register.  The TwoAddress pass will
+// insert a COPY before SLO when $dst != $src1 in SSA form.  Non-tied
+// format cannot be used because it creates SSA violations (same vreg
+// defined twice) when chaining MOVZ + SLO for large constant materialization.
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, SchedRW = [WriteALU] in {
-  def SLO16   : EInstRI16_NT<12, "slo $dst, $imm", []>;
+  def SLO16   : EInstRI16<12, "slo $dst, $imm", []>;
 }
 
 // Control register access
@@ -423,5 +490,5 @@ let Predicates = [HasSAF], isCall = 1, isTerminator = 1, isBarrier = 1,
 // InstructionSelector (GISel/ETCAInstructionSelector.cpp).  SDAG Pat<>
 // patterns (which would require -gen-dag-isel) are deliberately absent.
 //
-// SLO16 is handled in the InstructionSelector (non-tied, GISel-only).
+// SLO16 is handled in the InstructionSelector (tied-def, GISel-only).
 //===----------------------------------------------------------------------===//

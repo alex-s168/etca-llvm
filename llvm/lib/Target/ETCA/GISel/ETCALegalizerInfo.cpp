@@ -230,6 +230,11 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   getActionDefinitionsBuilder(G_SEXT).alwaysLegal();
   getActionDefinitionsBuilder(G_TRUNC).alwaysLegal();
 
+  // G_ANYEXT is created by the legalizer's built-in combine step when
+  // simplifying G_ZEXT/G_SEXT chains.  The instruction selector handles
+  // it like G_ZEXT (MOVZ at source width + COPY bridge).
+  getActionDefinitionsBuilder(G_ANYEXT).alwaysLegal();
+
   //===----------------------------------------------------------------===//
   // PHI — TIER 1 (data-flow)
   //===----------------------------------------------------------------===//
@@ -318,4 +323,8 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   //===----------------------------------------------------------------===//
   // Mark unhandled ops as unsupported (will cause GISel abort)
   //===----------------------------------------------------------------===//
+
+  // Finalize the legalization tables.  This must be called after all
+  // getActionDefinitionsBuilder calls are complete.
+  getLegacyLegalizerInfo().computeTables();
 }

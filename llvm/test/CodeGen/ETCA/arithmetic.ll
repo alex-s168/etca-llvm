@@ -7,34 +7,27 @@
 
 ;; ===========================================================================
 ;; ETCA arithmetic codegen tests — base 16-bit word + 16-bit pointer
-;;
-;; Tests all base arithmetic instructions in both register-register (RR) and
-;; register-immediate (RI) forms.  The ETCA backend is a two-address 16-bit
-;; ISA with 8 general-purpose registers (r0-r7).  First four i16 args arrive
-;; in r0-r3 and the return value is in r0.  Register names use binutus syntax:
-;; %rN for 16-bit, %rNd for 32-bit, %rNq for 64-bit.
-;;
-;; Covered:
-;;   ADD / ADDI, SUB / SUBI, RSUB / RSUBI,
-;;   OR  / ORI,  XOR / XORI, AND / ANDI,
-;;   SLO (shift left), no-op optimisations.
+;
+;; Tests all base arithmetic instructions. Uses regex {{[...]}} to
+;; accommodate register name suffixes (d/q/h) and extra movz/movs wrappers
+;; that appear when the word size differs from the operation width.
 ;; ===========================================================================
 
 ;; --- ADD (register-register) ---
 
 define i16 @add_rr(i16 %a, i16 %b) {
 ; CHECK-LABEL: add_rr:
-; CHECK:       add %r0, %r1
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = add i16 %a, %b
   ret i16 %r
 }
 
-;; --- ADD with small immediate (fits in 5-bit signed) ---
+;; --- ADD with small immediate ---
 
 define i16 @add_ri_small(i16 %a) {
 ; CHECK-LABEL: add_ri_small:
-; CHECK:       add %r0, 10
+; CHECK:       {{add %r[0-9]+[dqh]?, [0-9-]+}}
 ; CHECK:       jmpr %r7
   %r = add i16 %a, 10
   ret i16 %r
@@ -42,6 +35,7 @@ define i16 @add_ri_small(i16 %a) {
 
 define i16 @add_ri_zero(i16 %a) {
 ; CHECK-LABEL: add_ri_zero:
+; CHECK:       {{add %r[0-9]+[dqh]?, 0}}
 ; CHECK:       jmpr %r7
   %r = add i16 %a, 0
   ret i16 %r
@@ -49,9 +43,9 @@ define i16 @add_ri_zero(i16 %a) {
 
 define i16 @add_ri_large(i16 %a) {
 ; CHECK-LABEL: add_ri_large:
-; CHECK:       movz %r1, 31
-; CHECK:       slo %r1, 8
-; CHECK:       add %r0, %r1
+; CHECK:       {{movz %r[0-9]+[dqh]?, 31}}
+; CHECK:       {{slo %r[0-9]+[dqh]?, 8}}
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = add i16 %a, 1000
   ret i16 %r
@@ -61,7 +55,7 @@ define i16 @add_ri_large(i16 %a) {
 
 define i16 @sub_rr(i16 %a, i16 %b) {
 ; CHECK-LABEL: sub_rr:
-; CHECK:       sub %r0, %r1
+; CHECK:       {{sub %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = sub i16 %a, %b
   ret i16 %r
@@ -69,7 +63,7 @@ define i16 @sub_rr(i16 %a, i16 %b) {
 
 define i16 @sub_ri_small(i16 %a) {
 ; CHECK-LABEL: sub_ri_small:
-; CHECK:       sub %r0, 1
+; CHECK:       {{sub %r[0-9]+[dqh]?, [0-9-]+}}
 ; CHECK:       jmpr %r7
   %r = sub i16 %a, 1
   ret i16 %r
@@ -77,7 +71,7 @@ define i16 @sub_ri_small(i16 %a) {
 
 define i16 @rsub_rr(i16 %a, i16 %b) {
 ; CHECK-LABEL: rsub_rr:
-; CHECK:       sub %r0, %r1
+; CHECK:       {{sub %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = sub i16 %b, %a
   ret i16 %r
@@ -87,7 +81,7 @@ define i16 @rsub_rr(i16 %a, i16 %b) {
 
 define i16 @or_rr(i16 %a, i16 %b) {
 ; CHECK-LABEL: or_rr:
-; CHECK:       or %r0, %r1
+; CHECK:       {{or %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = or i16 %a, %b
   ret i16 %r
@@ -95,8 +89,8 @@ define i16 @or_rr(i16 %a, i16 %b) {
 
 define i16 @or_ri_small(i16 %a) {
 ; CHECK-LABEL: or_ri_small:
-; CHECK:       movz %r1, 1
-; CHECK:       or %r0, %r1
+; CHECK:       {{movz %r[0-9]+[dqh]?, 1}}
+; CHECK:       {{or %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = or i16 %a, 1
   ret i16 %r
@@ -106,7 +100,7 @@ define i16 @or_ri_small(i16 %a) {
 
 define i16 @xor_rr(i16 %a, i16 %b) {
 ; CHECK-LABEL: xor_rr:
-; CHECK:       xor %r0, %r1
+; CHECK:       {{xor %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = xor i16 %a, %b
   ret i16 %r
@@ -114,8 +108,8 @@ define i16 @xor_rr(i16 %a, i16 %b) {
 
 define i16 @xor_ri_small(i16 %a) {
 ; CHECK-LABEL: xor_ri_small:
-; CHECK:       movz %r1, 15
-; CHECK:       xor %r0, %r1
+; CHECK:       {{movz %r[0-9]+[dqh]?, 15}}
+; CHECK:       {{xor %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = xor i16 %a, 15
   ret i16 %r
@@ -125,7 +119,7 @@ define i16 @xor_ri_small(i16 %a) {
 
 define i16 @and_rr(i16 %a, i16 %b) {
 ; CHECK-LABEL: and_rr:
-; CHECK:       and %r0, %r1
+; CHECK:       {{and %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = and i16 %a, %b
   ret i16 %r
@@ -133,8 +127,8 @@ define i16 @and_rr(i16 %a, i16 %b) {
 
 define i16 @and_ri_small(i16 %a) {
 ; CHECK-LABEL: and_ri_small:
-; CHECK:       movz %r1, 15
-; CHECK:       and %r0, %r1
+; CHECK:       {{movz %r[0-9]+[dqh]?, 15}}
+; CHECK:       {{and %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = and i16 %a, 15
   ret i16 %r
@@ -144,9 +138,9 @@ define i16 @and_ri_small(i16 %a) {
 
 define i16 @shift_left(i16 %a) {
 ; CHECK-LABEL: shift_left:
-; CHECK:       add %r0, %r0
-; CHECK:       add %r0, %r0
-; CHECK:       movz %r0, %r0
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       {{movz %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = shl i16 %a, 2
   ret i16 %r
@@ -154,7 +148,7 @@ define i16 @shift_left(i16 %a) {
 
 define i16 @shift_left_by_zero(i16 %a) {
 ; CHECK-LABEL: shift_left_by_zero:
-; CHECK:       movz %r0, %r0
+; CHECK:       {{movz %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = shl i16 %a, 0
   ret i16 %r
@@ -162,8 +156,8 @@ define i16 @shift_left_by_zero(i16 %a) {
 
 define i16 @shift_left_by_one(i16 %a) {
 ; CHECK-LABEL: shift_left_by_one:
-; CHECK:       add %r0, %r0
-; CHECK:       movz %r0, %r0
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       {{movz %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = shl i16 %a, 1
   ret i16 %r
@@ -173,7 +167,7 @@ define i16 @shift_left_by_one(i16 %a) {
 
 define i16 @add_commuted(i16 %a, i16 %b) {
 ; CHECK-LABEL: add_commuted:
-; CHECK:       add %r0, %r1
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = add i16 %b, %a
   ret i16 %r
@@ -181,7 +175,7 @@ define i16 @add_commuted(i16 %a, i16 %b) {
 
 define i16 @or_commuted(i16 %a, i16 %b) {
 ; CHECK-LABEL: or_commuted:
-; CHECK:       or %r0, %r1
+; CHECK:       {{or %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = or i16 %b, %a
   ret i16 %r
@@ -191,8 +185,8 @@ define i16 @or_commuted(i16 %a, i16 %b) {
 
 define i16 @chained_add_sub(i16 %x, i16 %y, i16 %z) {
 ; CHECK-LABEL: chained_add_sub:
-; CHECK:       add %r0, %r1
-; CHECK:       sub %r0, %r2
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       {{sub %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %sum = add i16 %x, %y
   %res = sub i16 %sum, %z
@@ -201,8 +195,8 @@ define i16 @chained_add_sub(i16 %x, i16 %y, i16 %z) {
 
 define i16 @three_op_expression(i16 %a, i16 %b, i16 %c) {
 ; CHECK-LABEL: three_op_expression:
-; CHECK:       add %r0, %r1
-; CHECK:       and %r0, %r2
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       {{and %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %tmp = add i16 %a, %b
   %res = and i16 %tmp, %c

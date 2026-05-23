@@ -1978,6 +1978,9 @@ unsigned Triple::getArchPointerBitWidth(llvm::Triple::ArchType Arch) {
   case llvm::Triple::msp430:
     return 16;
 
+  case llvm::Triple::etca:
+    return 0;
+
   case llvm::Triple::aarch64_32:
   case llvm::Triple::amdil:
   case llvm::Triple::arc:
@@ -2086,6 +2089,7 @@ Triple Triple::get32BitArchVariant() const {
   case Triple::msp430:
   case Triple::systemz:
   case Triple::ve:
+  case Triple::etca:
     T.setArch(UnknownArch);
     break;
 
@@ -2208,6 +2212,7 @@ Triple Triple::get64BitArchVariant() const {
   case Triple::tce:
   case Triple::xcore:
   case Triple::xtensa:
+  case Triple::etca:
     T.setArch(UnknownArch);
     break;
 
@@ -2386,6 +2391,9 @@ Triple Triple::getBigEndianArchVariant() const {
   case Triple::tcele:
     T.setArch(Triple::tce);
     break;
+  case Triple::etca:
+    T.setArch(UnknownArch);
+    break;
   default:
     llvm_unreachable("getBigEndianArchVariant: unknown triple.");
   }
@@ -2494,6 +2502,7 @@ bool Triple::isLittleEndian() const {
   case Triple::x86_64:
   case Triple::xcore:
   case Triple::xtensa:
+  case Triple::etca:
     return true;
   default:
     return false;

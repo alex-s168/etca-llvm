@@ -10,10 +10,13 @@
 // Runs after instruction selection but before register allocation.
 //
 // SELECT_Pseudo dst, cond, trueval, falseval, pred
-//   → MBB: BrOpc TrueBB; fall-through to FalseBB
-//   → FalseBB: MOVZ dst, falseval; BR MBBCont
-//   → TrueBB: MOVZ dst, trueval; fall-through to MBBCont
-//   → MBBCont: rest of function
+//   → MBB: BrOpc TrueBB; BR FalseBB (fall-through)
+//   → FalseBB: MOVZ tmpfalse, falseval; BR MBBCont
+//   → TrueBB:  MOVZ tmptrue, trueval; fall-through to MBBCont
+//   → MBBCont: Dst = PHI tmpfalse (FalseBB), tmptrue (TrueBB)
+//
+// The PHI maintains SSA form (two separate vregs in TrueBB/FalseBB),
+// avoiding "getVRegDef assumes at most one definition" assertion.
 //
 //===----------------------------------------------------------------------===//
 
@@ -24,6 +27,7 @@
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/InitializePasses.h"
@@ -91,6 +95,8 @@ bool ETCASelectExpand::runOnMachineFunction(MachineFunction &MF) {
       }
     }
   }
+
+  MachineRegisterInfo &MRI = MF.getRegInfo();
 
   for (MachineInstr *MI : ToExpand) {
     MachineBasicBlock &MBB = *MI->getParent();
@@ -172,20 +178,37 @@ bool ETCASelectExpand::runOnMachineFunction(MachineFunction &MF) {
     BuildMI(MBB, *MI, DL, TII.get(BrOpc)).addMBB(TrueBB);
     BuildMI(MBB, *MI, DL, TII.get(ETCA::BR)).addMBB(FalseBB);
 
-    // FalseBB: MOVZ dst, falseval; BR MBBCont
+    // Create temporary virtual registers to maintain SSA form.
+    // Using Dst directly in both MOVZ instructions would create
+    // two definitions of Dst, violating SSA (causes "getVRegDef
+    // assumes at most one definition" assertion in later passes).
+    const TargetRegisterClass *DstRC = MRI.getRegClass(Dst);
+    Register TmpFalse = MRI.createVirtualRegister(DstRC);
+    Register TmpTrue = MRI.createVirtualRegister(DstRC);
+
+    // FalseBB: MOVZ tmpfalse, falseval; BR MBBCont
     BuildMI(FalseBB, DL,
             TII.get(getMovzOpcForRegWidth(
                 MF.getSubtarget<ETCASubtarget>().getRegWidth())),
-            Dst)
+            TmpFalse)
         .addReg(FalseVal);
     BuildMI(FalseBB, DL, TII.get(ETCA::BR)).addMBB(MBBCont);
 
-    // TrueBB: MOVZ dst, trueval (fall-through to MBBCont)
+    // TrueBB: MOVZ tmptrue, trueval (fall-through to MBBCont)
     BuildMI(TrueBB, DL,
             TII.get(getMovzOpcForRegWidth(
                 MF.getSubtarget<ETCASubtarget>().getRegWidth())),
-            Dst)
+            TmpTrue)
         .addReg(TrueVal);
+
+    // MBBCont: Dst = PHI TmpFalse (FalseBB), TmpTrue (TrueBB)
+    // This PHI joins the two SSA definitions and is later eliminated
+    // by the standard phi elimination pass.
+    BuildMI(*MBBCont, MBBCont->begin(), DL, TII.get(TargetOpcode::PHI), Dst)
+        .addReg(TmpFalse)
+        .addMBB(FalseBB)
+        .addReg(TmpTrue)
+        .addMBB(TrueBB);
 
     // Erase SELECT_Pseudo.
     MI->eraseFromParent();

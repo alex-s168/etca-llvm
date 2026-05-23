@@ -37,9 +37,9 @@ define i16 @load_after_store(i16* %ptr, i16 %val) {
 define i16 @stack_alloca(i16 %val) {
 ; CHECK-LABEL: stack_alloca:
 ; CHECK:       sub %r6, 2
-; CHECK:       movz %r1, %r5
-; CHECK:       store %r0, %r1
-; CHECK:       load %r0, %r1
+; CHECK:       movz %r1{{[dq]?}}, %r5
+; CHECK:       store %r0, %r1{{[dq]?}}
+; CHECK:       load %r0, %r1{{[dq]?}}
 ; CHECK:       jmpr %r7
   %ptr = alloca i16
   store i16 %val, i16* %ptr
@@ -49,8 +49,8 @@ define i16 @stack_alloca(i16 %val) {
 
 define i16 @load_store_different(i16* %in, i16* %out) {
 ; CHECK-LABEL: load_store_different:
-; CHECK:       load %r0, %r0
-; CHECK:       store %r0, %r1
+; CHECK:       load %r0, %r0{{[dq]?}}
+; CHECK:       store %r0, %r1{{[dq]?}}
 ; CHECK:       jmpr %r7
   %val = load i16, i16* %in
   store i16 %val, i16* %out
@@ -59,7 +59,7 @@ define i16 @load_store_different(i16* %in, i16* %out) {
 
 define i16 @volatile_load(i16* %ptr) {
 ; CHECK-LABEL: volatile_load:
-; CHECK:       load %r0, %r0
+; CHECK:       load %r0, %r0{{[dq]?}}
 ; CHECK:       jmpr %r7
   %val = load volatile i16, i16* %ptr
   ret i16 %val
@@ -85,8 +85,8 @@ define void @store_zero(i16* %ptr) {
 define i16 @multi_alloca(i16 %a, i16 %b) {
 ; CHECK-LABEL: multi_alloca:
 ; CHECK:       sub %r6
-; CHECK:       movz %r{{[0-9]+}}, %r5
-; CHECK:       add %r{{[0-9]+}}, -2
+; CHECK:       movz %r{{[0-9]+[dq]?}}, %r5
+; CHECK:       add %r{{[0-9]+[dq]?}}, -2
 ; CHECK:       store %r0
 ; CHECK:       store %r1
 ; CHECK:       load

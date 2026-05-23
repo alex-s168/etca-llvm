@@ -41,7 +41,13 @@ ETCARegisterBankInfo::getInstrMapping(const MachineInstr &MI) const {
   const unsigned Opc = MI.getOpcode();
 
   // Use default logic for non-generic or PHI instructions.
-  if (!isPreISelGenericOpcode(Opc) || Opc == TargetOpcode::G_PHI) {
+  // COPY is explicitly handled here because getInstrMappingImpl uses the
+  // physical register's size (16 bits) for the virtual register's mapping
+  // when copying from a 16-bit physical register to a wider virtual register
+  // (e.g., COPY $r0 → %0:_(s32)), causing "Meaningful bits not covered"
+  // assertion in RegBankSelect verification.
+  if ((!isPreISelGenericOpcode(Opc) && Opc != TargetOpcode::COPY) ||
+      Opc == TargetOpcode::G_PHI) {
     const InstructionMapping &Mapping = getInstrMappingImpl(MI);
     if (Mapping.isValid())
       return Mapping;
@@ -81,6 +87,19 @@ ETCARegisterBankInfo::getInstrMapping(const MachineInstr &MI) const {
     if (SizeBits < 16)
       SizeBits = 16;
     OpMappings.push_back(&getValueMapping(0, SizeBits, RB));
+  }
+
+  // For COPY (and other copy-like instructions), InstructionMapping::verify
+  // expects exactly 1 operand in the mapping (the destination).  If we
+  // included all operands, the verify check would fail because
+  // isCopyLike==true implies NumOperands==1.
+  //
+  // Since ETCA has a single register bank (GPRBank), the dest mapping is
+  // sufficient for RegBankSelect to route the copy.
+  if (MI.isCopy()) {
+    return getInstructionMapping(DefaultMappingID, /*Cost=*/1,
+                                 getOperandsMapping(OpMappings),
+                                 /*NumOperands=*/1);
   }
 
   return getInstructionMapping(DefaultMappingID, /*Cost=*/1,

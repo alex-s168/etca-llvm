@@ -128,11 +128,12 @@ static unsigned getMovziOpc(unsigned Size) {
 
 /// Return the register class for a given LLT type.
 static const TargetRegisterClass *getRCForType(LLT Ty) {
-  if (Ty == LLT::scalar(64))
+  unsigned Size = Ty.getSizeInBits();
+  if (Size == 64)
     return &ETCA::GPR64RegClass;
-  if (Ty == LLT::scalar(32))
+  if (Size == 32)
     return &ETCA::GPR32RegClass;
-  return &ETCA::GPRRegClass; // s8, s16, or pointer types
+  return &ETCA::GPRRegClass; // s8, s16, or pointer types with size < 32
 }
 
 /// Constrain a virtual register to the appropriate register class.
@@ -280,19 +281,28 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
       if (Chunks.empty()) {
         BuildMI(MBB, MI, MIMD, TII.get(ETCA::MOVZI16), Dst).addImm(0);
       } else {
-        // First: MOVZ with highest chunk
-        BuildMI(MBB, MI, MIMD, TII.get(ETCA::MOVZI16), Dst)
+        // Build large constant using MOVZ/SLO chain.
+        // SLO16 uses a tied-def format ($dst = $src1), so each SLO16
+        // consumes one vreg and produces the next.  A COPY from the
+        // last chain vreg to Dst satisfies SSA for the G_CONSTANT
+        // result.  The PostInstructionSelect COPY eliminator will merge
+        // same-class COPYs, which is correct since the chain represents
+        // an in-place register transformation.
+        Register Tmp = MRI->createVirtualRegister(&ETCA::GPRRegClass);
+        BuildMI(MBB, MI, MIMD, TII.get(ETCA::MOVZI16), Tmp)
             .addImm(Chunks.back());
         Chunks.pop_back();
-        // Remaining chunks: SLO
         while (!Chunks.empty()) {
-          BuildMI(MBB, MI, MIMD, TII.get(ETCA::SLO16), Dst)
+          Register Next = MRI->createVirtualRegister(&ETCA::GPRRegClass);
+          BuildMI(MBB, MI, MIMD, TII.get(ETCA::SLO16), Next)
+              .addReg(Tmp)
               .addImm(Chunks.back());
+          Tmp = Next;
           Chunks.pop_back();
         }
+        BuildMI(MBB, MI, MIMD, TII.get(TargetOpcode::COPY), Dst).addReg(Tmp);
       }
     } else {
-      // Non-16-bit width: use generic movzi
       BuildMI(MBB, MI, MIMD, TII.get(getMovziOpc(Size)), Dst)
           .addImm(Val & 0x1F);
     }
@@ -555,20 +565,38 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     Register Addr = MI.getOperand(1).getReg();
     LLT DstTy = MRI->getType(Dst);
     unsigned Size = DstTy.getSizeInBits();
+    unsigned PtrSize = ST.getPtrSize();
     MachineMemOperand *MMO = *MI.memoperands_begin();
     unsigned Opc;
+    // Select the correct load variant based on both data width and
+    // pointer width.  When data width != pointer width, we need a
+    // mixed-width variant (e.g., LOAD16_P32 for 16-bit data with
+    // 32-bit pointer).
     switch (Size) {
     case 8:
-      Opc = ETCA::LOAD8;
+      if (PtrSize <= 16)
+        Opc = ETCA::LOAD8;
+      else if (PtrSize <= 32)
+        Opc = ETCA::LOAD8_P32;
+      else
+        Opc = ETCA::LOAD8_P64;
       break;
     case 32:
-      Opc = ETCA::LOAD32;
+      if (PtrSize <= 32)
+        Opc = ETCA::LOAD32;
+      else
+        Opc = ETCA::LOAD32_P64;
       break;
     case 64:
       Opc = ETCA::LOAD64;
       break;
-    default:
-      Opc = ETCA::LOAD16;
+    default: // 16-bit or other
+      if (PtrSize <= 16)
+        Opc = ETCA::LOAD16;
+      else if (PtrSize <= 32)
+        Opc = ETCA::LOAD16_P32;
+      else
+        Opc = ETCA::LOAD16_P64;
       break;
     }
     BuildMI(MBB, MI, MIMD, TII.get(Opc), Dst).addReg(Addr).addMemOperand(MMO);
@@ -587,20 +615,38 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     Register Addr = MI.getOperand(1).getReg();
     LLT ValTy = MRI->getType(Val);
     unsigned Size = ValTy.getSizeInBits();
+    unsigned PtrSize = ST.getPtrSize();
     MachineMemOperand *MMO = *MI.memoperands_begin();
     unsigned Opc;
+    // Select the correct store variant based on both data width and
+    // pointer width.  When data width != pointer width, we need a
+    // mixed-width variant (e.g., STORE16_P32 for 16-bit data with
+    // 32-bit pointer).
     switch (Size) {
     case 8:
-      Opc = ETCA::STORE8;
+      if (PtrSize <= 16)
+        Opc = ETCA::STORE8;
+      else if (PtrSize <= 32)
+        Opc = ETCA::STORE8_P32;
+      else
+        Opc = ETCA::STORE8_P64;
       break;
     case 32:
-      Opc = ETCA::STORE32;
+      if (PtrSize <= 32)
+        Opc = ETCA::STORE32;
+      else
+        Opc = ETCA::STORE32_P64;
       break;
     case 64:
       Opc = ETCA::STORE64;
       break;
-    default:
-      Opc = ETCA::STORE16;
+    default: // 16-bit or other
+      if (PtrSize <= 16)
+        Opc = ETCA::STORE16;
+      else if (PtrSize <= 32)
+        Opc = ETCA::STORE16_P32;
+      else
+        Opc = ETCA::STORE16_P64;
       break;
     }
     BuildMI(MBB, MI, MIMD, TII.get(Opc))
@@ -914,16 +960,30 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     LLT SrcTy = MRI->getType(Src);
     unsigned DstSize = DstTy.getSizeInBits();
     unsigned SrcSize = SrcTy.getSizeInBits();
+    const TargetRegisterClass *SrcRC = getRCForType(SrcTy);
+    const TargetRegisterClass *DstRC = getRCForType(DstTy);
 
     if (SrcSize == DstSize) {
       // Same width: just copy (no truncation needed).
       BuildMI(MBB, MI, MIMD, TII.get(TargetOpcode::COPY), Dst).addReg(Src);
       if (!constrainReg(Dst, DstTy, RBI, *MRI))
         return false;
-    } else {
-      // Narrow: use destination-width MOVZ which reads the narrower
+    } else if (SrcRC == DstRC) {
+      // Same register class, different width (e.g., s16→s8):
+      // use destination-width MOVZ which reads the narrower
       // source width via SS bits and extends to register width.
       BuildMI(MBB, MI, MIMD, TII.get(getMovzOpc(DstSize)), Dst).addReg(Src);
+      if (!constrainReg(Dst, DstTy, RBI, *MRI))
+        return false;
+    } else {
+      // Different register classes (e.g., s32→s16, GPR32→GPR):
+      // first use source-width MOVZ to get a copy in the source RC,
+      // then COPY to bridge to the destination RC.
+      Register Tmp = MRI->createVirtualRegister(SrcRC);
+      BuildMI(MBB, MI, MIMD, TII.get(getMovzOpc(SrcSize)), Tmp).addReg(Src);
+      if (!constrainReg(Tmp, SrcTy, RBI, *MRI))
+        return false;
+      BuildMI(MBB, MI, MIMD, TII.get(TargetOpcode::COPY), Dst).addReg(Tmp);
       if (!constrainReg(Dst, DstTy, RBI, *MRI))
         return false;
     }

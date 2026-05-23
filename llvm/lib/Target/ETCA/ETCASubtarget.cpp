@@ -30,11 +30,11 @@ using namespace llvm;
 
 std::string ETCASubtarget::buildDataLayoutString(unsigned WordSize,
                                                  unsigned PtrSize) {
-  // Format: "e-m:e-p:PS:PS-i8:8-i16:16-i32:32-i64:64-a:0-n8:16"
+  // Format: "e-m:e-p:PS:PS-i8:8-i16:16-i32:32-i64:64-f32:32-f64:64-a:0-n8:16"
   // where PS is the pointer size.
-  // For 16-bit word size, i32 and i64 are not natively aligned (they are
-  // 16-bit). For 32-bit word size, i64 is not natively aligned. For 64-bit word
-  // size, everything is natively aligned.
+  // For 16-bit word size, i32/i64/f32/f64 are not natively aligned (they are
+  // 16-bit). For 32-bit word size, i64/f64 are not natively aligned. For 64-bit
+  // word size, everything is natively aligned.
   //
   // Key: i32:WS means i32 is WS-bit aligned in memory (where WS = WordSize).
   // The pointer size determines p:PS:PS.
@@ -58,12 +58,27 @@ std::string ETCASubtarget::buildDataLayoutString(unsigned WordSize,
   else
     OS << "-i32:16"; // i32 is 16-bit aligned on 16-bit machines
 
-  if (WordSize >= 64)
+  if (WordSize >= 64) {
     OS << "-i64:64";
-  else if (WordSize >= 32)
+    OS << "-i128:128"; // i128 naturally aligned on 64-bit machines
+  } else if (WordSize >= 32)
     OS << "-i64:32"; // i64 is 32-bit aligned on 32-bit machines
   else
     OS << "-i64:16"; // i64 is 16-bit aligned on 16-bit machines
+
+  // Float/double alignments follow the same logic as integers:
+  // aligned to min(word_size, type_size).
+  if (WordSize >= 32)
+    OS << "-f32:32";
+  else
+    OS << "-f32:16"; // f32 is 16-bit aligned on 16-bit machines
+
+  if (WordSize >= 64)
+    OS << "-f64:64";
+  else if (WordSize >= 32)
+    OS << "-f64:32"; // f64 is 32-bit aligned on 32-bit machines
+  else
+    OS << "-f64:16"; // f64 is 16-bit aligned on 16-bit machines
 
   OS << "-a:0"    // aggregate alignment 0 = use natural alignment
      << "-n8:16"; // native integer widths: 8, 16 bits

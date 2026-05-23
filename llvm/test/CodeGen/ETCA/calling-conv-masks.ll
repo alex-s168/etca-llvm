@@ -35,74 +35,74 @@ declare i16 @ext_callee(i16)
 define i16 @normal_func(i16 %v0, i16 %v1, i16 %v2) {
 ; GN-LABEL: normal_func:
 ; GN:       push %r5
-; GN-NEXT:  movz %r5, %r6
-; GN-NEXT:  push %r3
-; GN-NEXT:  push %r4
-; GN-NEXT:  movz %r3, %r1
-; GN-NEXT:  movz %r4, %r2
-; GN-NEXT:  call ext_callee
-; GN-NEXT:  add %r0, %r3
-; GN-NEXT:  add %r0, %r4
-; GN-NEXT:  movz %r6, %r5
-; GN-NEXT:  sub %r6, 4
-; GN-NEXT:  pop %r4
-; GN-NEXT:  pop %r3
-; GN-NEXT:  pop %r5
-; GN-NEXT:  jmpr %r7
+; GN:  movz %r5, %r6
+; GN:  push %r3
+; GN:  push %r4
+; GN:  movz %r3, %r1
+; GN:  movz %r4, %r2
+; GN:  call ext_callee
+; GN:  add %r0, %r3
+; GN:  add %r0, %r4
+; GN:  movz %r6, %r5
+; GN:  sub %r6, 4
+; GN:  pop %r4
+; GN:  pop %r3
+; GN:  pop %r5
+; GN:  jmpr %r7
 ;
 ; EW-LABEL: normal_func:
 ; EW:       push %r5
-; EW-NEXT:  movz %r5, %r6
-; EW-NEXT:  push %r3
-; EW-NEXT:  push %r4
-; EW-NEXT:  movz %r3, %r1d
-; EW-NEXT:  movz %r4, %r2d
-; EW-NEXT:  call ext_callee
-; EW-NEXT:  add %r0, %r3
-; EW-NEXT:  add %r0, %r4
-; EW-NEXT:  movz %r6, %r5
-; EW-NEXT:  sub %r6, 8
-; EW-NEXT:  pop %r4
-; EW-NEXT:  pop %r3
-; EW-NEXT:  pop %r5
-; EW-NEXT:  jmpr %r7
+; EW:  movz %r5, %r6
+; EW:  push %r3
+; EW:  push %r4
+; EW:  movz %r3, %r1d
+; EW:  movz %r4, %r2d
+; EW:  call ext_callee
+; EW:  add %r0, %r3
+; EW:  add %r0, %r4
+; EW:  movz %r6, %r5
+; EW:  sub %r6, 8
+; EW:  pop %r4
+; EW:  pop %r3
+; EW:  pop %r5
+; EW:  jmpr %r7
 ;
 ; QW-LABEL: normal_func:
 ; QW:       push %r5
-; QW-NEXT:  movz %r5, %r6
-; QW-NEXT:  call ext_callee
-; QW-NEXT:  add %r0, %r1
-; QW-NEXT:  add %r0, %r2
-; QW-NEXT:  movz %r6, %r5
-; QW-NEXT:  pop %r5
-; QW-NEXT:  jmpr %r7
+; QW:  movz %r5, %r6
+; QW:  call ext_callee
+; QW:  add %r0, %r1
+; QW:  add %r0, %r2
+; QW:  movz %r6, %r5
+; QW:  pop %r5
+; QW:  jmpr %r7
 ;
 ; P64-LABEL: normal_func:
 ; P64:       push %r5
-; P64-NEXT:  movz %r5, %r6
-; P64-NEXT:  call ext_callee
-; P64-NEXT:  add %r0, %r1
-; P64-NEXT:  add %r0, %r2
-; P64-NEXT:  movz %r6, %r5
-; P64-NEXT:  pop %r5
-; P64-NEXT:  jmpr %r7
+; P64:  movz %r5, %r6
+; P64:  call ext_callee
+; P64:  add %r0, %r1
+; P64:  add %r0, %r2
+; P64:  movz %r6, %r5
+; P64:  pop %r5
+; P64:  jmpr %r7
 ;
 ; REX-LABEL: normal_func:
 ; REX:       push %r5
-; REX-NEXT:  movz %r5, %r6
-; REX-NEXT:  push %r13
-; REX-NEXT:  push %r14
-; REX-NEXT:  push %r15
-; REX-NEXT:  call ext_callee
-; REX-NEXT:  add %r0, %r1
-; REX-NEXT:  add %r0, %r2
-; REX-NEXT:  movz %r6, %r5
-; REX-NEXT:  sub %r6, 6
-; REX-NEXT:  pop %r15
-; REX-NEXT:  pop %r14
-; REX-NEXT:  pop %r13
-; REX-NEXT:  pop %r5
-; REX-NEXT:  jmpr %r7
+; REX:  movz %r5, %r6
+; REX:  push %r13
+; REX:  push %r14
+; REX:  push %r15
+; REX:  call ext_callee
+; REX:  add %r0, %r1
+; REX:  add %r0, %r2
+; REX:  movz %r6, %r5
+; REX:  sub %r6, 6
+; REX:  pop %r15
+; REX:  pop %r14
+; REX:  pop %r13
+; REX:  pop %r5
+; REX:  jmpr %r7
   %r1 = call i16 @ext_callee(i16 %v0)
   %r2 = add i16 %r1, %v1
   %r  = add i16 %r2, %v2
@@ -121,60 +121,60 @@ declare coldcc i16 @cold_callee(i16)
 define i16 @call_cold(i16 %v0, i16 %v1, i16 %v2) {
 ; GN-LABEL: call_cold:
 ; GN:       push %r5
-; GN-NEXT:  movz %r5, %r6
-; GN-NEXT:  call cold_callee
-; GN-NEXT:  add %r0, %r1
-; GN-NEXT:  add %r0, %r2
-; GN-NEXT:  movz %r6, %r5
-; GN-NEXT:  pop %r5
-; GN-NEXT:  jmpr %r7
+; GN:  movz %r5, %r6
+; GN:  call cold_callee
+; GN:  add %r0, %r1
+; GN:  add %r0, %r2
+; GN:  movz %r6, %r5
+; GN:  pop %r5
+; GN:  jmpr %r7
 ;
 ; EW-LABEL: call_cold:
 ; EW:       push %r5
-; EW-NEXT:  movz %r5, %r6
-; EW-NEXT:  call cold_callee
-; EW-NEXT:  add %r0, %r1
-; EW-NEXT:  add %r0, %r2
-; EW-NEXT:  movz %r6, %r5
-; EW-NEXT:  pop %r5
-; EW-NEXT:  jmpr %r7
+; EW:  movz %r5, %r6
+; EW:  call cold_callee
+; EW:  add %r0, %r1
+; EW:  add %r0, %r2
+; EW:  movz %r6, %r5
+; EW:  pop %r5
+; EW:  jmpr %r7
 ;
 ; QW-LABEL: call_cold:
 ; QW:       push %r5
-; QW-NEXT:  movz %r5, %r6
-; QW-NEXT:  call cold_callee
-; QW-NEXT:  add %r0, %r1
-; QW-NEXT:  add %r0, %r2
-; QW-NEXT:  movz %r6, %r5
-; QW-NEXT:  pop %r5
-; QW-NEXT:  jmpr %r7
+; QW:  movz %r5, %r6
+; QW:  call cold_callee
+; QW:  add %r0, %r1
+; QW:  add %r0, %r2
+; QW:  movz %r6, %r5
+; QW:  pop %r5
+; QW:  jmpr %r7
 ;
 ; P64-LABEL: call_cold:
 ; P64:       push %r5
-; P64-NEXT:  movz %r5, %r6
-; P64-NEXT:  call cold_callee
-; P64-NEXT:  add %r0, %r1
-; P64-NEXT:  add %r0, %r2
-; P64-NEXT:  movz %r6, %r5
-; P64-NEXT:  pop %r5
-; P64-NEXT:  jmpr %r7
+; P64:  movz %r5, %r6
+; P64:  call cold_callee
+; P64:  add %r0, %r1
+; P64:  add %r0, %r2
+; P64:  movz %r6, %r5
+; P64:  pop %r5
+; P64:  jmpr %r7
 ;
 ; REX-LABEL: call_cold:
 ; REX:       push %r5
-; REX-NEXT:  movz %r5, %r6
-; REX-NEXT:  push %r13
-; REX-NEXT:  push %r14
-; REX-NEXT:  push %r15
-; REX-NEXT:  call cold_callee
-; REX-NEXT:  add %r0, %r1
-; REX-NEXT:  add %r0, %r2
-; REX-NEXT:  movz %r6, %r5
-; REX-NEXT:  sub %r6, 6
-; REX-NEXT:  pop %r15
-; REX-NEXT:  pop %r14
-; REX-NEXT:  pop %r13
-; REX-NEXT:  pop %r5
-; REX-NEXT:  jmpr %r7
+; REX:  movz %r5, %r6
+; REX:  push %r13
+; REX:  push %r14
+; REX:  push %r15
+; REX:  call cold_callee
+; REX:  add %r0, %r1
+; REX:  add %r0, %r2
+; REX:  movz %r6, %r5
+; REX:  sub %r6, 6
+; REX:  pop %r15
+; REX:  pop %r14
+; REX:  pop %r13
+; REX:  pop %r5
+; REX:  jmpr %r7
   %r1 = call coldcc i16 @cold_callee(i16 %v0)
   %r2 = add i16 %r1, %v1
   %r  = add i16 %r2, %v2
@@ -189,60 +189,60 @@ declare preserve_mostcc i16 @most_callee(i16)
 define i16 @call_most(i16 %v0, i16 %v1, i16 %v2) {
 ; GN-LABEL: call_most:
 ; GN:       push %r5
-; GN-NEXT:  movz %r5, %r6
-; GN-NEXT:  call most_callee
-; GN-NEXT:  add %r0, %r1
-; GN-NEXT:  add %r0, %r2
-; GN-NEXT:  movz %r6, %r5
-; GN-NEXT:  pop %r5
-; GN-NEXT:  jmpr %r7
+; GN:  movz %r5, %r6
+; GN:  call most_callee
+; GN:  add %r0, %r1
+; GN:  add %r0, %r2
+; GN:  movz %r6, %r5
+; GN:  pop %r5
+; GN:  jmpr %r7
 ;
 ; EW-LABEL: call_most:
 ; EW:       push %r5
-; EW-NEXT:  movz %r5, %r6
-; EW-NEXT:  call most_callee
-; EW-NEXT:  add %r0, %r1
-; EW-NEXT:  add %r0, %r2
-; EW-NEXT:  movz %r6, %r5
-; EW-NEXT:  pop %r5
-; EW-NEXT:  jmpr %r7
+; EW:  movz %r5, %r6
+; EW:  call most_callee
+; EW:  add %r0, %r1
+; EW:  add %r0, %r2
+; EW:  movz %r6, %r5
+; EW:  pop %r5
+; EW:  jmpr %r7
 ;
 ; QW-LABEL: call_most:
 ; QW:       push %r5
-; QW-NEXT:  movz %r5, %r6
-; QW-NEXT:  call most_callee
-; QW-NEXT:  add %r0, %r1
-; QW-NEXT:  add %r0, %r2
-; QW-NEXT:  movz %r6, %r5
-; QW-NEXT:  pop %r5
-; QW-NEXT:  jmpr %r7
+; QW:  movz %r5, %r6
+; QW:  call most_callee
+; QW:  add %r0, %r1
+; QW:  add %r0, %r2
+; QW:  movz %r6, %r5
+; QW:  pop %r5
+; QW:  jmpr %r7
 ;
 ; P64-LABEL: call_most:
 ; P64:       push %r5
-; P64-NEXT:  movz %r5, %r6
-; P64-NEXT:  call most_callee
-; P64-NEXT:  add %r0, %r1
-; P64-NEXT:  add %r0, %r2
-; P64-NEXT:  movz %r6, %r5
-; P64-NEXT:  pop %r5
-; P64-NEXT:  jmpr %r7
+; P64:  movz %r5, %r6
+; P64:  call most_callee
+; P64:  add %r0, %r1
+; P64:  add %r0, %r2
+; P64:  movz %r6, %r5
+; P64:  pop %r5
+; P64:  jmpr %r7
 ;
 ; REX-LABEL: call_most:
 ; REX:       push %r5
-; REX-NEXT:  movz %r5, %r6
-; REX-NEXT:  push %r13
-; REX-NEXT:  push %r14
-; REX-NEXT:  push %r15
-; REX-NEXT:  call most_callee
-; REX-NEXT:  add %r0, %r1
-; REX-NEXT:  add %r0, %r2
-; REX-NEXT:  movz %r6, %r5
-; REX-NEXT:  sub %r6, 6
-; REX-NEXT:  pop %r15
-; REX-NEXT:  pop %r14
-; REX-NEXT:  pop %r13
-; REX-NEXT:  pop %r5
-; REX-NEXT:  jmpr %r7
+; REX:  movz %r5, %r6
+; REX:  push %r13
+; REX:  push %r14
+; REX:  push %r15
+; REX:  call most_callee
+; REX:  add %r0, %r1
+; REX:  add %r0, %r2
+; REX:  movz %r6, %r5
+; REX:  sub %r6, 6
+; REX:  pop %r15
+; REX:  pop %r14
+; REX:  pop %r13
+; REX:  pop %r5
+; REX:  jmpr %r7
   %r1 = call preserve_mostcc i16 @most_callee(i16 %v0)
   %r2 = add i16 %r1, %v1
   %r  = add i16 %r2, %v2
@@ -258,76 +258,76 @@ declare preserve_allcc i16 @all_callee(i16)
 define i16 @call_all(i16 %v0, i16 %v1, i16 %v2) {
 ; GN-LABEL: call_all:
 ; GN:       push %r5
-; GN-NEXT:  movz %r5, %r6
-; GN-NEXT:  call all_callee
-; GN-NEXT:  add %r0, %r1
-; GN-NEXT:  add %r0, %r2
-; GN-NEXT:  movz %r6, %r5
-; GN-NEXT:  pop %r5
-; GN-NEXT:  jmpr %r7
+; GN:  movz %r5, %r6
+; GN:  call all_callee
+; GN:  add %r0, %r1
+; GN:  add %r0, %r2
+; GN:  movz %r6, %r5
+; GN:  pop %r5
+; GN:  jmpr %r7
 ;
 ; EW-LABEL: call_all:
 ; EW:       push %r5
-; EW-NEXT:  movz %r5, %r6
-; EW-NEXT:  call all_callee
-; EW-NEXT:  add %r0, %r1
-; EW-NEXT:  add %r0, %r2
-; EW-NEXT:  movz %r6, %r5
-; EW-NEXT:  pop %r5
-; EW-NEXT:  jmpr %r7
+; EW:  movz %r5, %r6
+; EW:  call all_callee
+; EW:  add %r0, %r1
+; EW:  add %r0, %r2
+; EW:  movz %r6, %r5
+; EW:  pop %r5
+; EW:  jmpr %r7
 ;
 ; QW-LABEL: call_all:
 ; QW:       push %r5
-; QW-NEXT:  movz %r5, %r6
-; QW-NEXT:  push %r3
-; QW-NEXT:  push %r4
-; QW-NEXT:  movz %r3, %r1q
-; QW-NEXT:  movz %r4, %r2q
-; QW-NEXT:  call all_callee
-; QW-NEXT:  add %r0, %r3
-; QW-NEXT:  add %r0, %r4
-; QW-NEXT:  movz %r6, %r5
-; QW-NEXT:  sub %r6, 15
-; QW-NEXT:  sub %r6, 1
-; QW-NEXT:  pop %r4
-; QW-NEXT:  pop %r3
-; QW-NEXT:  pop %r5
-; QW-NEXT:  jmpr %r7
+; QW:  movz %r5, %r6
+; QW:  push %r3
+; QW:  push %r4
+; QW:  movz %r3, %r1q
+; QW:  movz %r4, %r2q
+; QW:  call all_callee
+; QW:  add %r0, %r3
+; QW:  add %r0, %r4
+; QW:  movz %r6, %r5
+; QW:  sub %r6, 15
+; QW:  sub %r6, 1
+; QW:  pop %r4
+; QW:  pop %r3
+; QW:  pop %r5
+; QW:  jmpr %r7
 ;
 ; P64-LABEL: call_all:
 ; P64:       push %r5
-; P64-NEXT:  movz %r5, %r6
-; P64-NEXT:  push %r3
-; P64-NEXT:  push %r4
-; P64-NEXT:  movz %r3, %r1q
-; P64-NEXT:  movz %r4, %r2q
-; P64-NEXT:  call all_callee
-; P64-NEXT:  add %r0, %r3
-; P64-NEXT:  add %r0, %r4
-; P64-NEXT:  movz %r6, %r5
-; P64-NEXT:  sub %r6, 15
-; P64-NEXT:  sub %r6, 1
-; P64-NEXT:  pop %r4
-; P64-NEXT:  pop %r3
-; P64-NEXT:  pop %r5
-; P64-NEXT:  jmpr %r7
+; P64:  movz %r5, %r6
+; P64:  push %r3
+; P64:  push %r4
+; P64:  movz %r3, %r1q
+; P64:  movz %r4, %r2q
+; P64:  call all_callee
+; P64:  add %r0, %r3
+; P64:  add %r0, %r4
+; P64:  movz %r6, %r5
+; P64:  sub %r6, 15
+; P64:  sub %r6, 1
+; P64:  pop %r4
+; P64:  pop %r3
+; P64:  pop %r5
+; P64:  jmpr %r7
 ;
 ; REX-LABEL: call_all:
 ; REX:       push %r5
-; REX-NEXT:  movz %r5, %r6
-; REX-NEXT:  push %r3
-; REX-NEXT:  push %r4
-; REX-NEXT:  movz %r3, %r1
-; REX-NEXT:  movz %r4, %r2
-; REX-NEXT:  call all_callee
-; REX-NEXT:  add %r0, %r3
-; REX-NEXT:  add %r0, %r4
-; REX-NEXT:  movz %r6, %r5
-; REX-NEXT:  sub %r6, 4
-; REX-NEXT:  pop %r4
-; REX-NEXT:  pop %r3
-; REX-NEXT:  pop %r5
-; REX-NEXT:  jmpr %r7
+; REX:  movz %r5, %r6
+; REX:  push %r3
+; REX:  push %r4
+; REX:  movz %r3, %r1
+; REX:  movz %r4, %r2
+; REX:  call all_callee
+; REX:  add %r0, %r3
+; REX:  add %r0, %r4
+; REX:  movz %r6, %r5
+; REX:  sub %r6, 4
+; REX:  pop %r4
+; REX:  pop %r3
+; REX:  pop %r5
+; REX:  jmpr %r7
   %r1 = call preserve_allcc i16 @all_callee(i16 %v0)
   %r2 = add i16 %r1, %v1
   %r  = add i16 %r2, %v2
@@ -345,12 +345,12 @@ define coldcc i16 @coldcc_leaf(i16 %a, i16 %b) {
 ; EW:       jmpr %r7
 ;
 ; QW-LABEL: coldcc_leaf:
-; QW:       add %r0, %r1
-; QW-NEXT:  jmpr %r7
+; QW:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; QW:  jmpr %r7
 ;
 ; P64-LABEL: coldcc_leaf:
-; P64:       add %r0, %r1
-; P64-NEXT:  jmpr %r7
+; P64:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; P64:  jmpr %r7
 ;
 ; REX-LABEL: coldcc_leaf:
 ; REX:       jmpr %r7

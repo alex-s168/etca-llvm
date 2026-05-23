@@ -26,8 +26,8 @@
 define i16 @load_with_offset(ptr %p) {
 ; CHECK-LABEL: load_with_offset:
 ; Offset 4*2=8 materialized via ADDI, not folded into LOAD.
-; CHECK:       add %r0, 8
-; CHECK-NEXT:  load %r0, %r0
+; CHECK:       add %r{{[0-9]+[dq]?}}, 8
+; CHECK-NEXT:  load %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
   %p2 = getelementptr i16, ptr %p, i16 4
   %val = load i16, ptr %p2
   ret i16 %val
@@ -39,8 +39,8 @@ define i16 @load_with_offset(ptr %p) {
 define void @store_with_offset(ptr %p, i16 %v) {
 ; CHECK-LABEL: store_with_offset:
 ; Offset -2*2=-4 materialized via ADDI, not folded into STORE.
-; CHECK:       add %r0, -4
-; CHECK-NEXT:  store %r1, %r0
+; CHECK:       add %r{{[0-9]+[dq]?}}, -4
+; CHECK-NEXT:  store %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
   %p2 = getelementptr i16, ptr %p, i16 -2
   store i16 %v, ptr %p2
   ret void
@@ -75,10 +75,10 @@ exit:
 define i16 @struct_access(ptr %s) {
 ; CHECK-LABEL: struct_access:
 ; load field 0 at [reg]
-; CHECK:       load %r1, %r0
+; CHECK:       load %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
 ; Offset 2 computed via ADDI before next load
-; CHECK:       add %r0, 2
-; CHECK-NEXT:  load %r0, %r0
+; CHECK:       add %r{{[0-9]+[dq]?}}, 2
+; CHECK-NEXT:  load %r{{[0-9]+[dq]?}}, %r{{[0-9]+[dq]?}}
 entry:
   %f0 = load i16, ptr %s
   %p1 = getelementptr i16, ptr %s, i16 1

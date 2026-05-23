@@ -525,6 +525,23 @@ class EInstLoadRR32<string asmstr, list<dag> pattern>
 class EInstLoadRR64<string asmstr, list<dag> pattern>
     : EInstLoadRR<0b11, GPR64, GPR64, asmstr, pattern>;
 
+// Mixed-width loads: narrow data, wider address pointer
+// 8-bit load with 32-bit addr (SS=00, byte ext)
+class EInstLoadRR8P32<string asmstr, list<dag> pattern>
+    : EInstLoadRR<0b00, GPR, GPR32, asmstr, pattern>;
+// 8-bit load with 64-bit addr (SS=00, byte ext)
+class EInstLoadRR8P64<string asmstr, list<dag> pattern>
+    : EInstLoadRR<0b00, GPR, GPR64, asmstr, pattern>;
+// 16-bit load with 32-bit addr (SS=01)
+class EInstLoadRR16P32<string asmstr, list<dag> pattern>
+    : EInstLoadRR<0b01, GPR, GPR32, asmstr, pattern>;
+// 16-bit load with 64-bit addr (SS=01)
+class EInstLoadRR16P64<string asmstr, list<dag> pattern>
+    : EInstLoadRR<0b01, GPR, GPR64, asmstr, pattern>;
+// 32-bit load with 64-bit addr (SS=10, DW ext)
+class EInstLoadRR32P64<string asmstr, list<dag> pattern>
+    : EInstLoadRR<0b10, GPR32, GPR64, asmstr, pattern>;
+
 // Generic RR-format store base — parameterized by value and address register
 // classes so the address register can match the pointer width.
 class EInstStoreRRBase<bits<2> ss, RegisterClass ValRC, RegisterClass AddrRC,
@@ -561,6 +578,23 @@ class EInstStoreRR32<string asmstr, list<dag> pattern>
 // 64-bit store (SS=11) — 64-bit value, 64-bit addr
 class EInstStoreRR64<string asmstr, list<dag> pattern>
     : EInstStoreRRBase<0b11, GPR64, GPR64, asmstr, pattern>;
+
+// Mixed-width stores: narrow data, wider address pointer
+// 8-bit store with 32-bit addr (SS=00, byte ext)
+class EInstStoreRR8P32<string asmstr, list<dag> pattern>
+    : EInstStoreRRBase<0b00, GPR, GPR32, asmstr, pattern>;
+// 8-bit store with 64-bit addr (SS=00, byte ext)
+class EInstStoreRR8P64<string asmstr, list<dag> pattern>
+    : EInstStoreRRBase<0b00, GPR, GPR64, asmstr, pattern>;
+// 16-bit store with 32-bit addr (SS=01)
+class EInstStoreRR16P32<string asmstr, list<dag> pattern>
+    : EInstStoreRRBase<0b01, GPR, GPR32, asmstr, pattern>;
+// 16-bit store with 64-bit addr (SS=01)
+class EInstStoreRR16P64<string asmstr, list<dag> pattern>
+    : EInstStoreRRBase<0b01, GPR, GPR64, asmstr, pattern>;
+// 32-bit store with 64-bit addr (SS=10, DW ext)
+class EInstStoreRR32P64<string asmstr, list<dag> pattern>
+    : EInstStoreRRBase<0b10, GPR32, GPR64, asmstr, pattern>;
 
 // Compare/test instruction format — takes SS parameter for width.
 // SS=01 (word, base), SS=10 (dword, DW), SS=11 (qword, QW)
