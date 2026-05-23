@@ -58,28 +58,33 @@ include "ETCASchedule.td"
 //===----------------------------------------------------------------------===//
 // ETCA processors supported.
 //
-// Each processor model specifies a word + pointer width combination.
-// The minimum target is base+saf with 16-bit word + 16-bit pointer.
+// The generic model provides base+saf with 16-bit word + 16-bit pointer.
+// Other CPU names are backward-compatibility aliases for common feature
+// combinations.  Users can also select word/pointer sizes via -mattr:
+//   Word size:  +16bit | +32bit | +64bit
+//   Ptr size:   +ptr16 | +ptr32 | +ptr64
+//   Extensions: +dw, +qw, +byte, +rex, +dwas, +qwas
+//
+// Example: 64-bit word + 64-bit pointer → -mattr=+64bit,+ptr64,+dw,+qw
+// Example: 32-bit word + 32-bit pointer → -mattr=+32bit,+ptr32,+dw
+// Example: 64-bit word + 32-bit pointer → -mattr=+64bit,+ptr32,+dw,+qw
 //===----------------------------------------------------------------------===//
 
 // Base: 16-bit word, 16-bit pointer, SAF extension
 def : ProcessorModel<"generic", ETCASchedModel,
     [Feature16Bit, FeaturePtr16, FeatureSAF, FeatureByte]>;
 
-// 32-bit word, 32-bit pointer (DW + DWAS)
+// Backward-compatibility aliases for common feature combinations.
+// These expand to the correct features so -mcpu=etca32 etc. still work.
 def : ProcessorModel<"etca32", ETCASchedModel,
     [Feature32Bit, FeaturePtr32, FeatureSAF, FeatureDW, FeatureDWAS, FeatureByte]>;
 
-// 32-bit word, 64-bit pointer (DW + QWAS; QWAS requires QW, meaning
-// registers are 64-bit but word size is 32 for default operations)
 def : ProcessorModel<"etca32p64", ETCASchedModel,
     [Feature64Bit, FeaturePtr64, FeatureSAF, FeatureDW, FeatureQW, FeatureQWAS, FeatureByte]>;
 
-// 64-bit word, 32-bit pointer (QW + DWAS; note: DW is implied by QW)
 def : ProcessorModel<"etca64p32", ETCASchedModel,
     [Feature64Bit, FeaturePtr32, FeatureSAF, FeatureDW, FeatureQW, FeatureDWAS, FeatureByte]>;
 
-// 64-bit word, 64-bit pointer (QW + QWAS)
 def : ProcessorModel<"etca64", ETCASchedModel,
     [Feature64Bit, FeaturePtr64, FeatureSAF, FeatureDW, FeatureQW, FeatureQWAS, FeatureByte]>;
 

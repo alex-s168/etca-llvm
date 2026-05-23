@@ -83,22 +83,25 @@ build-etca/bin/llvm-lit llvm/test/*/ETCA/ clang/test/*/ETCA/ clang/test/*/etca-*
 
 ### 2.1 Target Triple
 
-ETCA uses the target triple `etca-unknown-elf`.  Pick the CPU model with `-mcpu=`;
-the triple stays the same regardless:
+ETCA uses the target triple `etca-unknown-elf`.  The word size, pointer size and
+extensions are selected by combining `-mcpu=generic` with `-mattr=` feature flags:
 
 ```sh
-# 16-bit word, 16-bit pointer (generic)
+# 16-bit word, 16-bit pointer (default: no extra flags needed)
 clang --target=etca-unknown-elf -mcpu=generic -c file.c
 
 # 32-bit word, 32-bit pointer
-clang --target=etca-unknown-elf -mcpu=etca32 -c file.c
+clang --target=etca-unknown-elf -mcpu=generic -mattr=+32bit,+ptr32,+dw -c file.c
 
 # 64-bit word, 64-bit pointer
-clang --target=etca-unknown-elf -mcpu=etca64 -c file.c
+clang --target=etca-unknown-elf -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -c file.c
+
+# 64-bit word, 32-bit pointer
+clang --target=etca-unknown-elf -mcpu=generic -mattr=+64bit,+ptr32,+dw,+qw -c file.c
 ```
 
 The code generation data layout (pointer size, type sizes) is computed from the
-`-mcpu=` setting, so you only need `-elf` without suffixes.
+feature flags, so you only need `-elf` without suffixes.
 
 The triple variants `etca-unknown-elf32` and `etca-unknown-elf64` exist only for
 the assembler (llvm-mc) to pick the correct pointer-sensitive defaults when invoked
@@ -106,20 +109,25 @@ without a `-mcpu=` flag.  You do not need them when using clang.
 
 ### 2.2 CPU Models (-mcpu)
 
-Five CPU models are supported:
+ETCA provides a single CPU model (`generic`) with word size, pointer size, and
+extension features selected via `-mattr=`.  There are no separate CPU models for
+each width combination.
 
-| `-mcpu=` | Word Size | Pointer Size | Enabled Extensions | Description |
-|----------|-----------|--------------|---------------------|-------------|
-| `generic` | 16-bit | 16-bit | SAF, BYTE | Base ISA + stack/functions |
-| `etca32` | 32-bit | 32-bit | SAF, BYTE, DW, DWAS | 32-bit everything |
-| `etca32p64` | 64-bit | 64-bit | SAF, BYTE, DW, QW, QWAS | 32-bit ops, 64-bit addr |
-| `etca64p32` | 64-bit | 32-bit | SAF, BYTE, DW, QW, DWAS | 64-bit ops, 32-bit addr |
-| `etca64` | 64-bit | 64-bit | SAF, BYTE, DW, QW, QWAS | Full 64-bit |
+| `-mcpu=` | Default Features | Description |
+|----------|------------------|-------------|
+| `generic` | 16-bit word, 16-bit ptr, SAF, BYTE | Base ISA + stack/functions |
 
-The default CPU is `generic` (16-bit). To use a different CPU:
+To select other word / pointer combinations, use `-mattr=` features (see §2.3):
+
 ```sh
-clang --target=etca-unknown-elf -mcpu=etca32 -c file.c
-clang --target=etca-unknown-elf -mcpu=etca64 -c file.c
+# 32-bit word + 32-bit pointer
+clang --target=etca-unknown-elf -mcpu=generic -mattr=+32bit,+ptr32,+dw -c file.c
+
+# 64-bit word + 64-bit pointer
+clang --target=etca-unknown-elf -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -c file.c
+
+# 64-bit word + 32-bit pointer
+clang --target=etca-unknown-elf -mcpu=generic -mattr=+64bit,+ptr32,+dw,+qw -c file.c
 ```
 
 ### 2.3 Extension Flags (-mattr)
@@ -157,8 +165,10 @@ clang --target=etca-unknown-elf -mcpu=generic -mattr=+rex,-byte -c file.c
 
 **Important notes:**
 - `-mcpu=generic` enables SAF, BYTE by default. It does NOT enable REX (you need `-mattr=+rex`).
-- DW and QW are automatically enabled by CPU models that need them.
-- The pointer size from the target triple should match the CPU model (use `elf32` for 32-bit, `elf64` for 64-bit).
+- When using `+64bit`, also add `+qw` to enable 64-bit operations (required for 64-bit pointers).
+- When using `+32bit`, also add `+dw` to enable 32-bit operations.
+- The ELF format (32-bit vs 64-bit) is selected automatically based on the pointer size:
+  `+ptr32` → ELF32, `+ptr64` → ELF64.
 
 ### 2.4 Preprocessor Defines
 
@@ -176,22 +186,13 @@ __ETCA_HAS_SAF__       // 1 — SAF extension (always on supported CPUs)
 __ETCA_HAS_BYTE__      // 1 — BYTE extension (always on supported CPUs)
 ```
 
-**CPU-specific macros:**
+**CPU-specific macros (backward compatibility aliases):**
 ```c
-// For -mcpu=generic:
-__ETCA_GENERIC__
-
-// For -mcpu=etca32:
-__ETCA32__
-
-// For -mcpu=etca32p64:
-__ETCA32P64__
-
-// For -mcpu=etca64p32:
-__ETCA64P32__
-
-// For -mcpu=etca64:
-__ETCA64__
+__ETCA_GENERIC__       // Defined for -mcpu=generic
+__ETCA32__             // Defined when word size >= 32
+__ETCA64__             // Defined when word size >= 64
+__ETCA32P64__          // Defined when word size >= 64 and ptr size == 64
+__ETCA64P32__          // Defined when word size == 64 and ptr size == 32
 ```
 
 **Optional extension macros:**
@@ -205,11 +206,13 @@ __ETCA_HAS_REX__       // 1 — REX extension enabled (-mattr=+rex)
 
 **Type sizes** (follow the word/pointer size):
 
-| CPU | `sizeof(int)` | `sizeof(long)` | `sizeof(long long)` | `sizeof(void*)` | `sizeof(size_t)` |
-|-----|--------------|----------------|---------------------|-----------------|-------------------|
-| generic | 2 | 4 | 8 | 2 | 4 |
-| etca32 | 4 | 4 | 8 | 4 | 4 |
-| etca64 | 4 | 8 | 8 | 8 | 8 |
+| Word Size | Ptr Size | `sizeof(int)` | `sizeof(long)` | `sizeof(long long)` | `sizeof(void*)` | `sizeof(size_t)` |
+|-----------|----------|--------------|----------------|---------------------|-----------------|-------------------|
+| 16-bit | 16-bit | 2 | 4 | 8 | 2 | 4 |
+| 32-bit | 32-bit | 4 | 4 | 8 | 4 | 4 |
+| 32-bit | 64-bit | 4 | 4 | 8 | 8 | 8 |
+| 64-bit | 32-bit | 4 | 8 | 8 | 4 | 4 |
+| 64-bit | 64-bit | 4 | 8 | 8 | 8 | 8 |
 
 `char` is **signed** by default on ETCA (matching binutils conventions).
 
@@ -261,14 +264,14 @@ For everyday assembly work, use `clang -c` — it handles the target triple, CPU
 model, and extension flags in one place:
 
 ```sh
-# Assemble a .s file into an object file
+# Assemble a .s file into an object file (16-bit default)
 clang --target=etca-unknown-elf -mcpu=generic -c file.s -o file.o
 
 # With REX extension
 clang --target=etca-unknown-elf -mcpu=generic -mattr=+rex -c file.s
 
-# 32-bit CPU
-clang --target=etca-unknown-elf -mcpu=etca32 -c file.s
+# 64-bit word, 64-bit pointer
+clang --target=etca-unknown-elf -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -c file.s
 
 # Generate assembly listing from C
 clang --target=etca-unknown-elf -mcpu=generic -S file.c -o file.s
@@ -318,20 +321,20 @@ clang --target=etca-unknown-elf -mcpu=generic -nostdlib -o program.elf program.c
 # With startup code and library (cr0.o + libc)
 clang --target=etca-unknown-elf -mcpu=generic program.c cr0.o -o program.elf
 
-# 64-bit
-clang --target=etca-unknown-elf -mcpu=etca64 -nostdlib -o program.elf program.c
-```
+# 64-bit word, 64-bit pointer
+clang --target=etca-unknown-elf -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -nostdlib -o program.elf program.c
 ```
 
-**Emulation flags by CPU model:**
+**Emulation flags by pointer size:**
 
-| CPU Model | LLD Flag | ELF Class |
-|-----------|----------|-----------|
-| generic (16-bit ptr) | `-m elf32etca` | ELF32 |
-| etca32 (32-bit ptr)  | `-m elf32etca` | ELF32 |
-| etca32p64 (64-bit ptr) | `-m elf64etca` | ELF64 |
-| etca64p32 (32-bit ptr) | `-m elf32etca` | ELF32 |
-| etca64 (64-bit ptr)  | `-m elf64etca` | ELF64 |
+The ELF class (32-bit or 64-bit) is selected automatically based on the pointer
+size feature.  You do not need to specify it manually.
+
+| Pointer Size Feature | LLD Flag | ELF Class |
+|----------------------|----------|-----------|
+| `+ptr16` (default) | `-m elf32etca` | ELF32 |
+| `+ptr32` | `-m elf32etca` | ELF32 |
+| `+ptr64` | `-m elf64etca` | ELF64 |
 
 **Important notes:**
 - ETCA is a **bare-metal target**. There is no operating system, so you need
@@ -354,15 +357,14 @@ clang --target=etca-unknown-elf -mcpu=generic -fuse-ld=bfd -nostdlib -o program.
 #   → invokes: ld.bfd -melf16_etca -o program.elf ...
 ```
 
-This works for all CPU models — clang passes the correct binutils emulation flag:
+This works for any feature combination — clang passes the correct binutils
+emulation flag based on the pointer size:
 
-| CPU Model | Binutils flag (`-fuse-ld=bfd`) |
-|-----------|-------------------------------|
-| generic (16-bit ptr) | `-melf16_etca` |
-| etca32 (32-bit ptr)  | `-melf32_etca` |
-| etca32p64 (64-bit ptr) | `-melf64_etca` |
-| etca64p32 (32-bit ptr) | `-melf32_etca` |
-| etca64 (64-bit ptr)  | `-melf64_etca` |
+| Pointer Size Feature | Binutils flag (`-fuse-ld=bfd`) |
+|----------------------|-------------------------------|
+| `+ptr16` (default) | `-melf16_etca` |
+| `+ptr32` | `-melf32_etca` |
+| `+ptr64` | `-melf64_etca` |
 
 If `ld.bfd` is not in your `$PATH`, the driver will report an error. Install
 the binutils toolchain or add its `bin/` directory to `$PATH`.

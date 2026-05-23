@@ -1,7 +1,7 @@
-; RUN: llc -march=etca -mcpu=etca32 < %s | FileCheck %s
-; RUN: llc -march=etca -mcpu=etca64 < %s | FileCheck %s
-; RUN: llc -march=etca -mcpu=etca32p64 < %s | FileCheck %s
-; RUN: llc -march=etca -mcpu=etca64p32 < %s | FileCheck %s
+; RUN: llc -march=etca -mcpu=generic -mattr=+32bit,+ptr32,+dw < %s | FileCheck %s
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw < %s | FileCheck %s
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw < %s | FileCheck %s
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr32,+dw,+qw < %s | FileCheck %s
 
 ;; ===========================================================================
 ;; ETCA 32-bit arithmetic tests — CPUs with DW extension

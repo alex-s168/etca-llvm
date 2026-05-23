@@ -19,10 +19,10 @@
 ; pointer increments.
 
 ; RUN: llc -march=etca -mcpu=generic -O1 < %s | FileCheck %s --check-prefix=GEN
-; RUN: llc -march=etca -mcpu=etca32 -O1 < %s | FileCheck %s --check-prefix=DW
-; RUN: llc -march=etca -mcpu=etca64 -O1 < %s | FileCheck %s --check-prefix=QW
-; RUN: llc -march=etca -mcpu=etca32p64 -O1 < %s | FileCheck %s --check-prefix=QW
-; RUN: llc -march=etca -mcpu=etca64p32 -O1 < %s | FileCheck %s --check-prefix=DW
+; RUN: llc -march=etca -mcpu=generic -mattr=+32bit,+ptr32,+dw -O1 < %s | FileCheck %s --check-prefix=DW
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -O1 < %s | FileCheck %s --check-prefix=QW
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -O1 < %s | FileCheck %s --check-prefix=QW
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr32,+dw,+qw -O1 < %s | FileCheck %s --check-prefix=DW
 
 ;; ===========================================================================
 ;; strcpy at -O1 — phi-node loop with GEP-based pointer increment
@@ -56,36 +56,46 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; GEN:       jmpr %r7
 ;
 ;; --- 32-bit pointer CPUs (etca32, etca64p32) ---
-;; Tight loop with dword-sized increment
+;; Uses 32-bit index register (r7d) for pointer increments.
 ; DW-LABEL: mystrcpy:
 ; DW:       push %r5
 ; DW:       movz %r5, %r6
 ; DW:       push %r3
+; DW:       push %r4
 ; DW:       movz %r2h, 0
-;; Loop: load byte from src, store to dest, increment both pointers
-; DW:       load %r3h, %r1h
-; DW:       store %r3h, %r7h
-; DW:       add %r1, 1
-; DW:       add %r7, 1
-; DW:       cmp %r{{[0-9]+}}{{h?}}, %r{{[0-9]+}}{{h?}}
+; DW:       movz %r7d, 0
+;; Loop: load byte from src, store to dest, increment index
+; DW:       movz %r3, %r1
+; DW:       add %r3, %r7d
+; DW:       movz %r4, %r0
+; DW:       add %r4, %r7d
+; DW:       load %r3h, %r3h
+; DW:       store %r3h, %r4h
+; DW:       add %r7d, 1
+; DW:       cmp %r3h, %r2h
 ; DW-NEXT:  beq
 ; DW-NEXT:  br
-;; Return: epilogue + jmpr
+;; Return: restore stack, pop, jmpr
 ; DW:       jmpr %r7
 ;
 ;; --- 64-bit pointer CPUs (etca64, etca32p64) ---
-;; Tight loop with qword-sized increment
+;; Uses 64-bit index register (r7q) for pointer increments.
 ; QW-LABEL: mystrcpy:
 ; QW:       push %r5
 ; QW:       movz %r5, %r6
 ; QW:       push %r3
+; QW:       push %r4
 ; QW:       movz %r2h, 0
-;; Loop: load byte from src, store to dest, increment both pointers
-; QW:       load %r3h, %r1h
-; QW:       store %r3h, %r7h
-; QW:       add %r1, 1
-; QW:       add %r7, 1
-; QW:       cmp %r{{[0-9]+}}{{h?}}, %r2{{h?}}
+; QW:       movz %r7q, 0
+;; Loop: load byte from src, store to dest, increment index
+; QW:       movz %r3, %r1
+; QW:       add %r3, %r7q
+; QW:       movz %r4, %r0
+; QW:       add %r4, %r7q
+; QW:       load %r3h, %r3h
+; QW:       store %r3h, %r4h
+; QW:       add %r7q, 1
+; QW:       cmp %r3h, %r2h
 ; QW-NEXT:  beq
 ; QW-NEXT:  br
 ;; Return

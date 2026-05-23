@@ -65,9 +65,13 @@ std::string ETCASubtarget::buildDataLayoutString(unsigned WordSize,
   else
     OS << "-i64:16"; // i64 is 16-bit aligned on 16-bit machines
 
-  OS << "-a:0"            // aggregate alignment 0 = use natural alignment
-     << "-n8:16"          // native integer widths: 8, 16 bits
-     << "-S" << WordSize; // stack alignment = register width (in bits)
+  OS << "-a:0"    // aggregate alignment 0 = use natural alignment
+     << "-n8:16"; // native integer widths: 8, 16 bits
+  if (WordSize >= 32)
+    OS << ":32"; // 32-bit native on 32/64-bit word machines
+  if (WordSize >= 64)
+    OS << ":64";          // 64-bit native on 64-bit word machines
+  OS << "-S" << WordSize; // stack alignment = register width (in bits)
 
   return Ret;
 }

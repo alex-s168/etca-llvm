@@ -119,8 +119,12 @@ void ETCATargetInfo::updateDataLayoutString() {
      << "-i64:" << (WordSize >= 64 ? 64 : (WordSize >= 32 ? 32 : 16));
 
   OS << "-a:0"                               // aggregate: natural alignment
-     << "-n8:16"                             // native integer widths
-     << "-S" << WordSize;                    // stack alignment in bits
+     << "-n8:16";                            // native integer widths
+  if (WordSize >= 32)
+    OS << ":32";
+  if (WordSize >= 64)
+    OS << ":64";
+  OS << "-S" << WordSize;                    // stack alignment in bits
 
   DataLayoutString = DL;
 }
@@ -138,7 +142,9 @@ void ETCATargetInfo::setWidthsFromCPU() {
     PtrSize = 32;
     break;
   case CK_ETCA32P64:
-    WordSize = 32;
+    // 64-bit registers (required for 64-bit address space via QWAS),
+    // 64-bit pointers, 32-bit C int width.
+    WordSize = 64;
     PtrSize = 64;
     break;
   case CK_ETCA64P32:

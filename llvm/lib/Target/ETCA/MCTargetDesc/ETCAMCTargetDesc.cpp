@@ -437,7 +437,8 @@ class ETCAAsmBackend : public MCAsmBackend {
 public:
   ETCAAsmBackend(const MCSubtargetInfo &STI, const MCTargetOptions &Options)
       : MCAsmBackend(llvm::endianness::little), Is64Bit(false) {
-    if (STI.hasFeature(ETCA::FeatureQWAS))
+    // Use 64-bit ELF when pointers are 64-bit (any CPU model with ptr64).
+    if (STI.hasFeature(ETCA::FeaturePtr64))
       Is64Bit = true;
   }
 

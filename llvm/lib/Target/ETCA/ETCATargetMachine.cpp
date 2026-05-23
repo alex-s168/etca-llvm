@@ -18,6 +18,7 @@
 
 #include "ETCA.h"
 #include "TargetInfo/ETCATargetInfo.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/GlobalISel/IRTranslator.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelect.h"
 #include "llvm/CodeGen/GlobalISel/Legalizer.h"
@@ -43,24 +44,46 @@ static Reloc::Model getEffectiveRelocModel(std::optional<Reloc::Model> RM) {
   return RM.value_or(Reloc::Static);
 }
 
-/// Build a DataLayout string from CPU name.
-/// Delegates to the authoritative buildDataLayoutString in ETCASubtarget.
-static std::string computeDataLayout(StringRef CPU) {
+/// Build a DataLayout string from the CPU name and feature string.
+/// Checks -mattr features first for +64bit/+32bit and +ptr64/+ptr32;
+/// falls back to the CPU name for backward compatibility with CPU
+/// aliases (etca32, etca64, etc.); finally defaults to 16+16.
+static std::string computeDataLayout(StringRef CPU, StringRef FS) {
   unsigned WordSize = 16;
   unsigned PtrSize = 16;
 
-  if (CPU == "etca32") {
-    WordSize = 32;
-    PtrSize = 32;
-  } else if (CPU == "etca32p64") {
-    WordSize = 32;
-    PtrSize = 64;
-  } else if (CPU == "etca64p32") {
-    WordSize = 64;
-    PtrSize = 32;
-  } else if (CPU == "etca64") {
-    WordSize = 64;
-    PtrSize = 64;
+  // Parse feature string for word/pointer size features.
+  // The FS format is "+feat1,-feat2,+feat3,..."
+  SmallVector<StringRef, 8> Features;
+  FS.split(Features, ',', -1, false);
+  for (StringRef F : Features) {
+    F = F.trim();
+    if (F == "+64bit")
+      WordSize = 64;
+    else if (F == "+32bit")
+      WordSize = 32;
+    else if (F == "+ptr64")
+      PtrSize = 64;
+    else if (F == "+ptr32")
+      PtrSize = 32;
+  }
+
+  // If features didn't specify sizes, fall back to CPU name for backward
+  // compatibility with ProcessorModel aliases (etca32, etca64, etc.).
+  if (WordSize == 16 && PtrSize == 16) {
+    if (CPU == "etca32") {
+      WordSize = 32;
+      PtrSize = 32;
+    } else if (CPU == "etca32p64") {
+      WordSize = 64;
+      PtrSize = 64;
+    } else if (CPU == "etca64p32") {
+      WordSize = 64;
+      PtrSize = 32;
+    } else if (CPU == "etca64") {
+      WordSize = 64;
+      PtrSize = 64;
+    }
   }
 
   return ETCASubtarget::buildDataLayoutString(WordSize, PtrSize);
@@ -74,8 +97,8 @@ ETCATargetMachine::ETCATargetMachine(const Target &TheTarget,
                                      std::optional<CodeModel::Model> CodeModel,
                                      CodeGenOptLevel OptLevel, bool JIT)
     : CodeGenTargetMachineImpl(
-          TheTarget, computeDataLayout(Cpu), TargetTriple, Cpu, FeatureString,
-          Options, getEffectiveRelocModel(RM),
+          TheTarget, computeDataLayout(Cpu, FeatureString), TargetTriple, Cpu,
+          FeatureString, Options, getEffectiveRelocModel(RM),
           getEffectiveCodeModel(CodeModel, CodeModel::Small), OptLevel),
       Subtarget(TargetTriple, Cpu, FeatureString, *this, Options, CodeModel,
                 OptLevel) {

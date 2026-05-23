@@ -1,4 +1,4 @@
-; RUN: llc -march=etca -mcpu=etca64 < %s | FileCheck %s --check-prefix=CHECK64
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw < %s | FileCheck %s --check-prefix=CHECK64
 
 ;; ===========================================================================
 ;; ETCA 64-bit arithmetic tests — CPUs with QW extension
