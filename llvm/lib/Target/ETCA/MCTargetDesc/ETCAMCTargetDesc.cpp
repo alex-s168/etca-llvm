@@ -252,6 +252,10 @@ private:
   unsigned encodeCallTarget(const MCInst &MI, unsigned OpNo,
                             SmallVectorImpl<MCFixup> &Fixups,
                             const MCSubtargetInfo &STI) const;
+
+  /// Compute REX prefix byte (0xC0 | flags) from register operands.
+  /// Returns 0 if no REX prefix is needed.
+  unsigned computeRexPrefix(const MCInst &MI) const;
 };
 
 } // namespace
@@ -343,22 +347,76 @@ unsigned ETCAMCCodeEmitter::encodeCallTarget(const MCInst &MI, unsigned OpNo,
   return 0;
 }
 
+unsigned ETCAMCCodeEmitter::computeRexPrefix(const MCInst &MI) const {
+  // Compute the REX prefix byte from register operands (HWEncoding bit 3).
+  // REX byte: 0xC0 | Q<<3 | A<<2 | B<<1 | X
+  //   A = bit 3 of AAA field (first register operand)
+  //   B = bit 3 of BBB field (second register operand, or PUSH source)
+  //   Q, X = 0 for base ISA (used by FI/MO1/MO2 extensions)
+  unsigned RexA = 0, RexB = 0;
+  unsigned Opc = MI.getOpcode();
+
+  // PUSH/PUSH32/PUSH64: the single register operand is in the BBB field
+  // (bits 12-10), NOT the AAA field.  AAA is hardwired to sp (6) in the
+  // instruction encoding.
+  bool IsPUSH =
+      (Opc == ETCA::PUSH || Opc == ETCA::PUSH32 || Opc == ETCA::PUSH64);
+
+  unsigned RegIdx = 0;
+  for (unsigned i = 0; i < MI.getNumOperands(); ++i) {
+    if (!MI.getOperand(i).isReg())
+      continue;
+    unsigned HWEnc =
+        Ctx.getRegisterInfo()->getEncodingValue(MI.getOperand(i).getReg());
+    unsigned RexBit = (HWEnc >> 3) & 1;
+    if (RexBit == 0) {
+      ++RegIdx;
+      continue;
+    }
+
+    if (IsPUSH && i == 0) {
+      // PUSH: single register operand maps to BBB
+      RexB |= 1;
+    } else if (RegIdx == 0) {
+      // First register operand → AAA field → REX.A
+      RexA |= 1;
+    } else {
+      // Second register operand → BBB field → REX.B
+      RexB |= 1;
+    }
+    ++RegIdx;
+  }
+
+  unsigned Rex = 0;
+  if (RexA || RexB) {
+    Rex = 0xC0 | (RexA << 2) | (RexB << 1);
+  }
+  return Rex;
+}
+
 void ETCAMCCodeEmitter::encodeInstruction(const MCInst &MI,
                                           SmallVectorImpl<char> &CB,
                                           SmallVectorImpl<MCFixup> &Fixups,
                                           const MCSubtargetInfo &STI) const {
-  // Let the auto-generated getBinaryCodeForInstr build the encoding.
+  // Determine if a REX prefix is needed based on register operands.
+  unsigned RexByte = computeRexPrefix(MI);
+
+  // Let the auto-generated getBinaryCodeForInstr build the encoding
+  // (the Inst field already has the 3-bit register encodings).
   uint64_t Binary = getBinaryCodeForInstr(MI, Fixups, STI);
 
   // Determine instruction size from the opcode descriptor.
-  // Currently all ETCA instructions are 2 bytes, but future extensions
-  // (VWI prefix for full immediates) may add multi-word instructions.
-  // Using getSize() from MCInstrDesc ensures forward compatibility.
   unsigned Size = MCII.get(MI.getOpcode()).getSize();
   if (Size == 0)
     Size = 2;
 
-  // Write bytes in little-endian order.
+  if (RexByte) {
+    // Emit REX prefix byte before the instruction.
+    // Total size = prefix + instruction.
+    CB.push_back(static_cast<char>(RexByte));
+  }
+
+  // Write instruction bytes in little-endian order.
   for (unsigned i = 0; i < Size; ++i)
     CB.push_back(static_cast<char>((Binary >> (i * 8)) & 0xFF));
 }

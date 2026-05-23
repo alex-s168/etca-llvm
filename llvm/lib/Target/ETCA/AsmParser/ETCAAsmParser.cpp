@@ -506,6 +506,47 @@ MCRegister ETCAAsmParser::matchRegisterName(StringRef Name) {
         .Case("lnh", ETCA::R7)
         .Case("lnd", ETCA::D7)
         .Case("lnq", ETCA::Q7)
+        // REX ABI names: t0-t4 (temps), s2-s4 (callee-saved)
+        .Case("t0", ETCA::R8)
+        .Case("t0x", ETCA::R8)
+        .Case("t0h", ETCA::R8)
+        .Case("t0d", ETCA::D8)
+        .Case("t0q", ETCA::Q8)
+        .Case("t1", ETCA::R9)
+        .Case("t1x", ETCA::R9)
+        .Case("t1h", ETCA::R9)
+        .Case("t1d", ETCA::D9)
+        .Case("t1q", ETCA::Q9)
+        .Case("t2", ETCA::R10)
+        .Case("t2x", ETCA::R10)
+        .Case("t2h", ETCA::R10)
+        .Case("t2d", ETCA::D10)
+        .Case("t2q", ETCA::Q10)
+        .Case("t3", ETCA::R11)
+        .Case("t3x", ETCA::R11)
+        .Case("t3h", ETCA::R11)
+        .Case("t3d", ETCA::D11)
+        .Case("t3q", ETCA::Q11)
+        .Case("t4", ETCA::R12)
+        .Case("t4x", ETCA::R12)
+        .Case("t4h", ETCA::R12)
+        .Case("t4d", ETCA::D12)
+        .Case("t4q", ETCA::Q12)
+        .Case("s2", ETCA::R13)
+        .Case("s2x", ETCA::R13)
+        .Case("s2h", ETCA::R13)
+        .Case("s2d", ETCA::D13)
+        .Case("s2q", ETCA::Q13)
+        .Case("s3", ETCA::R14)
+        .Case("s3x", ETCA::R14)
+        .Case("s3h", ETCA::R14)
+        .Case("s3d", ETCA::D14)
+        .Case("s3q", ETCA::Q14)
+        .Case("s4", ETCA::R15)
+        .Case("s4x", ETCA::R15)
+        .Case("s4h", ETCA::R15)
+        .Case("s4d", ETCA::D15)
+        .Case("s4q", ETCA::Q15)
         .Default(MCRegister::NoRegister);
   };
 
@@ -525,7 +566,7 @@ MCRegister ETCAAsmParser::matchRegisterName(StringRef Name) {
   // Check postfix format: rNd, rNq, rNx, rNh
   if (HasSizeSuffix) {
     StringRef NumPart = Name.substr(1, Name.size() - 2);
-    if (!NumPart.getAsInteger(10, RegNum) && RegNum <= 7) {
+    if (!NumPart.getAsInteger(10, RegNum) && RegNum <= 15) {
       switch (LastChar) {
       case 'd':
         return ETCA::D0 + RegNum;
@@ -543,7 +584,7 @@ MCRegister ETCAAsmParser::matchRegisterName(StringRef Name) {
     if (SecondChar == 'd' || SecondChar == 'q' || SecondChar == 'x' ||
         SecondChar == 'h') {
       StringRef NumPart = Name.substr(2);
-      if (!NumPart.getAsInteger(10, RegNum) && RegNum <= 7) {
+      if (!NumPart.getAsInteger(10, RegNum) && RegNum <= 15) {
         switch (SecondChar) {
         case 'd':
           return ETCA::D0 + RegNum; // rdN → 32-bit
@@ -565,7 +606,7 @@ MCRegister ETCAAsmParser::matchRegisterName(StringRef Name) {
   if (Prefix != 'r' && Prefix != 'd' && Prefix != 'q')
     return MCRegister::NoRegister;
 
-  if (Name.substr(1).getAsInteger(10, RegNum) || RegNum > 7)
+  if (Name.substr(1).getAsInteger(10, RegNum) || RegNum > 15)
     return MCRegister::NoRegister;
 
   switch (Prefix) {

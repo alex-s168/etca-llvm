@@ -46,6 +46,9 @@ class LLVM_LIBRARY_VISIBILITY ETCATargetInfo : public TargetInfo {
   static const TargetInfo::GCCRegAlias GCCRegAliases[];
   static const char *const GCCRegNames[];
 
+  // REX extension availability
+  bool HasREX = false;
+
   void setWidthsFromCPU();
 
   /// Build the DataLayout string from the current WordSize/PtrSize.

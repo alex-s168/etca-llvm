@@ -31,7 +31,7 @@ NEVER drop any requirement. If something is not easily possible, ask the user. T
 | base + saf + all word/address combos | ✅ DONE (2026-05-14) | 16/32/64-bit word & pointer, all 5 CPU models |
 | byte (SS=00, 8-bit ops) | ✅ DONE (2026-05-13) | All computation + LOAD8/STORE8, sign-extension semantics |
 | multiply / divide (libcall) | ✅ DONE (2026-05-14) | All 15 arithmetic libcall operations (mul/sdiv/udiv/srem/urem × 16/32/64-bit) work on all 5 CPU models |
-| extended registers (REX prefix) | ⬜ TODO | |
+| extended registers (REX prefix) | ✅ DONE (2026-05-23) | r8-r15, d8-d15, q8-q15, REX prefix byte, MC assembly, disassembler, encoder, parser (incl. ABI names t0-t4/s2-s4), register classes, calling convention, CSR masks, MC tests |
 | fi: full immediates (VWI prefix) | ⬜ TODO | |
 | mo1/mo2: complex memory operands | ⬜ TODO | |
 | expanded opcodes (EXOP prefix) | ⬜ TODO | |
@@ -172,7 +172,7 @@ generated code to call.
 | `saf.ll` | generic, etca32, etca64 | SAF calls |
 | `signext.ll` | generic, etca32, etca64 | Sign-extension semantics |
 
-### MC Tests (17)
+### MC Tests (18)
 | Test | Description |
 |------|-------------|
 | `addsub.s` | ADD/SUB RR+RI encodings for all widths |
@@ -184,6 +184,7 @@ generated code to call.
 | `logical.s` | AND/OR/XOR/TEST encodings |
 | `mov.s` | MOVZ/MOVS all widths |
 | `parser-errors.s` | Error message tests |
+| `rex-instructions.s` | REX extension: r8-r15 encoding + round-trip (NEW) |
 | `roundtrip-all.s` + `.dis` | Comprehensive decode(encode(inst)) round-trip |
 | `saf-instructions.s` | SAF encoding tests |
 | `simple.s` | Basic instruction encodings |
@@ -196,6 +197,7 @@ generated code to call.
 - [x] Legalizer subtarget-aware (HasDW/HasQW gate computation ops)
 - [x] Multi-width tests split by CPU capability (16/32/64 bit)
 - [x] Explicit FileCheck RUN lines for all 5 CPU models in CodeGen tests
+- [x] REX extension: r8-r15 register file, REX prefix encoder, parser (binutils-compatible ABI names t0-t4/s2-s4), disassembler, GPR_REX/GPR32_REX/GPR64_REX register classes, extended calling convention, CSR masks for REX callee-saved registers, feature flag, MC tests (encoding + round-trip), Clang integration
 - [ ] ELF object verification (EM_ETCA, section headers, relocations)
 - [ ] Integration tests (Fibonacci, memcpy, recursive factorial)
 - [ ] LLVM test suite integration
@@ -206,6 +208,9 @@ generated code to call.
 - [ ] compiler-rt builtins (soft-float, div/mod, etc.)
 - [ ] lld linker support (ETCA ELF linking)
 - [ ] Assembly syntax tests cross-checked vs etca binutils output
+
+### Extra
+- [ ] determine if we need llvm-libc, and libc++?
 
 ### Driver Implementation Details
 - `clang/lib/Basic/Targets/ETCA.{h,cpp}` — TargetInfo: dynamic type sizes via `setCPU()`, 5 CPU models (generic/etca32/etca32p64/etca64p32/etca64), LP-like C type model, GCC register names and aliases for inline asm, preprocessor defines (`__etca__`, `__ETCA__`, `__ETCA_GENERIC__`, `__ETCA32__`, etc., `__ETCA_WORD_SIZE__`, `__ETCA_PTR_SIZE__`, extension detection macros)

@@ -174,7 +174,22 @@ InstructionSelector *ETCASubtarget::getInstructionSelector() const {
 }
 
 const TargetRegisterClass *ETCASubtarget::getGPRRegClass() const {
-  switch (WordSize) {
+  return getGPRRegClassForWidth(WordSize);
+}
+
+const TargetRegisterClass *ETCASubtarget::getBaseOrRexGPRRegClass() const {
+  // Returns the REX-extended class when HasREX, else the base class.
+  if (HasREX)
+    return getGPRRegClassForWidth(WordSize);
+  return getGPRRegClass();
+}
+
+const TargetRegisterClass *
+ETCASubtarget::getGPRRegClassForWidth(unsigned Width) const {
+  // Always return the full 16-register class since GPR/GPR32/GPR64 now
+  // contain all 16 registers.  The HasREX flag controls register allocation
+  // in the legalizer (hasREX() gates which operations can use high regs).
+  switch (Width) {
   case 32:
     return &ETCA::GPR32RegClass;
   case 64:

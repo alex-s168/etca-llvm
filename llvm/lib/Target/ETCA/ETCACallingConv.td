@@ -15,7 +15,11 @@
 //    - r6:    stack pointer (sp) — callee-saved
 //    - r7:    link register (ln) — caller-saved
 //
-//  Arguments: first 4 in r0-r3, rest on stack (aligned to register width)
+//  REX extended ABI:
+//    - r8-r12 (t0-t4): caller-saved temp registers (additional args)
+//    - r13-r15 (s2-s4): callee-saved registers
+//
+//  Arguments: first 4 in r0-r3 (REX extends to r0-r7), rest on stack
 //  Return:    r0 (16/32-bit) or r0-r1 pair (64-bit)
 //
 //  Stack grows down.  Stack is aligned to register width bytes.
@@ -36,6 +40,8 @@ class CCIfSubtarget<string F, CCAction A>
 // Calling convention for formal arguments and call operands
 //===----------------------------------------------------------------------===//
 
+
+
 def CC_ETCA : CallingConv<[
   // Promote i8/i16 to word size based on subtarget:
   //   64-bit word (HasQW): promote to i64
@@ -45,9 +51,16 @@ def CC_ETCA : CallingConv<[
   CCIfType<[i8, i16], CCIfSubtarget<"hasDW()", CCPromoteToType<i32>>>,
   CCIfType<[i8], CCPromoteToType<i16>>,
 
-  // First 4 arguments in registers r0-r3
+  // Arguments in registers: base=r0-r3, REX extends to r0-r12
+  // (R4, R7 used as additional arg regs; R5-R6 are bp/sp)
+  CCIfType<[i16], CCIfSubtarget<"hasREX()",
+      CCAssignToReg<[R0, R1, R2, R3, R4, R7, R8, R9, R10, R11, R12]>>>,
   CCIfType<[i16], CCAssignToReg<[R0, R1, R2, R3]>>,
+  CCIfType<[i32], CCIfSubtarget<"hasREX()",
+      CCAssignToReg<[D0, D1, D2, D3, D4, D7, D8, D9, D10, D11, D12]>>>,
   CCIfType<[i32], CCAssignToReg<[D0, D1, D2, D3]>>,
+  CCIfType<[i64], CCIfSubtarget<"hasREX()",
+      CCAssignToReg<[Q0, Q1, Q2, Q3, Q4, Q7, Q8, Q9, Q10, Q11, Q12]>>>,
   CCIfType<[i64], CCAssignToReg<[Q0, Q1, Q2, Q3]>>,
 
   // Remaining arguments on stack, 2-byte aligned for i16, 4 for i32, 8 for i64
@@ -84,8 +97,14 @@ def RetCC_ETCA : CallingConv<[
 //
 // R5 (bp) and R6 (sp) are always reserved and never allocated, but LLVM's
 // CSR mask still includes them for proper save/restore ordering.
+//
+// With REX extension: R13(s2), R14(s3), R15(s4) are also callee-saved.
 //===----------------------------------------------------------------------===//
 
 def CSR_ETCA_RegMask : CalleeSavedRegs<(add R3, R4, R5, R6)>;
 def CSR_ETCA_GPR32_RegMask : CalleeSavedRegs<(add D3, D4, D5, D6)>;
 def CSR_ETCA_GPR64_RegMask : CalleeSavedRegs<(add Q3, Q4, Q5, Q6)>;
+
+def CSR_ETCA_REX_RegMask : CalleeSavedRegs<(add R3, R4, R5, R6, R13, R14, R15)>;
+def CSR_ETCA_REX_GPR32_RegMask : CalleeSavedRegs<(add D3, D4, D5, D6, D13, D14, D15)>;
+def CSR_ETCA_REX_GPR64_RegMask : CalleeSavedRegs<(add Q3, Q4, Q5, Q6, Q13, Q14, Q15)>;

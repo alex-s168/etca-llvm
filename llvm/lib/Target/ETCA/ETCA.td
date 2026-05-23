@@ -42,6 +42,8 @@ def FeatureQW  : SubtargetFeature<"qw", "HasQW", "true",
     "64-bit Quadword Operations extension">;
 def FeatureByte : SubtargetFeature<"byte", "HasByte", "true",
     "8-bit Byte Operations extension (SS=00)">;
+def FeatureREX : SubtargetFeature<"rex", "HasREX", "true",
+    "Expanded Registers extension (REX prefix, r8-r15)">;
 def FeatureDWAS : SubtargetFeature<"dwas", "HasDWAS", "true",
     "32-bit Address Space extension">;
 def FeatureQWAS : SubtargetFeature<"qwas", "HasQWAS", "true",

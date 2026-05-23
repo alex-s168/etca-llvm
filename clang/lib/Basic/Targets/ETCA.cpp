@@ -30,8 +30,11 @@ using namespace clang::targets;
 
 const char *const ETCATargetInfo::GCCRegNames[] = {
     "r0", "r1",  "r2",  "r3",  "r4",  "r5",  "r6",  "r7",
+    "r8", "r9",  "r10", "r11", "r12", "r13", "r14", "r15",
     "d0", "d1",  "d2",  "d3",  "d4",  "d5",  "d6",  "d7",
+    "d8", "d9",  "d10", "d11", "d12", "d13", "d14", "d15",
     "q0", "q1",  "q2",  "q3",  "q4",  "q5",  "q6",  "q7",
+    "q8", "q9",  "q10", "q11", "q12", "q13", "q14", "q15",
 };
 
 ArrayRef<const char *> ETCATargetInfo::getGCCRegNames() const {
@@ -62,6 +65,16 @@ const TargetInfo::GCCRegAlias ETCATargetInfo::GCCRegAliases[] = {
     {{"r5x"}, "r5"}, {{"r5h"}, "r5"},
     {{"r6x"}, "r6"}, {{"r6h"}, "r6"},
     {{"r7x"}, "r7"}, {{"r7h"}, "r7"},
+
+    // REX ABI names
+    {{"t0"}, "r8"}, {{"t0h"}, "r8"},
+    {{"t1"}, "r9"}, {{"t1h"}, "r9"},
+    {{"t2"}, "r10"}, {{"t2h"}, "r10"},
+    {{"t3"}, "r11"}, {{"t3h"}, "r11"},
+    {{"t4"}, "r12"}, {{"t4h"}, "r12"},
+    {{"s2"}, "r13"}, {{"s2h"}, "r13"},
+    {{"s3"}, "r14"}, {{"s3h"}, "r14"},
+    {{"s4"}, "r15"}, {{"s4h"}, "r15"},
 };
 
 ArrayRef<TargetInfo::GCCRegAlias> ETCATargetInfo::getGCCRegAliases() const {
@@ -228,6 +241,7 @@ bool ETCATargetInfo::hasFeature(StringRef Feature) const {
       .Case("no-saf", false)
       .Case("saf", true)          // SAF is always available on all CPUs
       .Case("byte", true)         // BYTE extension is available (SS=00 ops)
+      .Case("rex", HasREX)
       .Case("16bit", true)        // 16-bit ops always available
       .Case("32bit", WordSize >= 32)
       .Case("64bit", WordSize >= 64)
@@ -293,6 +307,10 @@ void ETCATargetInfo::getTargetDefines(const LangOptions &Opts,
 
   // BYTE extension always available
   Builder.defineMacro("__ETCA_HAS_BYTE__");
+
+  // REX extension (optional, enabled by -mattr=+rex or CPU feature)
+  if (HasREX)
+    Builder.defineMacro("__ETCA_HAS_REX__");
 }
 
 //===----------------------------------------------------------------------===//

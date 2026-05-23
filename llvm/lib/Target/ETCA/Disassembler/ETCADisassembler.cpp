@@ -8,8 +8,8 @@
 //
 // ETCA instruction disassembler.
 //
-// Decodes 16-bit instructions from raw bytes into MCInst structures.
-// Encoding matches binutils (etca-binutils-gdb).
+// Decodes 16-bit (and REX-extended 3-byte) instructions from raw bytes into
+// MCInst structures.  Encoding matches binutils (etca-binutils-gdb).
 //
 // Instruction formats (16-bit value, bits numbered 15..0):
 //   RR:   rA[15:13] | rB[12:10] | 00[9:8] | 00[7:6] | SS[5:4] | CCCC[3:0]
@@ -17,6 +17,10 @@
 //   BR:   1|0|D8[13]|CCCC[12:8] | D[7:0]
 //   SAF_JMP: bytes 0xAF, 0x(RRR[7:5]|X[4]|CCCC[3:0])
 //   SAF_CALL: bytes 0xB0|D[11:8], 0xD[7:0]
+//
+// When a REX prefix (0xC0-0xCF) precedes the 2-byte instruction, the
+// register fields are extended to 4 bits via REX.A (bit 2 of prefix)
+// and REX.B (bit 1 of prefix).
 //
 //===----------------------------------------------------------------------===//
 
@@ -66,16 +70,23 @@ ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
   uint16_t Insn = Bytes[0] | (uint16_t(Bytes[1]) << 8);
   Size = 2;
 
-  // Format detection by byte 0 (low byte = bits[7:0]):
-  //   bits[7:6]=00 → RR (Register-Register)
-  //   bits[7:6]=01 → RI (Register-Immediate)
-  //   byte 0 = 0xAF → SAF JMP/CALL
-  //   bits[7:4]=0xB → SAF CALL (0xB0|D[11:8])
-  //   bits[7:6]=10 → Branch (1|0|...)
-  //   bits[7:6]=11 → reserved
+  // Check for REX prefix (byte with value 0xC0-0xCF, i.e., 1100xxxx).
+  // When a REX prefix is present, it precedes the 2-byte instruction.
+  // REX format: 1100 Q A B X
+  //   A = bit 3 of AAA register field (bits [15:13])
+  //   B = bit 3 of BBB register field (bits [12:10])
+  unsigned RexFlags = 0;
+  if (Bytes.size() >= 3 && (Bytes[0] & 0xF0) == 0xC0) {
+    RexFlags = Bytes[0] & 0x0F;
+    Insn = Bytes[1] | (uint16_t(Bytes[2]) << 8);
+    Size = 3;
+  }
 
-  unsigned Byte0 = Insn & 0xFF;
-  unsigned Byte0Hi2 = (Byte0 >> 6) & 0x3; // bits [7:6]
+  // REX register helper: given a 3-bit register field, return the full
+  // 4-bit register number.  REX bit 2 = A, bit 1 = B.
+  auto RexReg = [RexFlags](unsigned Field, unsigned RexBit) -> unsigned {
+    return Field | (((RexFlags >> RexBit) & 1) << 3);
+  };
 
   // NOP check
   if (Insn == 0x008F) {
@@ -83,13 +94,16 @@ ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
     return MCDisassembler::Success;
   }
 
+  unsigned Byte0 = Insn & 0xFF;
+  unsigned Byte0Hi2 = (Byte0 >> 6) & 0x3;
+
   // SAF JMP/CALL (byte0 = 0xAF)
   if (Byte0 == 0xAF) {
     unsigned Byte1 = (Insn >> 8) & 0xFF;
-    unsigned Reg = (Byte1 >> 5) & 0x7;
+    unsigned Reg = RexReg((Byte1 >> 5) & 0x7, 2); // REX.A
     unsigned X = (Byte1 >> 4) & 0x1;
     unsigned Cond = Byte1 & 0xF;
-    if (Cond == 0xE) { // Always condition
+    if (Cond == 0xE) {
       Instr.setOpcode(X ? ETCA::CALLR : ETCA::JMPR);
       Instr.addOperand(MCOperand::createReg(ETCA::R0 + Reg));
       return MCDisassembler::Success;
@@ -99,11 +113,10 @@ ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
 
   // SAF CALL (byte0 & 0xF0 == 0xB0)
   if ((Byte0 & 0xF0) == 0xB0) {
-    // Byte0 = 0xB0 | D[11:8], Byte1 = D[7:0]
     int16_t Disp = ((Byte0 & 0xF) << 8) | ((Insn >> 8) & 0xFF);
     if (Disp & 0x800)
-      Disp |= 0xF000; // sign-extend 12-bit
-    Disp *= 2;        // convert halfwords to bytes
+      Disp |= 0xF000;
+    Disp *= 2;
     Instr.setOpcode(ETCA::CALL);
     Instr.addOperand(MCOperand::createImm(Disp));
     return MCDisassembler::Success;
@@ -111,53 +124,49 @@ ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
 
   // Branch (bits[7:6] = 10)
   if (Byte0Hi2 == 2) {
-    // Byte0 bits[7]=1, bits[6]=0
-    // Format: byte0=1|0|D8|CCCC, byte1=D[7:0]
-    unsigned D8 = (Byte0 >> 4) & 1;        // bit 4 = D8
-    unsigned Cond = Byte0 & 0xF;           // bits [3:0] = CCCC
-    unsigned DispLow = (Insn >> 8) & 0xFF; // byte 1 = D[7:0]
-
+    unsigned D8 = (Byte0 >> 4) & 1;
+    unsigned Cond = Byte0 & 0xF;
+    unsigned DispLow = (Insn >> 8) & 0xFF;
     int16_t Disp = (D8 << 8) | DispLow;
     if (Disp & 0x100)
-      Disp |= 0xFE00; // sign-extend 9-bit
-    Disp *= 2;        // convert halfwords to bytes
+      Disp |= 0xFE00;
+    Disp *= 2;
 
     unsigned Opc;
-    // Condition codes match binutils (etca-binutils-gdb).
     switch (Cond) {
     case 0:
       Opc = ETCA::BEQ;
-      break; // je/jz
+      break;
     case 1:
       Opc = ETCA::BNE;
-      break; // jne/jnz
+      break;
     case 4:
       Opc = ETCA::BLTU;
-      break; // jb/jc
+      break;
     case 5:
       Opc = ETCA::BGEU;
-      break; // jae/jnb
+      break;
     case 8:
       Opc = ETCA::BLEU;
-      break; // jbe/jna
+      break;
     case 9:
       Opc = ETCA::BGTU;
-      break; // ja/jnbe
+      break;
     case 10:
       Opc = ETCA::BLT;
-      break; // jl/jnge
+      break;
     case 11:
       Opc = ETCA::BGE;
-      break; // jge/jnl
+      break;
     case 12:
       Opc = ETCA::BLE;
-      break; // jle/jng
+      break;
     case 13:
       Opc = ETCA::BGT;
-      break; // jg/jnle
+      break;
     case 14:
       Opc = ETCA::BR;
-      break; // jmp
+      break;
     default:
       return MCDisassembler::Fail;
     }
@@ -170,68 +179,62 @@ ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
   if (Byte0Hi2 == 3)
     return MCDisassembler::Fail;
 
-  // bits[7:6] = 00 → RR, bits[7:6] = 01 → RI
   unsigned Bits76 = Byte0Hi2;
-
-  // Extract shared fields
-  unsigned RegA = (Insn >> 13) & 0x7; // rA: bits [15:13]
-  unsigned RegB = (Insn >> 10) & 0x7; // rB: bits [12:10] (RR) or imm part (RI)
-  unsigned SS = (Insn >> 4) & 0x3;    // SS: bits [5:4]
-  unsigned CCCC = Insn & 0xF;         // CCCC: bits [3:0]
+  unsigned RegA = (Insn >> 13) & 0x7;
+  unsigned RegB = (Insn >> 10) & 0x7;
+  unsigned SS = (Insn >> 4) & 0x3;
+  unsigned CCCC = Insn & 0xF;
 
   // Select register base based on SS width
   unsigned Base;
   if (SS == 0b10)
-    Base = ETCA::D0; // 32-bit
+    Base = ETCA::D0;
   else if (SS == 0b11)
-    Base = ETCA::Q0; // 64-bit
+    Base = ETCA::Q0;
   else
-    Base = ETCA::R0; // 8-bit (SS=00) or 16-bit (SS=01)
+    Base = ETCA::R0;
 
-  if (Bits76 == 0) { // RR format (bits [7:6] = 00)
-    // SAF PUSH/POP: CCCC = 1100 or 1101
+  unsigned FullA = RexReg(RegA, 2); // REX.A
+  unsigned FullB = RexReg(RegB, 1); // REX.B
+
+  if (Bits76 == 0) { // RR format
+    // SAF PUSH/POP
     if (CCCC == 0xC) {
-      // POP: rA=Reg (dst), rB must be 6 (sp)
       if (RegB != 6)
         return MCDisassembler::Fail;
-      // Select opcode based on SS bits (stack increment size).
       if (SS == 0b10) {
         Instr.setOpcode(ETCA::POP32);
-        Instr.addOperand(MCOperand::createReg(ETCA::D0 + RegA));
+        Instr.addOperand(MCOperand::createReg(ETCA::D0 + FullA));
       } else if (SS == 0b11) {
         Instr.setOpcode(ETCA::POP64);
-        Instr.addOperand(MCOperand::createReg(ETCA::Q0 + RegA));
+        Instr.addOperand(MCOperand::createReg(ETCA::Q0 + FullA));
       } else {
         Instr.setOpcode(ETCA::POP);
-        Instr.addOperand(MCOperand::createReg(ETCA::R0 + RegA));
+        Instr.addOperand(MCOperand::createReg(ETCA::R0 + FullA));
       }
       return MCDisassembler::Success;
     }
     if (CCCC == 0xD) {
-      // PUSH: rA must be 6 (sp), rB=Reg (src)
       if (RegA != 6)
         return MCDisassembler::Fail;
-      // Select opcode based on SS bits (stack increment size).
       if (SS == 0b10) {
         Instr.setOpcode(ETCA::PUSH32);
-        Instr.addOperand(MCOperand::createReg(ETCA::D0 + RegB));
+        Instr.addOperand(MCOperand::createReg(ETCA::D0 + FullB));
       } else if (SS == 0b11) {
         Instr.setOpcode(ETCA::PUSH64);
-        Instr.addOperand(MCOperand::createReg(ETCA::Q0 + RegB));
+        Instr.addOperand(MCOperand::createReg(ETCA::Q0 + FullB));
       } else {
         Instr.setOpcode(ETCA::PUSH);
-        Instr.addOperand(MCOperand::createReg(ETCA::R0 + RegB));
+        Instr.addOperand(MCOperand::createReg(ETCA::R0 + FullB));
       }
       return MCDisassembler::Success;
     }
 
-    // Map CCCC to opcode
     unsigned Opc = 0;
     enum OpForm { FormTied3, FormUntied2, FormLoadStore, FormCmpTest };
     OpForm Form = FormTied3;
 
     if (CCCC <= 9) {
-      // Arithmetic ops (0=ADD...9=MOVS)
       switch (CCCC) {
       case 0:
         Opc = SS == 0b00   ? ETCA::ADD8
@@ -299,7 +302,6 @@ ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
         break;
       }
     } else if (CCCC == 0xA || CCCC == 0xB) {
-      // LOAD/STORE
       Form = FormLoadStore;
       if (CCCC == 0xA)
         Opc = SS == 0b00   ? ETCA::LOAD8
@@ -319,32 +321,24 @@ ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
 
     switch (Form) {
     case FormLoadStore:
-      Instr.addOperand(MCOperand::createReg(Base + RegA));
-      Instr.addOperand(MCOperand::createReg(Base + RegB));
-      break;
     case FormUntied2:
-      Instr.addOperand(MCOperand::createReg(Base + RegA));
-      Instr.addOperand(MCOperand::createReg(Base + RegB));
-      break;
     case FormCmpTest:
-      // CMP/TEST register class must match SS bits (like all other RR ops).
-      Instr.addOperand(MCOperand::createReg(Base + RegA));
-      Instr.addOperand(MCOperand::createReg(Base + RegB));
+      Instr.addOperand(MCOperand::createReg(Base + FullA));
+      Instr.addOperand(MCOperand::createReg(Base + FullB));
       break;
     case FormTied3:
     default:
-      Instr.addOperand(MCOperand::createReg(Base + RegA));
-      Instr.addOperand(MCOperand::createReg(Base + RegA));
-      Instr.addOperand(MCOperand::createReg(Base + RegB));
+      Instr.addOperand(MCOperand::createReg(Base + FullA));
+      Instr.addOperand(MCOperand::createReg(Base + FullA));
+      Instr.addOperand(MCOperand::createReg(Base + FullB));
       break;
     }
     return MCDisassembler::Success;
   }
 
-  if (Bits76 == 1) {                    // RI format (bits [7:6] = 01)
-    unsigned Imm5 = (Insn >> 8) & 0x1F; // bits [12:8] = 5-bit immediate
+  if (Bits76 == 1) { // RI format
+    unsigned Imm5 = (Insn >> 8) & 0x1F;
 
-    // Map CCCC to opcode
     unsigned Opc = 0;
     bool IsNonTied = false;
 
@@ -418,7 +412,7 @@ ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
     case 13:
       Opc = ETCA::SLO16;
       IsNonTied = true;
-      break; // PUSHI uses this via RI format
+      break;
     case 14:
       Opc = ETCA::READCR;
       break;
@@ -440,19 +434,16 @@ ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
     Instr.setOpcode(Opc);
 
     if (IsNonTied) {
-      // MOVZI/MOVSI: 2 operands [dst=rA, imm]
-      Instr.addOperand(MCOperand::createReg(Base + RegA));
+      Instr.addOperand(MCOperand::createReg(Base + FullA));
       Instr.addOperand(MCOperand::createImm(Imm5));
     } else {
-      // Standard tied: 3 operands [dst=rA, src1=rA, imm]
-      Instr.addOperand(MCOperand::createReg(Base + RegA));
-      Instr.addOperand(MCOperand::createReg(Base + RegA));
+      Instr.addOperand(MCOperand::createReg(Base + FullA));
+      Instr.addOperand(MCOperand::createReg(Base + FullA));
       Instr.addOperand(MCOperand::createImm(Imm5));
     }
     return MCDisassembler::Success;
   }
 
-  // bits[7:6] = 10 or 11: reserved in base ISA
   return MCDisassembler::Fail;
 }
 

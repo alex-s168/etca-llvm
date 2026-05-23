@@ -54,6 +54,7 @@ class ETCASubtarget : public ETCAGenSubtargetInfo {
   // Extension flags
   bool HasSAF = false;
   bool HasByte = false;
+  bool HasREX = false;
   bool HasDW = false;
   bool HasQW = false;
   bool HasDWAS = false;
@@ -113,6 +114,7 @@ public:
   // Extension accessors
   bool hasSAF() const { return HasSAF; }
   bool hasByte() const { return HasByte; }
+  bool hasREX() const { return HasREX; }
   bool hasDW() const { return HasDW; }
   bool hasQW() const { return HasQW; }
   bool hasDWAS() const { return HasDWAS; }
@@ -126,7 +128,15 @@ public:
   Align getStackAlign() const { return Align(getRegWidth() / 8); }
 
   /// Returns the appropriate register class for the word size.
+  /// If HasREX, returns the extended 16-register class.
   const TargetRegisterClass *getGPRRegClass() const;
+
+  /// Returns the REX-extended register class if HasREX, else the base class.
+  const TargetRegisterClass *getBaseOrRexGPRRegClass() const;
+
+  /// Returns the appropriate pointer register class (16, 32, or 64-bit).
+  /// If HasREX, returns the extended 16-register class.
+  const TargetRegisterClass *getGPRRegClassForWidth(unsigned Width) const;
 
   /// Returns the data layout string for this subtarget.
   std::string getDataLayoutString() const { return DLString; }

@@ -48,8 +48,15 @@ ETCARegisterInfo::getPointerRegClass(unsigned Kind) const {
 const MCPhysReg *
 ETCARegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   // SAF ABI: r3(s0), r4(s1), r5(bp), r6(sp) are callee-saved.
+  // With REX extension, r13(s2), r14(s3), r15(s4) are also callee-saved.
   // Without SAF, nothing is callee-saved (can't have function calls).
   if (ST.hasSAF()) {
+    if (ST.hasREX()) {
+      static const MCPhysReg CalleeSavedRegs_REX[] = {
+          ETCA::R3,  ETCA::R4,  ETCA::R5,  ETCA::R6,
+          ETCA::R13, ETCA::R14, ETCA::R15, 0};
+      return CalleeSavedRegs_REX;
+    }
     static const MCPhysReg CalleeSavedRegs[] = {ETCA::R3, ETCA::R4, ETCA::R5,
                                                 ETCA::R6, 0};
     return CalleeSavedRegs;
@@ -292,12 +299,24 @@ const uint32_t *
 ETCARegisterInfo::getCallPreservedMask(const MachineFunction &MF,
                                        CallingConv::ID CC) const {
   // SAF ABI: R3(s0), R4(s1), R5(bp), R6(sp) are callee-saved.
+  // With REX: R13(s2), R14(s3), R15(s4) are also callee-saved.
   // The CSR mask is auto-generated from CalleeSavedRegs definitions
-  // in ETCACallingConv.td.  Select the right mask based on word size.
+  // in ETCACallingConv.td.  Select the right mask based on word size
+  // and REX availability.
   // getRegMasks() returns masks in the order they appear in the .td file:
   //   [0] = CSR_ETCA_RegMask (16-bit)
   //   [1] = CSR_ETCA_GPR32_RegMask (32-bit)
   //   [2] = CSR_ETCA_GPR64_RegMask (64-bit)
+  //   [3] = CSR_ETCA_REX_RegMask (16-bit + REX)
+  //   [4] = CSR_ETCA_REX_GPR32_RegMask (32-bit + REX)
+  //   [5] = CSR_ETCA_REX_GPR64_RegMask (64-bit + REX)
+  if (ST.hasREX()) {
+    if (ST.getWordSize() >= 64)
+      return getRegMasks()[5];
+    if (ST.getWordSize() >= 32)
+      return getRegMasks()[4];
+    return getRegMasks()[3];
+  }
   if (ST.getWordSize() >= 64)
     return getRegMasks()[2];
   if (ST.getWordSize() >= 32)
