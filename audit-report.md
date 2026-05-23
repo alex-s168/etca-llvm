@@ -8,46 +8,6 @@
 
 ## 🟡 Medium Severity Issues
 
-### 13. `isLoadFromStackSlot` / `isStoreToStackSlot` Only Checks FI on Operand 1 (ETCAInstrInfo.cpp)
-
-```cpp
-Register ETCAInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
-                                            int &FrameIndex) const {
-  if (MI.getOperand(1).isFI()) {
-    FrameIndex = MI.getOperand(1).getIndex();
-    return MI.getOperand(0).getReg();
-  }
-  return Register();
-}
-```
-
-This only matches FrameIndex when it's operand 1. For STORE, the value is operand 0 and the address is operand 1. For LOAD, the dest is operand 0 and the address is operand 1. Both look at operand 1, which is correct. BUT this only matches BEFORE frame index elimination (when FIs haven't been replaced yet). After elimination, these functions return nothing, which is fine — the PEI/Spiller code is supposed to call these pre-elimination.
-
-Actually this is the standard LLVM pattern. No bug, but worth verifying that the functions are never called after frame index elimination in passes that don't expect them.
-
-### 14. Frame Index Elimination for LOAD Reuses Destination Register (ETCARegisterInfo.cpp)
-
-```cpp
-if (IsLoad) {
-    Register ScratchReg = MI.getOperand(0).getReg();
-    BuildMI(MBB, II, DL, TII.get(MovOpc), ScratchReg).addReg(FrameReg);
-    ...
-    MI.getOperand(FIOperandNum).ChangeToRegister(ScratchReg, /*isDef=*/false);
-    return false;
-}
-```
-
-The destination register of a LOAD is reused as the scratch register for address computation. This means the MOVZ+ADDI chain writes to the destination register BEFORE the LOAD reads it (for the address). If the address computation and the LOAD are the same instruction, this is fine because they're separate operands.
-
-**However**, if the address somehow depends on the destination register (which would be a use-before-def in the original LLVM IR), this could mask the bug. With GISel, this shouldn't happen because G_LOAD has explicit operands and the address register is separate from the dest register.
-
-Still, the fallback case for STORE without a scavenger is worse:
-```cpp
-BuildMI(MBB, II, DL, TII.get(AddiOpc), FrameReg)
-    .addReg(FrameReg).addImm(Step);
-```
-This modifies the frame register IN PLACE and then restores it after. If a signal or interrupt occurs between the add and the restore, the frame register is corrupted. This is extremely fragile.
-
 ### 15. `CCCD::getCallPreservedMask` Doesn't Handle Variadic Call Conventions
 
 **File**: `llvm/lib/Target/ETCA/ETCARegisterInfo.cpp`

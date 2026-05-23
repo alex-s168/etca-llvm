@@ -154,11 +154,21 @@ bool ETCARegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     DebugLoc DL = MI.getDebugLoc();
 
     if (IsLoad) {
-      // LOAD destination register is dead before the instruction (it's
-      // about to be overwritten), so reuse it as the scratch register.
-      //   MOVZ scratch, FrameReg
-      //   ADDI scratch, scratch, offset
-      //   LOAD dst, scratch
+      // Reuse the LOAD destination register as address-computation scratch.
+      // This is safe because:
+      //   1. The dest register is dead before this instruction (it's about
+      //      to be overwritten), so MOVZ/ADDI into it cannot clobber any
+      //      live value.
+      //   2. FrameReg is always one of the reserved frame registers (R5=bp
+      //      or R6=sp), which can never be allocated as the LOAD destination.
+      //   3. The hardware reads the address operand before writing the
+      //      result register — so reading ScratchReg for the address is
+      //      fine even though the write to the same register follows.
+      //
+      // Generated sequence:
+      //   MOVZ  dst, FrameReg       ; address = FrameReg
+      //   ADDI  dst, dst, offset    ; address += offset
+      //   LOAD  dst, (dst)          ; dst = *address
       Register ScratchReg = MI.getOperand(0).getReg();
 
       BuildMI(MBB, II, DL, TII.get(MovOpc), ScratchReg).addReg(FrameReg);
@@ -181,30 +191,13 @@ bool ETCARegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     //   MOVZ scratch, FrameReg
     //   ADDI scratch, scratch, offset  (chained for large offsets)
     //   STORE val, scratch
-    Register ScratchReg;
-    if (RS) {
-      ScratchReg = RS->scavengeRegisterBackwards(*RC, II, false, SPAdj);
-    } else {
-      // Fallback (rare): temporarily adjust the frame register in place,
-      // use it as the address, then restore.
-      SmallVector<int64_t, 4> Steps;
-      int64_t Remaining = Off;
-      while (Remaining != 0) {
-        int64_t Step = std::clamp<int64_t>(Remaining, -16, 15);
-        Steps.push_back(Step);
-        BuildMI(MBB, II, DL, TII.get(AddiOpc), FrameReg)
-            .addReg(FrameReg)
-            .addImm(Step);
-        Remaining -= Step;
-      }
-      MI.getOperand(FIOperandNum).ChangeToRegister(FrameReg, /*isDef=*/false);
-      for (int64_t Step : llvm::reverse(Steps)) {
-        BuildMI(MBB, std::next(II), DL, TII.get(AddiOpc), FrameReg)
-            .addReg(FrameReg)
-            .addImm(-Step);
-      }
-      return false;
-    }
+    //
+    // WARNING: We must NOT modify FrameReg in place (e.g. ADDI FrameReg, +
+    // ADDI FrameReg, -), because an interrupt between the modification and
+    // the restore would leave the frame register corrupted.  Since
+    // requiresRegisterScavenging() returns true, RS is always available.
+    assert(RS && "STORE frame index elimination requires register scavenger");
+    Register ScratchReg = RS->scavengeRegisterBackwards(*RC, II, false, SPAdj);
 
     BuildMI(MBB, II, DL, TII.get(MovOpc), ScratchReg).addReg(FrameReg);
 
