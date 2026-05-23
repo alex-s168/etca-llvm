@@ -175,6 +175,7 @@ generated code to call.
 
 ### Extra
 - [ ] determine if we need llvm-libc, and libc++?
+- [ ] `writeNopData` odd-count fallback: when an extension adds 1-byte NOPs, update `writeNopData` to handle odd byte counts without falling back to trap instructions
 
 ### Driver Implementation Details
 - `clang/lib/Basic/Targets/ETCA.{h,cpp}` — TargetInfo: dynamic type sizes via `setCPU()`, 5 CPU models (generic/etca32/etca32p64/etca64p32/etca64), LP-like C type model, GCC register names and aliases for inline asm, preprocessor defines (`__etca__`, `__ETCA__`, `__ETCA_GENERIC__`, `__ETCA32__`, etc., `__ETCA_WORD_SIZE__`, `__ETCA_PTR_SIZE__`, extension detection macros)

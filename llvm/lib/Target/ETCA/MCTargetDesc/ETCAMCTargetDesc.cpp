@@ -551,12 +551,14 @@ public:
 
   bool writeNopData(raw_ostream &OS, uint64_t Count,
                     const MCSubtargetInfo *STI) const override {
-    // NOP = 2-byte NOP (0x008F LE: [0x8F, 0x00]) per binutils etca_build_nop
-    if ((Count % 2) != 0)
-      return false;
-    for (uint64_t i = 0; i < Count; i += 2)
+    // NOP = 2-byte NOP (0x008F LE: [0x8F, 0x00]) per binutils etca_build_nop.
+    // Write as many full NOPs as the even-aligned portion allows, then return
+    // false for the odd remainder so LLVM's generic fallback emits a trap.
+    uint64_t NopCount = Count / 2;
+    for (uint64_t i = 0; i < NopCount; ++i)
       OS.write("\x8F\x00", 2);
-    return true;
+    // If Count is odd, return false -- the caller will handle the last byte.
+    return (Count % 2) == 0;
   }
 };
 } // namespace

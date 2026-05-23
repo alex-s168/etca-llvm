@@ -8,22 +8,6 @@
 
 ## 🔴 Critical Issues
 
-### 5. Missing `writeNopData` for Odd Counts Returns False But Can Crash Downstream (ETCAMCTargetDesc.cpp)
-
-**File**: `llvm/lib/Target/ETCA/MCTargetDesc/ETCAMCTargetDesc.cpp`
-
-```cpp
-bool writeNopData(raw_ostream &OS, uint64_t Count,
-                  const MCSubtargetInfo *STI) const override {
-    if ((Count % 2) != 0)
-      return false;
-    ...
-}
-```
-
-Returning `false` from `writeNopData` signals "I can't fill this count", and LLVM's generic code will then fall back to emitting trap instructions or aborting. This is the expected LLVM contract, but other architectures (ARM, RISC-V) can handle odd counts. The 2-byte NOP requirement is reasonable for ETCA (16-bit instructions).
-
-**Minor issue**: The `getMinimumNopSize()` returns 2, which is correct, but the contract means that alignment padding of odd sizes will use trap instructions instead of NOPs.
 
 ### 6. Disassembler: CCCC=13 (SLO16) is Wrong in RI Switch (ETCADisassembler.cpp)
 
