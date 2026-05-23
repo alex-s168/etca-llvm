@@ -178,11 +178,15 @@ static std::tuple<ELFKind, uint16_t, uint8_t> parseEmulation(Ctx &ctx,
           .Case("elf64loongarch", {ELF64LEKind, EM_LOONGARCH})
           .Case("elf64_s390", {ELF64BEKind, EM_S390})
           .Case("hexagonelf", {ELF32LEKind, EM_HEXAGON})
+          .Cases({"elf32etca", "etcaelf"}, {ELF32LEKind, EM_ETCA})
+          .Case("elf64etca", {ELF64LEKind, EM_ETCA})
           .Default({ELFNoneKind, EM_NONE});
 
   if (ret.first == ELFNoneKind)
     ErrAlways(ctx) << "unknown emulation: " << emul;
   if (ret.second == EM_MSP430)
+    osabi = ELFOSABI_STANDALONE;
+  else if (ret.second == EM_ETCA)
     osabi = ELFOSABI_STANDALONE;
   else if (ret.second == EM_AMDGPU)
     osabi = ELFOSABI_AMDGPU_HSA;

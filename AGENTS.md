@@ -160,8 +160,18 @@ generated code to call.
 - [x] clang driver support (`etca-unknown-elf` target triple, `-mcpu=` for 5 CPU models, proper DataLayout, preprocessor defines `__etca__`/`__ETCA__`, C++ name mangling, all word/address width combos supported)
 - [ ] clang intrinsics for ETCa-specific operations (READCR, WRITECR, etc.)
 - [ ] compiler-rt builtins (soft-float, div/mod, etc.)
-- [ ] lld linker support (ETCA ELF linking)
-- [ ] Assembly syntax tests cross-checked vs etca binutils output
+- [x] lld linker support (ETCA ELF linking) — full LLD backend in `lld/ELF/Arch/ETCA.cpp` with:
+  - All 57 ELF relocation types matching binutils
+  - 32-bit and 64-bit ELF output (auto-detected via CPU features)
+  - RELA format (binutils-compatible)
+  - `elf32etca` / `elf64etca` emulation flags
+  - `--oformat binary` support for flat ROM images
+  - Works with `clang -fuse-ld=lld`
+- [x] Binutils ld support via clang (default: searches for `etca-elf-ld`, passes correct `-melf{16,32,64}_etca` flags)
+- [x] clang `-fuse-ld=lld` / `-fuse-ld=bfd` support in driver
+- [x] Both `llvm-objcopy -O binary` and `--oformat binary` for ROM production
+- [x] Binutils cross-compatibility verified (binutils ld can link LLVM-produced .o files)
+- [x] Assembly syntax tests cross-checked vs etca binutils output
 
 ### Extra
 - [ ] determine if we need llvm-libc, and libc++?
@@ -198,7 +208,7 @@ echo 'define i16 @add(i16 %a, i16 %b) {
 }' | build-etca/bin/llc -march=etca -mcpu=generic -filetype=asm
 
 # Run all ETCA tests
-build-etca/bin/llvm-lit llvm/test/*/ETCA/ clang/test/*/ETCA/  clang/test/*/etca-*
+ninja -C build-etca && build-etca/bin/llvm-lit llvm/test/*/ETCA/ clang/test/*/ETCA/ clang/test/*/etca-* lld/test/ELF/etca-*
 ```
 
 **Compiler note**: Clang 22.1.4 + libc++ has `abi_tag` incompatibility with `libDebugInfoGSYM`. GCC works but is slower.

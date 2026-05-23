@@ -11,14 +11,14 @@
    - [Extension Flags (-mattr)](#23-extension-flags--mattr)
    - [Preprocessor Defines](#24-preprocessor-defines)
    - [Inline Assembly](#25-inline-assembly)
-3. [LLVM Assembler (llvm-mc)](#3-llvm-assembler-llvm-mc)
-   - [Register Naming](#31-register-naming)
-   - [Instruction Set](#32-instruction-set)
-   - [Instruction Syntax](#33-instruction-syntax)
-   - [Size Suffixes](#34-size-suffixes)
-   - [Labels](#35-labels)
-   - [Directives](#36-directives)
-4. [Appendix: Complete Instruction Reference](#4-appendix-complete-instruction-reference)
+3. [Assembly Syntax](#3-assembly-syntax)
+4. [Linker (LD / LLD)](#4-linker-ld--lld)
+   - [LLD (Recommended)](#41-lld-recommended)
+   - [Using the binutils linker](#42-using-the-binutils-linker--fuse-ldbfd-)
+   - [Binutils / LLD Cross-Compatibility](#43-binutils--lld-cross-compatibility)
+   - [Producing Flat Binaries / ROM Images](#44-producing-flat-binaries--rom-images)
+   - [Linker Scripts](#45-linker-scripts)
+5. [Appendix: Complete Instruction Reference](#5-appendix-complete-instruction-reference)
 
 ---
 
@@ -65,7 +65,7 @@ ninja -C build-etca
 | `llvm-objdump` | `build-etca/bin/llvm-objdump` | Object file inspection |
 | `llvm-readobj` | `build-etca/bin/llvm-readobj` | Object file reading |
 | `clang` | `build-etca/bin/clang` | C/C++/... compiler |
-| `lld` | `build-etca/bin/lld` | ELF linker (with `-m etcaelf`) |
+| `ld.lld` | `build-etca/bin/ld.lld` | LLD ELF linker (ETCA support built-in) |
 | `llvm-lit` | `build-etca/bin/llvm-lit` | Test runner |
 
 
@@ -73,8 +73,8 @@ ninja -C build-etca
 ### Running Tests
 
 ```sh
-# Run all ETCA tests (MC assembly, CodeGen, Clang driver, preprocessor)
-build-etca/bin/llvm-lit llvm/test/*/ETCA/ clang/test/*/ETCA/ clang/test/*/etca-*
+# Run all ETCA tests (MC assembly, CodeGen, Clang driver, preprocessor, LLD)
+build-etca/bin/llvm-lit llvm/test/*/ETCA/ clang/test/*/ETCA/ clang/test/*/etca-* lld/test/ELF/etca-*
 ```
 
 ---
@@ -215,55 +215,47 @@ __ETCA_HAS_REX__       // 1 — REX extension enabled (-mattr=+rex)
 
 ### 2.5 Inline Assembly
 
-ETCA supports GCC-style inline assembly:
+ETCA supports GCC-style inline assembly.
+
+**Constraints:** `r` (any GPR), `i` (immediate), `m` (memory), `0`–`7` (specific rN).
+
+**Register names in inline asm:** `r0`–`r15`, `d0`–`d15` (32-bit), `q0`–`q15` (64-bit).
+r8+ and their d/q variants require `-mattr=+rex`.
 
 ```c
-// General register constraint
 int result;
 asm("add %0, %1" : "=r"(result) : "r"(a), "r"(b));
-
-// Specific register constraints (r0-r7)
-asm("movz %0, %1" : "=r"(result) : "0"(a), "r"(b));
-
-// Immediate constraint
-asm("add %0, %1, %2" : "=r"(result) : "r"(a), "i"(5));
+asm("movz %0, %1" : "=r"(result) : "0"(a));
+asm("" : : : "r0", "r1", "r5", "r6");   // clobber list
 ```
 
-**Constraint letters:**
-
-| Constraint | Meaning |
-|------------|---------|
-| `r` | Any general-purpose register |
-| `i` | Immediate constant |
-| `m` | Memory operand |
-| `0`–`7` | Specific register (r0–r7) / matching constraint |
-
-**Clobber list:**
-```c
-// Mark registers as clobbered
-asm volatile("" : : : "r0", "r1", "r5", "r6", "r7");
-```
-
-**Register names** that can be used in inline asm:
-```
-r0  r1  r2  r3  r4  r5  r6  r7
-r8  r9  r10 r11 r12 r13 r14 r15     (with +rex)
-d0  d1  d2  d3  d4  d5  d6  d7
-d8  d9  d10 d11 d12 d13 d14 d15     (with +rex)
-q0  q1  q2  q3  q4  q5  q6  q7
-q8  q9  q10 q11 q12 q13 q14 q15     (with +rex)
-```
-
-**Important:** ETCA does NOT currently support Clang builtins/intrinsics for ETCa-specific instructions (READCR, WRITECR, etc.). Use inline assembly to access these.
+**Important:** ETCA does not currently support Clang builtins for ETCa-specific instructions (READCR, WRITECR, etc.). Use inline assembly to access these.
 
 ---
 
-## 3. Assembler
+## 3. Assembly Syntax
 
-ETCA assembly can be assembled either through the Clang driver (recommended for
-normal use) or directly with `llvm-mc` (for testing and debugging).
+The complete ETCA assembly syntax reference (register naming, instruction set,
+instruction syntax, size suffixes, labels, directives, and full instruction
+tables) has been moved to a separate document:
 
-### Recommended: via Clang
+➡️ **[`ETCA-ASM-SYNTAX.md`](./ETCA-ASM-SYNTAX.md)**
+
+Key points:
+- Registers use `%rN` (16-bit), `%rNd`/`%dN` (32-bit), `%rNq`/`%qN` (64-bit), `%rNh` (8-bit).
+- Instructions follow RR (register-register) and RI (register-immediate) formats.
+- Size suffixes: `h` (8-bit), `d` (32-bit), `q` (64-bit), or inferred from register.
+- SAF extension adds `push`/`pop`/`call`/`jmpr`/`callr`.
+- Branch instructions use 9-bit signed displacements (±512 bytes).
+- Standard ELF directives (`.text`, `.data`, `.globl`, `.byte`, `.hword`, etc.).
+
+---
+
+
+
+
+
+
 
 For everyday assembly work, use `clang -c` — it handles the target triple, CPU
 model, and extension flags in one place:
@@ -282,403 +274,276 @@ clang --target=etca-unknown-elf -mcpu=etca32 -c file.s
 clang --target=etca-unknown-elf -mcpu=generic -S file.c -o file.s
 ```
 
-### Low-level: llvm-mc
 
-Use `llvm-mc` when you need to inspect encodings, test round-tripping, or debug
-the assembler itself:
+## 4. Linker (LD / LLD)
+
+ETCA ELF executables can be linked with either **LLD** (built as part of the LLVM
+project, **default**) or **GNU ld** (from etca-binutils-gdb, opt-in). Both produce
+compatible ELF output with `EM_ETCA` machine type.
+
+### 4.1 LLD (Recommended, Default)
+
+LLD has built-in ETCA support and does not require any external tools.
+It is invoked via `ld.lld` or `lld` with the `-m elf32etca` or `-m elf64etca`
+emulation flag.
+
+**Basic usage:**
 
 ```sh
-# Assemble to object file
-llvm-mc -arch=etca -mcpu=generic -filetype=obj file.s -o file.o
+# Link a single object file into an executable (32-bit)
+ld.lld -m elf32etca -o program.elf program.o
 
-# Show instruction encodings (useful for tests)
-llvm-mc -arch=etca -mcpu=generic --show-encoding file.s
+# Link multiple object files
+ld.lld -m elf32etca -o program.elf main.o lib.o
 
-# Specify extensions
-llvm-mc -arch=etca -mcpu=generic -mattr=+rex file.s
+# Link with libraries
+ld.lld -m elf32etca -L/path/to/lib -o program.elf main.o -lmylib
 
-# Output assembly listing (default output)
-llvm-mc -arch=etca -mcpu=generic -filetype=asm file.s
+# 64-bit ELF output
+ld.lld -m elf64etca -o program.elf program.o
 
-# Disassemble object file
-llvm-objdump -d --arch-name=etca file.o
+# Relocatable (partial) link
+ld.lld -m elf32etca -r -o partial.o a.o b.o
+
+# Produce a relocatable object (no link)
+ld.lld -m elf32etca -r -o merged.o a.o b.o
 ```
 
-Note that `llvm-mc` requires the explicit `-arch=etca` flag, while `clang -c`
-derives the architecture from the target triple.
+**Via Clang (LLD is the default linker):**
 
-### 3.1 Register Naming
+```sh
+# Single-step compilation + linking with LLD (no -fuse-ld= needed!)
+clang --target=etca-unknown-elf -mcpu=generic -nostdlib -o program.elf program.c
 
-ETCA registers follow binutils conventions. The `%` prefix is optional but recommended for consistency with binutils.
+# With startup code and library (cr0.o + libc)
+clang --target=etca-unknown-elf -mcpu=generic program.c cr0.o -o program.elf
 
-**16-bit word registers (base ISA):**
+# 64-bit
+clang --target=etca-unknown-elf -mcpu=etca64 -nostdlib -o program.elf program.c
 ```
-%r0   %r1   %r2   %r3   %r4   %r5   %r6   %r7
-```
-
-**16-bit with REX extension (`-mattr=+rex`):**
-```
-%r8   %r9   %r10  %r11  %r12  %r13  %r14  %r15
 ```
 
-**32-bit doubleword registers (SS=10):**
-```
-%r0d  %r1d  %r2d  %r3d  %r4d  %r5d  %r6d  %r7d   (or %d0..%d7)
-%r8d  %r9d  %r10d %r11d %r12d %r13d %r14d %r15d   (with +rex)
-```
+**Emulation flags by CPU model:**
 
-**64-bit quadword registers (SS=11):**
-```
-%r0q  %r1q  %r2q  %r3q  %r4q  %r5q  %r6q  %r7q   (or %q0..%q7)
-%r8q  %r9q  %r10q %r11q %r12q %r13q %r14q %r15q   (with +rex)
-```
+| CPU Model | LLD Flag | ELF Class |
+|-----------|----------|-----------|
+| generic (16-bit ptr) | `-m elf32etca` | ELF32 |
+| etca32 (32-bit ptr)  | `-m elf32etca` | ELF32 |
+| etca32p64 (64-bit ptr) | `-m elf64etca` | ELF64 |
+| etca64p32 (32-bit ptr) | `-m elf32etca` | ELF32 |
+| etca64 (64-bit ptr)  | `-m elf64etca` | ELF64 |
 
-**8-bit byte registers (SS=00):**
-```
-%r0h  %r1h  %r2h  %r3h  %r4h  %r5h  %r6h  %r7h
-```
+**Important notes:**
+- ETCA is a **bare-metal target**. There is no operating system, so you need
+to provide your own startup code (`_start` entry point) and linker script if
+you need custom memory layout.
+- By default, LLD places `.text` at address `0xB4` (after ELF headers and
+program headers). Use `-Ttext=` or a linker script to override.
+- `--gc-sections` is automatically enabled for final links (not for `-r` links).
+- When invoked through clang with `-fuse-ld=lld`, LLD is found via the
+  standard driver search path (`ld.lld` in the build `bin/` directory).
 
-**Alternative naming (all forms accepted):**
-| Form | Example | Meaning |
-|------|---------|---------|
-| `%rN` | `%r0` | 16-bit word register |
-| `%rNd` | `%r0d` | 32-bit doubleword |
-| `%rNq` | `%r0q` | 64-bit quadword |
-| `%rNh` | `%r0h` | 8-bit byte |
-| `%rNx` | `%r0x` | 16-bit word (explicit) |
-| `%rdN` | `%rd0` | 32-bit doubleword (infix) |
-| `%rqN` | `%rq0` | 64-bit quadword (infix) |
-| `%dN` | `%d0` | 32-bit (backward compat) |
-| `%qN` | `%q0` | 64-bit (backward compat) |
-| `rN` | `r0` | Any register (without % prefix) |
+### 4.2 Using the binutils linker (`-fuse-ld=bfd`)
 
-**ABI names (all point to the corresponding register):**
+If you have the etca-binutils-gdb toolchain installed, tell clang to use it
+via `-fuse-ld=bfd`:
 
-| ABI Name | Register | Description |
-|----------|----------|-------------|
-| `a0` / `a1` / `a2` | r0 / r1 / r2 | Argument registers |
-| `s0` / `s1` | r3 / r4 | Callee-saved registers |
-| `bp` | r5 | Base pointer (frame pointer) |
-| `sp` | r6 | Stack pointer |
-| `ln` | r7 | Link register (return address) |
-| `t0` / `t1` / `t2` / `t3` / `t4` | r8 / r9 / r10 / r11 / r12 | Temp registers (REX, caller-saved) |
-| `s2` / `s3` / `s4` | r13 / r14 / r15 | Callee-saved registers (REX) |
-
-Size-qualified ABI names are also accepted: `t0d`, `s2q`, etc.
-
-### 3.2 Instruction Set
-
-#### Base ISA — Computation (RR format)
-
-| Mnemonic | Opcode | Operation | Flags | Description |
-|----------|--------|-----------|-------|-------------|
-| `add dst, src2` | 0000 | `dst ← dst + src2` | ZNCV | Add |
-| `sub dst, src2` | 0001 | `dst ← dst - src2` | ZNCV | Subtract |
-| `rsub dst, src2` | 0010 | `dst ← src2 - dst` | ZNCV | Reverse subtract |
-| `cmp src1, src2` | 0011 | `_ ← src1 - src2` | ZNCV | Compare (no dest) |
-| `or dst, src2` | 0100 | `dst ← dst \| src2` | ZN | Bitwise OR |
-| `xor dst, src2` | 0101 | `dst ← dst ^ src2` | ZN | Bitwise XOR |
-| `and dst, src2` | 0110 | `dst ← dst & src2` | ZN | Bitwise AND |
-| `test src1, src2` | 0111 | `_ ← src1 & src2` | ZN | Test bits (no dest) |
-| `movz dst, src` | 1000 | `dst ← src` | None | Move, zero-extend |
-| `movs dst, src` | 1001 | `dst ← src` | None | Move, sign-extend |
-| `load dst, addr` | 1010 | `dst ← MEM[addr]` | None | Load from memory |
-| `store val, addr` | 1011 | `MEM[addr] ← val` | None | Store to memory |
-
-#### Base ISA — Computation (RI format)
-
-Same operations, but second operand is a 5-bit immediate:
-| Mnemonic | Example | Extension |
-|----------|---------|-----------|
-| `add dst, imm` | `add %r0, 5` | Sign-extended |
-| `sub dst, imm` | `sub %r0, 5` | Sign-extended |
-| `cmp dst, imm` | `cmp %r0, 5` | Sign-extended |
-| `movz dst, imm` | `movz %r0, 31` | Zero-extended |
-| `movs dst, imm` | `movs %r0, -1` | Sign-extended |
-| `slo dst, imm` | `slo %r0, 7` | Shift-left-OR |
-
-Immediate range: `-16` to `+15` (sign-extended) for most ops, `0` to `31` (zero-extended) for MOVZ.
-
-#### BYTE Extension (SS=00)
-
-All RR/RI operations work on 8-bit data when suffixed with `h` or when the source register has `h` suffix:
-
-```
-add %r0h, %r1h     # 8-bit addition
-load %r0h, %r1     # 8-bit load (byte)
-store %r0h, %r1    # 8-bit store (byte)
+```sh
+# Use binutils ld.bfd instead of the default LLD
+clang --target=etca-unknown-elf -mcpu=generic -fuse-ld=bfd -nostdlib -o program.elf program.c
+#   → invokes: ld.bfd -melf16_etca -o program.elf ...
 ```
 
-#### DW/QW Extensions (SS=10 / SS=11)
+This works for all CPU models — clang passes the correct binutils emulation flag:
 
-Operations work on 32-bit or 64-bit data with the `d`/`q` register suffix or size suffix:
+| CPU Model | Binutils flag (`-fuse-ld=bfd`) |
+|-----------|-------------------------------|
+| generic (16-bit ptr) | `-melf16_etca` |
+| etca32 (32-bit ptr)  | `-melf32_etca` |
+| etca32p64 (64-bit ptr) | `-melf64_etca` |
+| etca64p32 (32-bit ptr) | `-melf32_etca` |
+| etca64 (64-bit ptr)  | `-melf64_etca` |
 
-```
-add %r0d, %r1d     # 32-bit addition (requires DW)
-add %r0q, %r1q     # 64-bit addition (requires QW)
-```
+If `ld.bfd` is not in your `$PATH`, the driver will report an error. Install
+the binutils toolchain or add its `bin/` directory to `$PATH`.
 
-#### Control Register Access
+**Note:** When using `-fuse-ld=bfd`, clang searches for `ld.bfd` (not
+`etca-elf-ld`). The `-fuse-ld=` mechanism always looks for `ld.<flavor>`.
 
-```
-readcr %r0, 0      # Read CPUID1 into %r0
-readcr %r0, 1      # Read CPUID2
-readcr %r0, 2      # Read FEAT
-writecr %r0, 0     # Write CPUID1 (NOP)
-```
+### 4.3 Binutils / LLD Cross-Compatibility
 
-#### SAF Extension
+Object files produced by LLVM's assembler (via `llvm-mc` or `clang -c`) use
+**RELA** format relocations, which are compatible with both LLD and GNU ld.
+This means you can assemble with LLVM and link with binutils (via
+`-fuse-ld=bfd`), or assemble with binutils and link with LLD (the default):
 
-```
-# Stack operations
-push %r0           # Push register onto stack
-push 5             # Push immediate
-pop %r0            # Pop register from stack
+### 4.4 Producing Flat Binaries / ROM Images
 
-# Calls and jumps
-call label         # PC-relative call (12-bit displacement)
-jmpr %r0           # Jump to register (return)
-callr %r0          # Call subroutine via register
+ETCA bare-metal systems typically run directly from ROM. You can produce
+flat binary images (raw machine code without ELF headers) in two ways:
 
-# Return (pseudo-instruction)
-ret                # Return from function (expands to jmpr %r7)
-```
+#### Method A: `--oformat binary` (direct, no intermediate ELF)
 
-#### Branch Instructions
+LLD can output a flat binary directly with the `--oformat binary` flag:
 
-```
-br label            # Unconditional branch
-beq label           # Branch if equal (Z)
-bne label           # Branch if not equal (!Z)
-bltu label          # Branch if below/less unsigned (C)
-bgeu label          # Branch if above/equal unsigned (!C)
-bleu label          # Branch if below or equal (C|Z)
-bgtu label          # Branch if above (!(C|Z))
-blt label           # Branch if less signed (N!=V)
-bge label           # Branch if greater/equal signed (N=V)
-ble label           # Branch if less or equal (Z|(N!=V))
-bgt label           # Branch if greater (Z&(N=V))
+```sh
+# Write only the .text section contents as raw binary
+ld.lld -m elf32etca --oformat binary -o program.bin program.o
+
+# With a custom base address (sets VMA, binary starts at offset 0)
+ld.lld -m elf32etca --oformat binary -Ttext=0x1000 -o program.bin program.o
 ```
 
-Branch displacement is 9-bit signed (±256 halfwords = ±512 bytes).
+Only `SHF_ALLOC` sections (`.text`, `.data`, `.rodata`) are included in the
+binary output. `SHT_NOBITS` sections (`.bss`) are skipped.
 
-#### NOP
+#### Method B: `llvm-objcopy -O binary` (from ELF)
 
-```
-nop                 # No operation (encoded as 0x008F)
-```
+Alternatively, link to ELF first, then extract the binary image:
 
-### 3.3 Instruction Syntax
+```sh
+# Step 1: Link to ELF
+ld.lld -m elf32etca -o program.elf program.o
 
-**RR (Register-Register) format:**
-```
-mnemonic %dst, %src2
-```
-Example: `add %r0, %r1` — adds r1 to r0, stores result in r0.
-
-Exception for `movz`/`movs`: `movz %dst, %src` — copies src to dst.
-
-Exception for `cmp`/`test`: `cmp %src1, %src2` — no destination.
-
-**RI (Register-Immediate) format:**
-```
-mnemonic %dst, imm5
-```
-Example: `add %r0, 5` — adds 5 to r0, stores in r0.
-
-For `movz`/`movs` with immediate: `movz %dst, imm5`.
-
-**LOAD/STORE:**
-```
-load %dst, %addr     # Load from address in addr reg
-store %val, %addr    # Store val to address in addr reg
+# Step 2: Extract binary image
+llvm-objcopy -O binary program.elf program.bin
 ```
 
-**Branch/CALL:**
-```
-br label
-call label
-```
+Both methods produce identical output:
 
-**SAF Jump/Call via register:**
-```
-jmpr %reg
-callr %reg
+```sh
+ld.lld -m elf32etca --oformat binary -o a.bin a.o
+llvm-objcopy -O binary a.elf a.bin   # same result as above
+diff a.bin b.bin && echo "identical"
 ```
 
-**Size-qualified mnemonics:**
-```
-addh %r0, %r1       # 8-bit addition (same as add with h regs)
-addd %r0, %r1       # 32-bit addition (same as add with d regs)
-addq %r0, %r1       # 64-bit addition (same as add with q regs)
-```
+#### Method C: Via Clang + LLD + objcopy (full pipeline)
 
-### 3.4 Size Suffixes
+For a complete C source → ROM image pipeline:
 
-Instructions accept an optional size suffix that determines the operation width:
-
-| Suffix | Width | Example |
-|--------|-------|---------|
-| (none) | Inferred from register | `add %r0, %r1` → 16-bit |
-| `h` | 8-bit | `addh %r0, %r1` → 8-bit |
-| `d` | 32-bit | `addd %r0, %r1` → 32-bit |
-| `q` | 64-bit | `addq %r0, %r1` → 64-bit |
-
-If the register width differs from the suffix, the suffix takes precedence:
-
-```
-addd %r0, %r1       # 32-bit add (even though r0/r1 are 16-bit registers)
+```sh
+clang --target=etca-unknown-elf -mcpu=generic -fuse-ld=lld -nostdlib \
+  -Wl,-T,rom.ld -o program.elf program.c
+llvm-objcopy -O binary program.elf program.bin
 ```
 
-### 3.5 Labels
+#### Complete ROM Image Example
 
-Labels follow standard asm syntax:
+Create a linker script `etca_rom.ld` that places code in ROM and data in RAM:
 
-```asm
-.text
-    movz %r0, 10        # r0 = 10
-    movz %r1, 20        # r1 = 20
-loop:
-    sub %r0, 1          # r0--
-    cmp %r0, %r1        # compare
-    bne loop            # if not equal, continue loop
-    br done
-done:
-    jmpr %r7            # return
+```ld
+MEMORY
+{
+  ROM (rx)  : ORIGIN = 0x00000000, LENGTH = 1M
+  RAM (rwx) : ORIGIN = 0x10000000, LENGTH = 1M
+}
+
+SECTIONS
+{
+  .text : { *(.text*) } > ROM
+  .rodata : { *(.rodata*) } > ROM
+  .data : { *(.data*) } > RAM AT > ROM
+  .bss : { *(.bss*) } > RAM
+
+  /DISCARD/ : {
+    *(.comment*)
+    *(.note*)
+    *(.debug*)
+  }
+}
 ```
 
-### 3.6 Directives
+Then build the ROM image:
 
-Standard ELF directives are supported:
+```sh
+# Compile
+clang --target=etca-unknown-elf -mcpu=generic -c -o program.o program.c
 
-```asm
-.text                   # Code section
-.data                   # Data section
-.section .bss           # BSS section
-.globl func_name        # Export symbol
-.type func_name,@function
-.size func_name, .-func_name
-.p2align 1              # Align to 2 bytes
-.byte 0x10, 0x04        # Emit raw bytes
-.hword 0x1234           # Emit 16-bit value
-.word 0x12345678        # Emit 32-bit value
-.quad 0x1234            # Emit 64-bit value
-.string "hello"         # Emit string
-.zero 16                # Emit 16 zero bytes
+# Link and produce ELF
+ld.lld -m elf32etca -T etca_rom.ld -o program.elf program.o
+
+# Extract ROM contents (flat binary)
+llvm-objcopy -O binary program.elf program.bin
+
+# Check ROM image size and contents
+llvm-objdump -d program.elf          # verify instructions
+llvm-readelf -S program.elf          # verify section layout
+xxd program.bin | head -20           # inspect raw bytes
 ```
 
----
+**Notes on ROM images:**
+- `.bss` (uninitialized data) is NOT included in the binary — your startup
+  code must zero-initialize the BSS section at runtime using the VMA/length
+  stored in the ELF symbols.
+- `.data` initializers are stored in ROM (after `.text`) and must be copied
+  to RAM by startup code before `main()` is called.
+- The linker script `AT > ROM` directive places the data section's contents
+  in the ROM load address even though the runtime address is in RAM.
+- Use `-Ttext=0x...` for simple cases, or a full linker script for complex
+  memory maps with multiple regions.
 
-## 4. Appendix: Complete Instruction Reference
+### 4.5 Linker Scripts
 
-### RR Computation Instructions (Base + BYTE + DW + QW)
+ETCA supports standard GNU linker scripts for custom memory layouts:
 
-| Mnemonic | 8-bit (SS=00) | 16-bit (SS=01) | 32-bit (SS=10) | 64-bit (SS=11) |
-|----------|---------------|----------------|-----------------|-----------------|
-| `add` | `add %rh, %rh` | `add %r, %r` | `add %rd, %rd` | `add %rq, %rq` |
-| `sub` | `sub %rh, %rh` | `sub %r, %r` | `sub %rd, %rd` | `sub %rq, %rq` |
-| `rsub` | `rsub %rh, %rh` | `rsub %r, %r` | `rsub %rd, %rd` | `rsub %rq, %rq` |
-| `cmp` | `cmp %rh, %rh` | `cmp %r, %r` | `cmp %rd, %rd` | `cmp %rq, %rq` |
-| `or` | `or %rh, %rh` | `or %r, %r` | `or %rd, %rd` | `or %rq, %rq` |
-| `xor` | `xor %rh, %rh` | `xor %r, %r` | `xor %rd, %rd` | `xor %rq, %rq` |
-| `and` | `and %rh, %rh` | `and %r, %r` | `and %rd, %rd` | `and %rq, %rq` |
-| `test` | `test %rh, %rh` | `test %r, %r` | `test %rd, %rd` | `test %rq, %rq` |
-| `movz` | `movz %rh, %rh` | `movz %r, %r` | `movz %rd, %rd` | `movz %rq, %rq` |
-| `movs` | `movs %rh, %rh` | `movs %r, %r` | `movs %rd, %rd` | `movs %rq, %rq` |
-| `load` | `load %rh, %r` | `load %r, %r` | `load %rd, %rd` | `load %rq, %rq` |
-| `store` | `store %rh, %r` | `store %r, %r` | `store %rd, %rd` | `store %rq, %rq` |
+```ld
+/* etca.ld - Example linker script for ETCA */
+MEMORY
+{
+  ROM (rx)  : ORIGIN = 0x00000000, LENGTH = 64K
+  RAM (rwx) : ORIGIN = 0x00010000, LENGTH = 32K
+}
 
-**Note on load/store address register:** The address register width must match the pointer size of the CPU model. For 16-bit pointers (generic), use `%rN` as the address. For 32-bit pointers (etca32, etca64p32), use `%rNd`/`%dN`. For 64-bit pointers (etca32p64, etca64), use `%rNq`/`%qN`.
-
-### RI Computation Instructions
-
-| Mnemonic | 8-bit | 16-bit | 32-bit | 64-bit |
-|----------|-------|--------|--------|--------|
-| `add %r, imm` | ✓ | ✓ | ✓ | ✓ |
-| `sub %r, imm` | ✓ | ✓ | ✓ | ✓ |
-| `rsub %r, imm` | ✓ | ✓ | ✓ | ✓ |
-| `cmp %r, imm` | ✓ | ✓ | ✓ | ✓ |
-| `or %r, imm` | ✓ | ✓ | ✓ | ✓ |
-| `xor %r, imm` | ✓ | ✓ | ✓ | ✓ |
-| `and %r, imm` | ✓ | ✓ | ✓ | ✓ |
-| `test %r, imm` | ✓ | ✓ | ✓ | ✓ |
-| `movz %r, imm` | ✓ | ✓ | ✓ | ✓ |
-| `movs %r, imm` | ✓ | ✓ | ✓ | ✓ |
-
-### SAF Instructions
-
-| Instruction | Description |
-|-------------|-------------|
-| `push %r` | Push register onto stack |
-| `push imm` | Push 5-bit unsigned immediate |
-| `pop %r` | Pop register from stack |
-| `call label` | PC-relative call (12-bit displacement) |
-| `jmpr %r` | Jump to register (return) |
-| `callr %r` | Call via register |
-
-### Branch Instructions
-
-| Instruction | Condition | Encoding |
-|-------------|-----------|----------|
-| `br label` | Always (unconditional) | 0xEE |
-| `beq label` | Equal (Z) | 0x00 |
-| `bne label` | Not equal (!Z) | 0x01 |
-| `bltu label` | Below/unsigned less (C) | 0x04 |
-| `bgeu label` | Above or equal unsigned (!C) | 0x05 |
-| `bleu label` | Below or equal (C\|Z) | 0x08 |
-| `bgtu label` | Above unsigned (!(C\|Z)) | 0x09 |
-| `blt label` | Less signed (N≠V) | 0x0A |
-| `bge label` | Greater or equal signed (N=V) | 0x0B |
-| `ble label` | Less or equal (Z\|(N≠V)) | 0x0C |
-| `bgt label` | Greater signed (!Z & N=V) | 0x0D |
-
-### Pseudo Instructions
-
-| Pseudo | Expansion | Description |
-|--------|-----------|-------------|
-| `nop` | `0x008F` (hardware NOP) | No operation |
-| `ret` | `jmpr %r7` | Return from function |
-| `mov dst, src` | `movz` or `movs` depending on context | Generic move |
-
-### REX Extension (r8-r15)
-
-When `-mattr=+rex` is enabled, registers r8-r15 (and their d/q variants) become available. The assembler automatically emits a REX prefix byte before any instruction that uses a register ≥ 8:
-
-```asm
-add %r8, %r9         # Uses REX prefix (A=1, B=1)
-add %r8d, %r9d       # 32-bit with REX
-add %r8q, %r9q       # 64-bit with REX
-add %r8, 5           # RI with REX
-load %r8, %r9        # LOAD with REX
-push %r8             # PUSH with REX
-pop %r9              # POP with REX
+SECTIONS
+{
+  .text : { *(.text*) } > ROM
+  .data : { *(.data*) } > RAM AT > ROM
+  .bss  : { *(.bss*)  } > RAM
+}
 ```
 
-The REX prefix is automatically inserted by the encoder; you never write it explicitly.
+Use with:
+```sh
+ld.lld -m elf32etca -T etca.ld -o program.elf program.o
+```
 
----
 
 ## FAQ / Troubleshooting
 
-### "first operand must be a register" error
-
-You're trying to use an instruction that expects a register operand with a non-register value. Check that the mnemonic and operand types match (e.g., `add` needs two registers, `addi` is not a valid mnemonic — use `add` with an immediate).
-
-### "unknown instruction mnemonic" error
-
-The instruction may require a specific extension. Enable it with `-mattr=+saf` (for push/pop/call), `-mattr=+rex` (for r8-r15), or use the correct CPU model.
-
-### "instruction not available in this width/form"
-
-The operation doesn't exist for the requested width. For example, `slo` only exists in 16-bit form.
-
-### REX prefix not emitted
-
-The REX prefix is emitted automatically when any register operand has a register number ≥ 8. Ensure `-mattr=+rex` is passed to the assembler.
-
 ### Can't link — no linker script
 
-ETCA is a bare-metal target. You'll need to provide your own linker script and startup code. The default linker is `etca-elf-ld`.
+ETCA is a bare-metal target. You'll need to provide your own linker script and startup code.
+
+### Linker not found (when using `-fuse-ld=bfd`)
+
+This error only occurs when you explicitly request the binutils linker and
+it's not installed. By default, LLD is used and is always available in the
+build directory (`bin/ld.lld`). If you do pass `-fuse-ld=bfd` without having
+the binutils toolchain installed, you'll see:
+
+```
+clang: error: etca-elf-ld command failed with exit code 1
+```
+
+**Solutions:**
+- Remove `-fuse-ld=bfd` to use LLD (the default, always works).
+- Or install the etca-binutils-gdb toolchain and add its `bin/` directory
+  to `$PATH`.
+
+### LLD says "internal linker error: cannot read addend"
+
+This means LLD encountered a relocation type it doesn't understand.
+Make sure you're using a version of llvm-mc that has the correct relocation
+mapping (ELF fixup → relocation type). Rebuild with the latest ETCA backend.
+
+### LLD in clang link step fails (`-lc` / `-lgcc` not found)
+
+ETCA is bare-metal and doesn't have libc by default. Add `-nostdlib` to
+the clang invocation to skip standard library linking:
+
+```sh
+clang --target=etca-unknown-elf -mcpu=generic -nostdlib -o out.elf file.c
+```
 
 ---
 

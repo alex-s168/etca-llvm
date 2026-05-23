@@ -33,7 +33,8 @@ MCAsmBackend *createETCAAsmBackend(const Target &T, const MCSubtargetInfo &STI,
                                    const MCRegisterInfo &MRI,
                                    const MCTargetOptions &Options);
 
-std::unique_ptr<MCObjectTargetWriter> createETCAELFObjectWriter(uint8_t OSABI);
+std::unique_ptr<MCObjectTargetWriter> createETCAELFObjectWriter(uint8_t OSABI,
+                                                                bool Is64Bit);
 
 } // namespace llvm
 

@@ -17,8 +17,8 @@
 # SECTIONS:     ]
 # SECTIONS:   }
 # SECTIONS:   Section {
-# SECTIONS:     Name: .rel.text
-# SECTIONS:     Type: SHT_REL (0x9)
+# SECTIONS:     Name: .rela.text
+# SECTIONS:     Type: SHT_RELA (0x4)
 # SECTIONS:     Flags [ (0x40)
 # SECTIONS:       SHF_INFO_LINK (0x40)
 # SECTIONS:     ]
@@ -32,17 +32,17 @@
 # SECTIONS:     ]
 # SECTIONS:   }
 # SECTIONS:   Section {
-# SECTIONS:     Name: .rel.data
-# SECTIONS:     Type: SHT_REL (0x9)
+# SECTIONS:     Name: .rela.data
+# SECTIONS:     Type: SHT_RELA (0x4)
 # SECTIONS:   }
 
 # CHECK: Relocations [
-# CHECK:   Section ({{[0-9]+}}) .rel.text {
-# CHECK:     0x0 R_ETCA_NONE ext_func
-# CHECK:     0x2 R_ETCA_NONE ext_func
+# CHECK:   Section ({{[0-9]+}}) .rela.text {
+# CHECK:     0x0 R_ETCA_BASE_JMP ext_func 0x0
+# CHECK:     0x2 R_ETCA_SAF_CALL ext_func 0x0
 # CHECK:   }
-# CHECK:   Section ({{[0-9]+}}) .rel.data {
-# CHECK:     0x0 R_ETCA_NONE ext_data
+# CHECK:   Section ({{[0-9]+}}) .rela.data {
+# CHECK:     0x0 R_ETCA_16 ext_data 0x0
 # CHECK:   }
 # CHECK: ]
 

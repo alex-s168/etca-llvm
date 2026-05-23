@@ -20,8 +20,8 @@
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/Driver.h"
 #include "clang/Driver/InputInfo.h"
-#include "clang/Options/Options.h"
 #include "clang/Driver/Types.h"
+#include "clang/Options/Options.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
@@ -70,8 +70,7 @@ void ETCAToolChain::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
   if (GCCInstallation.isValid()) {
     SmallString<128> IncludeDir;
     llvm::sys::path::append(IncludeDir, GCCInstallation.getParentLibPath(),
-                            "..", GCCInstallation.getTriple().str(),
-                            "include");
+                            "..", GCCInstallation.getTriple().str(), "include");
     if (llvm::sys::fs::is_directory(IncludeDir))
       addSystemInclude(DriverArgs, CC1Args, IncludeDir);
   }
@@ -88,8 +87,9 @@ void ETCAToolChain::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
     addSystemInclude(DriverArgs, CC1Args, Dir);
 }
 
-std::string ETCAToolChain::ComputeEffectiveClangTriple(
-    const ArgList &Args, types::ID InputType) const {
+std::string
+ETCAToolChain::ComputeEffectiveClangTriple(const ArgList &Args,
+                                           types::ID InputType) const {
   // Start with the base triple (e.g., "etca-unknown-elf").
   std::string TripleStr = getTripleString().str();
 
@@ -114,8 +114,8 @@ std::string ETCAToolChain::ComputeEffectiveClangTriple(
   // size to the OS name. The base triple is e.g. "etca-unknown-elf".
   if (PtrSize != 16) {
     // Rebuild triple string: "etca-unknown-elf" + "32" or "64"
-    TripleStr = (getArchName().str() + "-unknown-elf" +
-                 (PtrSize == 32 ? "32" : "64"));
+    TripleStr =
+        (getArchName().str() + "-unknown-elf" + (PtrSize == 32 ? "32" : "64"));
   }
 
   return TripleStr;
@@ -144,33 +144,46 @@ void ETCA::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   const ToolChain &ToolChain = getToolChain();
   const Driver &D = ToolChain.getDriver();
 
-  // Determine which linker to use
-  std::string Linker = ToolChain.GetProgramPath(getShortName());
+  // Determine which linker to use (handles -fuse-ld=lld, -fuse-ld=bfd, etc.)
+  bool LinkerIsLLD = false;
+  std::string Linker = ToolChain.GetLinkerPath(&LinkerIsLLD);
+
+  // Also detect LLD from the resolved path (GetLinkerPath only sets
+  // LinkerIsLLD when -fuse-ld=lld is explicit; the default "ld.lld"
+  // path needs filename detection too).
+  if (!LinkerIsLLD) {
+    StringRef LinkerName = llvm::sys::path::filename(Linker);
+    LinkerIsLLD = LinkerName.contains("lld");
+  }
 
   ArgStringList CmdArgs;
+
+  // Determine emulation from target CPU
+  std::string CPU = getCPUName(D, Args, ToolChain.getTriple());
+  StringRef Emulation;
+  if (LinkerIsLLD) {
+    // LLD emulation flags
+    if (CPU == "etca64" || CPU == "etca32p64")
+      Emulation = "elf64etca";
+    else
+      Emulation = "elf32etca"; // all 32-bit pointer variants + generic
+  } else {
+    // Binutils emulation flags
+    if (CPU == "etca64" || CPU == "etca32p64")
+      Emulation = "elf64_etca";
+    else if (CPU == "etca64p32" || CPU == "etca32")
+      Emulation = "elf32_etca";
+    else
+      Emulation = "elf16_etca"; // generic (16-bit)
+  }
+
+  if (!Emulation.empty()) {
+    CmdArgs.push_back(Args.MakeArgString(Twine("-m") + Emulation));
+  }
 
   // Output file
   CmdArgs.push_back("-o");
   CmdArgs.push_back(Output.getFilename());
-
-  // Only add default libraries if the user hasn't opted out
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_r) &&
-      !Args.hasArg(options::OPT_nodefaultlibs)) {
-    // Emulation selection for etca-ld
-    if (Linker.find("etca-ld") != std::string::npos) {
-      // Select emulation based on the target CPU/arch
-      std::string CPU = getCPUName(D, Args, ToolChain.getTriple());
-      if (CPU == "etca64" || CPU == "etca32p64")
-        CmdArgs.push_back("-melf64_etca");
-      else if (CPU == "etca64p32")
-        CmdArgs.push_back("-melf32_etca");
-      else if (CPU == "etca32")
-        CmdArgs.push_back("-melf32_etca");
-      else
-        CmdArgs.push_back("-melf16_etca"); // generic
-    }
-  }
 
   // Garbage collect unused sections
   if (!Args.hasArg(options::OPT_r))
@@ -184,8 +197,7 @@ void ETCA::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   AddLinkerInputs(ToolChain, Inputs, Args, CmdArgs, JA);
 
   // Standard libraries (if not disabled)
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_r) &&
+  if (!Args.hasArg(options::OPT_nostdlib) && !Args.hasArg(options::OPT_r) &&
       !Args.hasArg(options::OPT_nodefaultlibs)) {
     // On bare-metal, we link -lc if it's available
     if (!Args.hasArg(options::OPT_nolibc)) {

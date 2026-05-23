@@ -432,9 +432,14 @@ MCCodeEmitter *llvm::createETCAMCCodeEmitter(const MCInstrInfo &MCII,
 
 namespace {
 class ETCAAsmBackend : public MCAsmBackend {
+  bool Is64Bit;
+
 public:
   ETCAAsmBackend(const MCSubtargetInfo &STI, const MCTargetOptions &Options)
-      : MCAsmBackend(llvm::endianness::little) {}
+      : MCAsmBackend(llvm::endianness::little), Is64Bit(false) {
+    if (STI.hasFeature(ETCA::FeatureQWAS))
+      Is64Bit = true;
+  }
 
   ~ETCAAsmBackend() override = default;
 
@@ -521,7 +526,7 @@ public:
 
   std::unique_ptr<MCObjectTargetWriter>
   createObjectTargetWriter() const override {
-    return createETCAELFObjectWriter(0);
+    return createETCAELFObjectWriter(0, Is64Bit);
   }
 
   MCFixupKindInfo getFixupKindInfo(MCFixupKind Kind) const override {
@@ -589,46 +594,65 @@ enum ETCARelocType : unsigned {
 
 class ETCAELFObjectWriter : public MCELFObjectTargetWriter {
 public:
-  ETCAELFObjectWriter(uint8_t OSABI)
-      : MCELFObjectTargetWriter(/*Is64Bit=*/false, OSABI, ELF::EM_ETCA,
-                                /*HasRelocationAddend=*/false) {}
+  ETCAELFObjectWriter(uint8_t OSABI, bool Is64Bit)
+      : MCELFObjectTargetWriter(Is64Bit, OSABI, ELF::EM_ETCA,
+                                /*HasRelocationAddend=*/true) {}
 
   ~ETCAELFObjectWriter() override = default;
 
   unsigned getRelocType(const MCFixup &Fixup, const MCValue &Target,
                         bool IsPCRel) const override {
     MCFixupKind Kind = Fixup.getKind();
-    if (Kind < FirstTargetFixupKind)
-      return R_ETCA_NONE;
 
-    unsigned ETCAKind = Kind - FirstTargetFixupKind;
-
-    switch (ETCAKind) {
-    case ETCA::fixup_ETCA_NONE:
-      return R_ETCA_NONE;
-    case ETCA::fixup_ETCA_BASE_JMP:
-      return R_ETCA_BASE_JMP;
-    case ETCA::fixup_ETCA_8:
-      return R_ETCA_8;
-    case ETCA::fixup_ETCA_16:
-      return R_ETCA_16;
-    case ETCA::fixup_ETCA_32:
-      return R_ETCA_32;
-    case ETCA::fixup_ETCA_64:
-      return R_ETCA_64;
-    case ETCA::fixup_ETCA_SAF_CALL:
-      return R_ETCA_SAF_CALL;
-    default:
-      return R_ETCA_NONE;
+    // Handle generic data fixups (absolute data references).
+    if (Kind < FirstTargetFixupKind) {
+      switch (unsigned(Kind)) {
+      case FK_Data_1:
+        return R_ETCA_8;
+      case FK_Data_2:
+        return R_ETCA_16;
+      case FK_Data_4:
+        return R_ETCA_32;
+      case FK_Data_8:
+        return R_ETCA_64;
+      default:
+        return R_ETCA_NONE;
+      }
     }
+
+    // ETCA FixupKind values start at FirstTargetFixupKind.
+    // Use a zero-based index into the fixup enum.
+    static constexpr unsigned FixupBase = ETCA::fixup_ETCA_NONE;
+    unsigned ETCAKind = Kind - FixupBase;
+
+    // Map to relocation types matching the Fixups enum order.
+    // fixup_ETCA_NONE → R_ETCA_NONE
+    // fixup_ETCA_BASE_JMP → R_ETCA_BASE_JMP
+    // fixup_ETCA_8 → R_ETCA_8
+    // fixup_ETCA_16 → R_ETCA_16
+    // fixup_ETCA_32 → R_ETCA_32
+    // fixup_ETCA_64 → R_ETCA_64
+    // fixup_ETCA_SAF_CALL → R_ETCA_SAF_CALL
+    static constexpr unsigned RelocMap[] = {
+        R_ETCA_NONE,     // 0: fixup_ETCA_NONE
+        R_ETCA_BASE_JMP, // 1: fixup_ETCA_BASE_JMP
+        R_ETCA_8,        // 2: fixup_ETCA_8
+        R_ETCA_16,       // 3: fixup_ETCA_16
+        R_ETCA_32,       // 4: fixup_ETCA_32
+        R_ETCA_64,       // 5: fixup_ETCA_64
+        R_ETCA_SAF_CALL, // 6: fixup_ETCA_SAF_CALL
+    };
+    if (ETCAKind < std::size(RelocMap))
+      return RelocMap[ETCAKind];
+    return R_ETCA_NONE;
   }
 };
 
 } // namespace
 
 std::unique_ptr<MCObjectTargetWriter>
-llvm::createETCAELFObjectWriter(uint8_t OSABI) {
-  return std::make_unique<ETCAELFObjectWriter>(OSABI);
+llvm::createETCAELFObjectWriter(uint8_t OSABI, bool Is64Bit) {
+  return std::make_unique<ETCAELFObjectWriter>(OSABI, Is64Bit);
 }
 
 //===----------------------------------------------------------------------===//

@@ -1,4 +1,5 @@
-//===--- ETCA.h - ETCA ToolChain Implementations -----------------*- C++ -*-===//
+//===--- ETCA.h - ETCA ToolChain Implementations -----------------*- C++
+//-*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -26,12 +27,14 @@ public:
   ETCAToolChain(const Driver &D, const llvm::Triple &Triple,
                 const llvm::opt::ArgList &Args);
 
-  void AddClangSystemIncludeArgs(const llvm::opt::ArgList &DriverArgs,
-                                 llvm::opt::ArgStringList &CC1Args) const override;
+  void
+  AddClangSystemIncludeArgs(const llvm::opt::ArgList &DriverArgs,
+                            llvm::opt::ArgStringList &CC1Args) const override;
 
-  void addClangTargetOptions(const llvm::opt::ArgList &DriverArgs,
-                             llvm::opt::ArgStringList &CC1Args,
-                             Action::OffloadKind DeviceOffloadKind) const override;
+  void
+  addClangTargetOptions(const llvm::opt::ArgList &DriverArgs,
+                        llvm::opt::ArgStringList &CC1Args,
+                        Action::OffloadKind DeviceOffloadKind) const override;
 
   // ETCA is a bare-metal target — no PIC/PIE by default
   bool isPICDefault() const override { return false; }
@@ -48,6 +51,10 @@ public:
 
   bool HasNativeLLVMSupport() const override { return true; }
 
+  // Default linker: LLD (always available in the build directory).
+  // Use -fuse-ld=bfd or install etca-elf-ld in $PATH to use binutils.
+  const char *getDefaultLinker() const override { return "ld.lld"; }
+
   std::string ComputeEffectiveClangTriple(
       const llvm::opt::ArgList &Args,
       types::ID InputType = types::TY_INVALID) const override;
@@ -63,8 +70,7 @@ namespace ETCA {
 
 class LLVM_LIBRARY_VISIBILITY Linker final : public Tool {
 public:
-  Linker(const ToolChain &TC)
-      : Tool("ETCA::Linker", "etca-elf-ld", TC) {}
+  Linker(const ToolChain &TC) : Tool("ETCA::Linker", "etca-elf-ld", TC) {}
 
   bool hasIntegratedCPP() const override { return false; }
   bool isLinkJob() const override { return true; }
