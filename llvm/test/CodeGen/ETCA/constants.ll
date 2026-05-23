@@ -10,7 +10,7 @@
 ;;
 ;; Tests MOVZ (zero-extend move) and MOVS (sign-extend move) used for
 ;; constant materialisation, frame-index computation, and register-to-register
-;; copies.  The ETCA backend maps ISD::Constant and ISD::FrameIndex to MOVZ.
+;; copies.  The ETCA backend maps constants and frame indices to MOVZ.
 ;;
 ;; MOVZ:  movz $dst, $imm (5-bit immediate) — small constants
 ;; MOVZI: movz $dst, $imm  — large immediate (same mnemonic, RI encoding)

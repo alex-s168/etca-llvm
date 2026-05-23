@@ -1,4 +1,4 @@
-//===- ETCAISelLowering.h - ETCA DAG Lowering Interface ---------*- C++ -*-===//
+//===- ETCAISelLowering.h - ETCA Target Lowering Configuration --*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,14 +6,12 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// ETCA target lowering configuration.
+// This file defines the ETCATargetLowering class, which configures register
+// classes and provides target queries (addressing modes, immediate legality)
+// for the GlobalISel pipeline.
 //
-// This file defines the ETCATargetLowering class, which configures which
-// operations are legal/expand/custom for the ETCA target. This is used by
-// the GlobalISel pipeline (via getTargetLowering()).
-//
-// NOTE: SDAG lowering hooks (LowerOperation, LowerFormalArguments, etc.)
-// have been deliberately removed. ETCA uses GlobalISel exclusively.
+// NOTE: All SDAG-specific lowering hooks (LowerOperation, etc.) have been
+// deliberately removed. ETCA uses GlobalISel exclusively.
 //
 //===----------------------------------------------------------------------===//
 
@@ -25,8 +23,6 @@
 namespace llvm {
 
 class ETCASubtarget;
-class SelectionDAG;
-class SDValue;
 
 class ETCATargetLowering : public TargetLowering {
 public:

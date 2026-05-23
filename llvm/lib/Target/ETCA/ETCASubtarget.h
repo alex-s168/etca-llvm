@@ -97,10 +97,6 @@ public:
   const TargetRegisterInfo *getRegisterInfo() const override;
   const TargetLowering *getTargetLowering() const override;
 
-  const SelectionDAGTargetInfo *getSelectionDAGInfo() const override {
-    return nullptr;
-  }
-
   // GISel accessors
   const CallLowering *getCallLowering() const override;
   const LegalizerInfo *getLegalizerInfo() const override;

@@ -417,53 +417,11 @@ let Predicates = [HasSAF], isCall = 1, isTerminator = 1, isBarrier = 1,
 }
 
 //===----------------------------------------------------------------------===//
-// Pattern definitions for instruction selection
+// Instruction selection patterns
 //
-// These patterns map LLVM generic operations to ETCA machine instructions.
+// ETCA uses GlobalISel exclusively. All isel logic lives in the
+// InstructionSelector (GISel/ETCAInstructionSelector.cpp).  SDAG Pat<>
+// patterns (which would require -gen-dag-isel) are deliberately absent.
+//
+// SLO16 is handled in the InstructionSelector (non-tied, GISel-only).
 //===----------------------------------------------------------------------===//
-
-// --- 16-bit arithmetic ---
-def : Pat<(add GPR:$src1, GPR:$src2), (ADD16 GPR:$src1, GPR:$src2)>;
-def : Pat<(sub GPR:$src1, GPR:$src2), (SUB16 GPR:$src1, GPR:$src2)>;
-def : Pat<(or  GPR:$src1, GPR:$src2), (OR16  GPR:$src1, GPR:$src2)>;
-def : Pat<(xor GPR:$src1, GPR:$src2), (XOR16 GPR:$src1, GPR:$src2)>;
-def : Pat<(and GPR:$src1, GPR:$src2), (AND16 GPR:$src1, GPR:$src2)>;
-
-def : Pat<(add GPR:$src1, i16imm:$imm), (ADDI16 GPR:$src1, i16imm:$imm)>;
-def : Pat<(sub GPR:$src1, i16imm:$imm), (SUBI16 GPR:$src1, i16imm:$imm)>;
-def : Pat<(or  GPR:$src1, i16imm:$imm), (ORI16  GPR:$src1, i16imm:$imm)>;
-def : Pat<(xor GPR:$src1, i16imm:$imm), (XORI16 GPR:$src1, i16imm:$imm)>;
-def : Pat<(and GPR:$src1, i16imm:$imm), (ANDI16 GPR:$src1, i16imm:$imm)>;
-
-// SLO16 is non-tied (GISel-only), SDAG patterns not used.
-// def : Pat<(shl GPR:$src1, i16imm:$imm), (SLO16 i16imm:$imm)>;
-
-// --- 32-bit arithmetic (DW extension) ---
-let Predicates = [HasDW] in {
-  def : Pat<(add GPR32:$src1, GPR32:$src2), (ADD32 GPR32:$src1, GPR32:$src2)>;
-  def : Pat<(sub GPR32:$src1, GPR32:$src2), (SUB32 GPR32:$src1, GPR32:$src2)>;
-  def : Pat<(or  GPR32:$src1, GPR32:$src2), (OR32  GPR32:$src1, GPR32:$src2)>;
-  def : Pat<(xor GPR32:$src1, GPR32:$src2), (XOR32 GPR32:$src1, GPR32:$src2)>;
-  def : Pat<(and GPR32:$src1, GPR32:$src2), (AND32 GPR32:$src1, GPR32:$src2)>;
-
-  def : Pat<(add GPR32:$src1, i32imm:$imm), (ADDI32 GPR32:$src1, i32imm:$imm)>;
-  def : Pat<(sub GPR32:$src1, i32imm:$imm), (SUBI32 GPR32:$src1, i32imm:$imm)>;
-  def : Pat<(or  GPR32:$src1, i32imm:$imm), (ORI32  GPR32:$src1, i32imm:$imm)>;
-  def : Pat<(xor GPR32:$src1, i32imm:$imm), (XORI32 GPR32:$src1, i32imm:$imm)>;
-  def : Pat<(and GPR32:$src1, i32imm:$imm), (ANDI32 GPR32:$src1, i32imm:$imm)>;
-}
-
-// --- 64-bit arithmetic (QW extension) ---
-let Predicates = [HasQW] in {
-  def : Pat<(add GPR64:$src1, GPR64:$src2), (ADD64 GPR64:$src1, GPR64:$src2)>;
-  def : Pat<(sub GPR64:$src1, GPR64:$src2), (SUB64 GPR64:$src1, GPR64:$src2)>;
-  def : Pat<(or  GPR64:$src1, GPR64:$src2), (OR64  GPR64:$src1, GPR64:$src2)>;
-  def : Pat<(xor GPR64:$src1, GPR64:$src2), (XOR64 GPR64:$src1, GPR64:$src2)>;
-  def : Pat<(and GPR64:$src1, GPR64:$src2), (AND64 GPR64:$src1, GPR64:$src2)>;
-
-  def : Pat<(add GPR64:$src1, i64imm:$imm), (ADDI64 GPR64:$src1, i64imm:$imm)>;
-  def : Pat<(sub GPR64:$src1, i64imm:$imm), (SUBI64 GPR64:$src1, i64imm:$imm)>;
-  def : Pat<(or  GPR64:$src1, i64imm:$imm), (ORI64  GPR64:$src1, i64imm:$imm)>;
-  def : Pat<(xor GPR64:$src1, i64imm:$imm), (XORI64 GPR64:$src1, i64imm:$imm)>;
-  def : Pat<(and GPR64:$src1, i64imm:$imm), (ANDI64 GPR64:$src1, i64imm:$imm)>;
-}

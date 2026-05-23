@@ -6,32 +6,6 @@
 
 ---
 
-## 🔴 High Severity Issues
-
-### 9. `lowerCall` Doesn't Mark R7 as Clobbered (ETCACallLowering.cpp)
-
-The `CALL_Pseudo` instruction has `Defs = [R7]` in the .td file (which marks R7 as defined), but the calling convention's callee-saved list does NOT include R7 (correct — it's caller-saved). However, `lowerCall` must also ensure R7 is marked as clobbered by the call. The `Defs = [R7]` in the .td file does mark it as implicitly defined, but the register allocator needs the `getCallPreservedMask()` to NOT include R7, which is correct. However, R7's liveness as a "defined by call" means any live range of R7 across the call will be killed, which is what we want since the call clobbers R7.
-
-Actually this is handled correctly — CALL_Pseudo has `let Defs = [R7]`, which marks R7 as an implicit def. The register allocator sees this and kills any previous live range of R7 across the call.
-
-### 10. `getLoadStoreActions` Missing for Wider Types (ETCAISelLowering.cpp)
-
-**File**: `llvm/lib/Target/ETCA/ETCAISelLowering.cpp`
-
-```cpp
-if (WS <= 16) {
-    setLoadExtAction(ISD::ZEXTLOAD, MVT::i16, MVT::i8, Expand);
-    setLoadExtAction(ISD::SEXTLOAD, MVT::i16, MVT::i8, Expand);
-    setLoadExtAction(ISD::EXTLOAD, MVT::i16, MVT::i8, Expand);
-}
-```
-
-When `WS >= 32`, there are no load extension actions set for `MVT::i32` → `MVT::i8` or `MVT::i32` → `MVT::i16`. These should be set to `Expand` to prevent the DAGCombiner from creating illegal extending loads.
-
-Since ETCA is GISel-only, this only matters if the SDAG lowering is ever exposed. It's a pre-existing issue from the SDAG era.
-
----
-
 ## 🟡 Medium Severity Issues
 
 ### 11. `computeDataLayout` Duplicates `buildDataLayoutString` Logic (ETCATargetMachine.cpp)

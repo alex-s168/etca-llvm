@@ -1,4 +1,5 @@
-//===- ETCAISelLowering.cpp - ETCA DAG Lowering Implementation ------------===//
+//===- ETCAISelLowering.cpp - ETCA Target Lowering Implementation
+//----------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,15 +7,10 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// ETCA target lowering.
-//
-// Configures which operations are legal/expand/custom for the ETCA target.
-// This is used by both GISel (via Legality check). The constructor registers
-// register classes and sets operation actions for all supported types and
-// CPU variants.
-//
-// NOTE: SDAG lowering hooks (LowerOperation, LowerFormalArguments, etc.) have
-// been deliberately removed. ETCA uses GlobalISel exclusively.
+// ETCA target lowering configuration.  This file only retains the constructor
+// (register classes + shared properties) and isLegalAddressingMode.  All
+// SDAG-specific operation action setup has been removed — ETCA uses GlobalISel
+// exclusively (LegalizerInfo in GISel/ETCALegalizerInfo.cpp handles legality).
 //
 //===----------------------------------------------------------------------===//
 
@@ -40,6 +36,8 @@ ETCATargetLowering::ETCATargetLowering(const TargetMachine &TM,
                                        const ETCASubtarget &STI)
     : TargetLowering(TM, STI), STI(STI) {
   // Register the appropriate register classes based on word size.
+  // (GISel uses these register classes via RegisterBankInfo and
+  // InstructionSelector.)
   unsigned WS = STI.getWordSize();
 
   if (WS == 64) {
@@ -51,88 +49,15 @@ ETCATargetLowering::ETCATargetLowering(const TargetMachine &TM,
   addRegisterClass(MVT::i16, &GPRRegClass);
   computeRegisterProperties(STI.getRegisterInfo());
 
-  // Set up type actions for operations based on register width.
-  // The legal types are determined by WS.
-
-  // Load extension actions
-  if (WS <= 16) {
-    setLoadExtAction(ISD::ZEXTLOAD, MVT::i16, MVT::i8, Expand);
-    setLoadExtAction(ISD::SEXTLOAD, MVT::i16, MVT::i8, Expand);
-    setLoadExtAction(ISD::EXTLOAD, MVT::i16, MVT::i8, Expand);
-  }
-
-  // MUL/DIV are not natively supported in base ISA.
-  // Use libcalls (compiler-rt __mulhi3, __divhi3, etc.).
-  if (WS == 64) {
-    setOperationAction(ISD::MUL, MVT::i64, LibCall);
-    setOperationAction(ISD::UDIV, MVT::i64, LibCall);
-    setOperationAction(ISD::SDIV, MVT::i64, LibCall);
-    setOperationAction(ISD::UREM, MVT::i64, LibCall);
-    setOperationAction(ISD::SREM, MVT::i64, LibCall);
-  }
-  if (WS >= 32) {
-    setOperationAction(ISD::MUL, MVT::i32, LibCall);
-    setOperationAction(ISD::UDIV, MVT::i32, LibCall);
-    setOperationAction(ISD::SDIV, MVT::i32, LibCall);
-    setOperationAction(ISD::UREM, MVT::i32, LibCall);
-    setOperationAction(ISD::SREM, MVT::i32, LibCall);
-  }
-  setOperationAction(ISD::MUL, MVT::i16, LibCall);
-  setOperationAction(ISD::UDIV, MVT::i16, LibCall);
-  setOperationAction(ISD::SDIV, MVT::i16, LibCall);
-  setOperationAction(ISD::UREM, MVT::i16, LibCall);
-  setOperationAction(ISD::SREM, MVT::i16, LibCall);
-
-  setOperationAction(ISD::MULHS, MVT::i16, Expand);
-  setOperationAction(ISD::MULHU, MVT::i16, Expand);
-
-  // Shift operations
-  if (WS == 64) {
-    setOperationAction(ISD::SHL, MVT::i64, Legal);
-    setOperationAction(ISD::SRA, MVT::i64, Expand);
-    setOperationAction(ISD::SRL, MVT::i64, Expand);
-  }
-  if (WS >= 32) {
-    setOperationAction(ISD::SHL, MVT::i32, Legal);
-    setOperationAction(ISD::SRA, MVT::i32, Expand);
-    setOperationAction(ISD::SRL, MVT::i32, Expand);
-  }
-  setOperationAction(ISD::SHL, MVT::i16, Legal);
-  setOperationAction(ISD::SRA, MVT::i16, Expand);
-  setOperationAction(ISD::SRL, MVT::i16, Expand);
-
-  // BR_CC / BRCOND
-  if (WS == 64) {
-    setOperationAction(ISD::SETCC, MVT::i64, Expand);
-    setOperationAction(ISD::BR_CC, MVT::i64, Custom);
-    setOperationAction(ISD::BRCOND, MVT::i64, Custom);
-    setOperationAction(ISD::SELECT_CC, MVT::i64, Expand);
-    setOperationAction(ISD::GlobalAddress, MVT::i64, Custom);
-    setOperationAction(ISD::ConstantPool, MVT::i64, Custom);
-    setOperationAction(ISD::JumpTable, MVT::i64, Custom);
-  }
-  if (WS >= 32) {
-    setOperationAction(ISD::SETCC, MVT::i32, Expand);
-    setOperationAction(ISD::BR_CC, MVT::i32, Custom);
-    setOperationAction(ISD::BRCOND, MVT::i32, Custom);
-    setOperationAction(ISD::SELECT_CC, MVT::i32, Expand);
-    setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
-    setOperationAction(ISD::ConstantPool, MVT::i32, Custom);
-    setOperationAction(ISD::JumpTable, MVT::i32, Custom);
-  }
-  setOperationAction(ISD::SETCC, MVT::i16, Expand);
-  setOperationAction(ISD::BR_CC, MVT::i16, Custom);
-  setOperationAction(ISD::BRCOND, MVT::i16, Custom);
-  setOperationAction(ISD::BRCOND, MVT::i1, Custom);
-  setOperationAction(ISD::SELECT_CC, MVT::i16, Expand);
-  setOperationAction(ISD::GlobalAddress, MVT::i16, Custom);
-  setOperationAction(ISD::ConstantPool, MVT::i16, Custom);
-  setOperationAction(ISD::JumpTable, MVT::i16, Custom);
-
+  // Shared target properties used by LLVM infrastructure (not SDAG-specific):
   setBooleanContents(ZeroOrOneBooleanContent);
   setBooleanVectorContents(ZeroOrOneBooleanContent);
   setMinimumJumpTableEntries(5);
   setMinFunctionAlignment(Align(2));
+
+  // NOTE: Operation legality (setOperationAction/setLoadExtAction) is NOT set
+  // up here — ETCA uses GlobalISel exclusively, where ETCALegalizerInfo in
+  // GISel/ETCALegalizerInfo.cpp handles all legalization decisions.
 }
 
 bool ETCATargetLowering::isLegalAddressingMode(const DataLayout &DL,

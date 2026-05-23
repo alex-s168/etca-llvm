@@ -10,9 +10,8 @@
 ;;
 ;; Tests all conditional branch instructions generated from LLVM IR
 ;; icmp + br patterns.  Each test exercises one condition code.  The ETCA
-;; backend lowers BR_CC by emitting a CMP followed by the matching
-;; conditional branch.  When the icmp result feeds directly into a br,
-;; SelectionDAGBuilder fuses them into a single BR_CC node.
+;; backend lowers comparisons and branches by emitting a CMP followed by the
+;; matching conditional branch.
 ;;
 ;; Branch mnemonics:
 ;;   BR   (unconditional),   BEQ, BNE,  BLT,  BGE,  BGT,  BLE,
