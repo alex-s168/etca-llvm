@@ -58,35 +58,19 @@ include "ETCASchedule.td"
 //===----------------------------------------------------------------------===//
 // ETCA processors supported.
 //
-// The generic model provides base+saf with 16-bit word + 16-bit pointer.
-// Other CPU names are backward-compatibility aliases for common feature
-// combinations.  Users can also select word/pointer sizes via -mattr:
+// The ETCA backend uses a single "generic" CPU model.  Word size, pointer
+// size, and extensions are selected via -mattr feature flags:
 //   Word size:  +16bit | +32bit | +64bit
 //   Ptr size:   +ptr16 | +ptr32 | +ptr64
-//   Extensions: +dw, +qw, +byte, +rex, +dwas, +qwas
+//   Extensions: +dw, +qw, +byte, +saf, +rex, +dwas, +qwas
 //
 // Example: 64-bit word + 64-bit pointer → -mattr=+64bit,+ptr64,+dw,+qw
 // Example: 32-bit word + 32-bit pointer → -mattr=+32bit,+ptr32,+dw
 // Example: 64-bit word + 32-bit pointer → -mattr=+64bit,+ptr32,+dw,+qw
 //===----------------------------------------------------------------------===//
 
-// Base: 16-bit word, 16-bit pointer, SAF extension
 def : ProcessorModel<"generic", ETCASchedModel,
     [Feature16Bit, FeaturePtr16, FeatureSAF, FeatureByte]>;
-
-// Backward-compatibility aliases for common feature combinations.
-// These expand to the correct features so -mcpu=etca32 etc. still work.
-def : ProcessorModel<"etca32", ETCASchedModel,
-    [Feature32Bit, FeaturePtr32, FeatureSAF, FeatureDW, FeatureDWAS, FeatureByte]>;
-
-def : ProcessorModel<"etca32p64", ETCASchedModel,
-    [Feature64Bit, FeaturePtr64, FeatureSAF, FeatureDW, FeatureQW, FeatureQWAS, FeatureByte]>;
-
-def : ProcessorModel<"etca64p32", ETCASchedModel,
-    [Feature64Bit, FeaturePtr32, FeatureSAF, FeatureDW, FeatureQW, FeatureDWAS, FeatureByte]>;
-
-def : ProcessorModel<"etca64", ETCASchedModel,
-    [Feature64Bit, FeaturePtr64, FeatureSAF, FeatureDW, FeatureQW, FeatureQWAS, FeatureByte]>;
 
 //===----------------------------------------------------------------------===//
 // Register File, Calling Conv, Instruction Descriptions

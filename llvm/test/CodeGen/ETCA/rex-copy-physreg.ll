@@ -1,6 +1,6 @@
 ; RUN: llc -mtriple=etca-unknown-elf -mcpu=generic -mattr=+rex < %s 2>&1 | FileCheck %s --check-prefix=GEN
-; RUN: llc -mtriple=etca-unknown-elf -mcpu=etca32 -mattr=+rex < %s 2>&1 | FileCheck %s --check-prefix=DW
-; RUN: llc -mtriple=etca-unknown-elf -mcpu=etca64 -mattr=+rex < %s 2>&1 | FileCheck %s --check-prefix=QW
+; RUN: llc -mtriple=etca-unknown-elf -mcpu=generic -mattr=+32bit,+ptr32,+dw,+rex < %s 2>&1 | FileCheck %s --check-prefix=DW
+; RUN: llc -mtriple=etca-unknown-elf -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw,+rex < %s 2>&1 | FileCheck %s --check-prefix=QW
 ;
 ; Test that copyPhysReg correctly handles REX extended registers.
 

@@ -849,6 +849,13 @@ static void getWebAssemblyTargetFeatures(const Driver &D,
                             options::OPT_m_wasm_Features_Group);
 }
 
+static void getETCATargetFeatures(const Driver &D, const llvm::Triple &Triple,
+                                  const ArgList &Args,
+                                  std::vector<StringRef> &Features) {
+  handleTargetFeaturesGroup(D, Triple, Args, Features,
+                            options::OPT_m_etca_Features_Group);
+}
+
 void tools::getTargetFeatures(const Driver &D, const llvm::Triple &Triple,
                               const ArgList &Args, ArgStringList &CmdArgs,
                               bool ForAS, bool IsAux) {
@@ -920,6 +927,9 @@ void tools::getTargetFeatures(const Driver &D, const llvm::Triple &Triple,
     break;
   case llvm::Triple::ve:
     ve::getVETargetFeatures(D, Args, Features);
+    break;
+  case llvm::Triple::etca:
+    getETCATargetFeatures(D, Triple, Args, Features);
     break;
   case llvm::Triple::csky:
     csky::getCSKYTargetFeatures(D, Triple, Args, CmdArgs, Features);

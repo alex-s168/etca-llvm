@@ -2,7 +2,7 @@
 ; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -stop-after=legalizer < %s | FileCheck %s --check-prefix=GEN64
 
 ; Test that 64-bit MUL/DIV/REM operations are legalized as libcalls on
-; CPUs with the QW extension (etca64, etca32p64, etca64p32).
+; CPUs with the QW extension (word size >= 64).
 
 define i64 @mul64(i64 %a, i64 %b) {
 ; GEN64-LABEL: name: mul64

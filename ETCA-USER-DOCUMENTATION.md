@@ -8,7 +8,7 @@
 2. [Using the Clang Driver](#2-using-the-clang-driver)
    - [Target Triple](#21-target-triple)
    - [CPU Models (-mcpu)](#22-cpu-models--mcpu)
-   - [Extension Flags (-mattr)](#23-extension-flags--mattr)
+   - [Extension Flags](#23-extension-flags)
    - [Preprocessor Defines](#24-preprocessor-defines)
    - [Inline Assembly](#25-inline-assembly)
 3. [Assembly Syntax](#3-assembly-syntax)
@@ -84,20 +84,21 @@ build-etca/bin/llvm-lit llvm/test/*/ETCA/ clang/test/*/ETCA/ clang/test/*/etca-*
 ### 2.1 Target Triple
 
 ETCA uses the target triple `etca-unknown-elf`.  The word size, pointer size and
-extensions are selected by combining `-mcpu=generic` with `-mattr=` feature flags:
+extensions are selected by combining `-mcpu=generic` with individual `-m` feature
+flags:
 
 ```sh
 # 16-bit word, 16-bit pointer (default: no extra flags needed)
 clang --target=etca-unknown-elf -mcpu=generic -c file.c
 
 # 32-bit word, 32-bit pointer
-clang --target=etca-unknown-elf -mcpu=generic -mattr=+32bit,+ptr32,+dw -c file.c
+clang --target=etca-unknown-elf -mcpu=generic -m32bit -mptr32 -mdw -c file.c
 
 # 64-bit word, 64-bit pointer
-clang --target=etca-unknown-elf -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -c file.c
+clang --target=etca-unknown-elf -mcpu=generic -m64bit -mptr64 -mdw -mqw -c file.c
 
 # 64-bit word, 32-bit pointer
-clang --target=etca-unknown-elf -mcpu=generic -mattr=+64bit,+ptr32,+dw,+qw -c file.c
+clang --target=etca-unknown-elf -mcpu=generic -m64bit -mptr32 -mdw -mqw -c file.c
 ```
 
 The code generation data layout (pointer size, type sizes) is computed from the
@@ -107,68 +108,72 @@ The triple variants `etca-unknown-elf32` and `etca-unknown-elf64` exist only for
 the assembler (llvm-mc) to pick the correct pointer-sensitive defaults when invoked
 without a `-mcpu=` flag.  You do not need them when using clang.
 
+**Note for llc/llvm-mc:** These tools accept `-mattr=+feat1,+feat2,...` (comma-
+separated).  For clang, use individual `-m` flags as shown above.
+
 ### 2.2 CPU Models (-mcpu)
 
-ETCA provides a single CPU model (`generic`) with word size, pointer size, and
-extension features selected via `-mattr=`.  There are no separate CPU models for
-each width combination.
+ETCA provides a single CPU model (`generic`).  Word size, pointer size, and
+extension features are selected via individual `-m` flags or `-mattr=` (for
+llc/llvm-mc).  There are no separate CPU models for each width combination.
 
 | `-mcpu=` | Default Features | Description |
 |----------|------------------|-------------|
 | `generic` | 16-bit word, 16-bit ptr, SAF, BYTE | Base ISA + stack/functions |
 
-To select other word / pointer combinations, use `-mattr=` features (see §2.3):
+To select other word / pointer combinations, use `-m` feature flags (see §2.3):
 
 ```sh
 # 32-bit word + 32-bit pointer
-clang --target=etca-unknown-elf -mcpu=generic -mattr=+32bit,+ptr32,+dw -c file.c
+clang --target=etca-unknown-elf -mcpu=generic -m32bit -mptr32 -mdw -c file.c
 
 # 64-bit word + 64-bit pointer
-clang --target=etca-unknown-elf -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -c file.c
+clang --target=etca-unknown-elf -mcpu=generic -m64bit -mptr64 -mdw -mqw -c file.c
 
 # 64-bit word + 32-bit pointer
-clang --target=etca-unknown-elf -mcpu=generic -mattr=+64bit,+ptr32,+dw,+qw -c file.c
+clang --target=etca-unknown-elf -mcpu=generic -m64bit -mptr32 -mdw -mqw -c file.c
 ```
 
-### 2.3 Extension Flags (-mattr)
+### 2.3 Extension Flags
 
-Individual extensions can be enabled/disabled via `-mattr`:
+Individual extensions can be enabled/disabled via `-m` flags for clang, or via
+`-mattr=` for llc/llvm-mc:
 
 ```sh
-# Enable REX extension (expanded registers r8-r15)
-clang --target=etca-unknown-elf -mcpu=generic -mattr=+rex -c file.c
+# Enable REX extension (expanded registers r8-r15) — with clang
+clang --target=etca-unknown-elf -mcpu=generic -mrex -c file.c
 
-# Disable SAF (no function calls)
-clang --target=etca-unknown-elf -mcpu=generic -mattr=-saf -c file.c
+# Enable REX extension — with llc
+llc -march=etca -mcpu=generic -mattr=+rex file.ll
 
-# Combine: enable REX and disable BYTE
-clang --target=etca-unknown-elf -mcpu=generic -mattr=+rex,-byte -c file.c
+# Disable SAF (no function calls) — with llc
+llc -march=etca -mcpu=generic -mattr=-saf file.ll
 ```
 
-**Available features:**
+**Available features (clang `-m` flags / llc `-mattr=` style):**
 
-| Feature | Flag | Description |
-|---------|------|-------------|
-| SAF | `+saf` / `-saf` | Stack and Functions (calls, push/pop). Enabled by default on all CPUs. |
-| BYTE | `+byte` / `-byte` | 8-bit byte operations (SS=00). Enabled by default on all CPUs. |
-| DW | `+dw` / `-dw` | 32-bit doubleword operations |
-| QW | `+qw` / `-qw` | 64-bit quadword operations |
-| REX | `+rex` / `-rex` | Expanded registers (r8-r15) |
-| DWAS | `+dwas` / `-dwas` | 32-bit address space |
-| QWAS | `+qwas` / `-qwas` | 64-bit address space |
-| 16bit | `+16bit` / `-16bit` | 16-bit word mode |
-| 32bit | `+32bit` / `-32bit` | 32-bit word mode |
-| 64bit | `+64bit` / `-64bit` | 64-bit word mode |
-| ptr16 | `+ptr16` / `-ptr16` | 16-bit pointer |
-| ptr32 | `+ptr32` / `-ptr32` | 32-bit pointer |
-| ptr64 | `+ptr64` / `-ptr64` | 64-bit pointer |
+| Feature | Clang flag | llc `-mattr=` | Description |
+|---------|-----------|---------------|-------------|
+| SAF | `-msaf` / `-mno-saf` | `+saf` / `-saf` | Stack and Functions (calls, push/pop). Enabled by default. |
+| BYTE | `-mbyte` / `-mno-byte` | `+byte` / `-byte` | 8-bit byte operations (SS=00). Enabled by default. |
+| DW | `-mdw` / `-mno-dw` | `+dw` / `-dw` | 32-bit doubleword operations |
+| QW | `-mqw` / `-mno-qw` | `+qw` / `-qw` | 64-bit quadword operations |
+| REX | `-mrex` / `-mno-rex` | `+rex` / `-rex` | Expanded registers (r8-r15) |
+| 16-bit word | — | `+16bit` / `-16bit` | 16-bit word mode (default) |
+| 32-bit word | `-m32bit` / `-mno-32bit` | `+32bit` / `-32bit` | 32-bit word mode |
+| 64-bit word | `-m64bit` / `-mno-64bit` | `+64bit` / `-64bit` | 64-bit word mode |
+| 16-bit ptr | `-mptr16` | `+ptr16` | 16-bit pointer (default) |
+| 32-bit ptr | `-mptr32` | `+ptr32` | 32-bit pointer |
+| 64-bit ptr | `-mptr64` | `+ptr64` | 64-bit pointer |
 
 **Important notes:**
-- `-mcpu=generic` enables SAF, BYTE by default. It does NOT enable REX (you need `-mattr=+rex`).
-- When using `+64bit`, also add `+qw` to enable 64-bit operations (required for 64-bit pointers).
-- When using `+32bit`, also add `+dw` to enable 32-bit operations.
+- `-mcpu=generic` enables SAF, BYTE by default. It does NOT enable REX (you need `-mrex`).
+- When using `-m64bit`, also add `-mqw` to enable 64-bit operations (required for 64-bit pointers).
+- When using `-m32bit`, also add `-mdw` to enable 32-bit operations.
 - The ELF format (32-bit vs 64-bit) is selected automatically based on the pointer size:
-  `+ptr32` → ELF32, `+ptr64` → ELF64.
+  `-mptr32` → ELF32, `-mptr64` → ELF64.
+- The `DWAS` and `QWAS` features are not exposed as separate clang `-m` flags; they
+  are derived from the pointer size (`-mptr32` implies DWAS, `-mptr64` implies QWAS).
 
 ### 2.4 Preprocessor Defines
 
@@ -201,7 +206,7 @@ __ETCA_HAS_DW__        // 1 — 32-bit ops available (word size >= 32)
 __ETCA_HAS_QW__        // 1 — 64-bit ops available (word size >= 64)
 __ETCA_HAS_DWAS__      // 1 — 32-bit address space (ptr size >= 32)
 __ETCA_HAS_QWAS__      // 1 — 64-bit address space (ptr size >= 64)
-__ETCA_HAS_REX__       // 1 — REX extension enabled (-mattr=+rex)
+__ETCA_HAS_REX__       // 1 — REX extension enabled (-mrex)
 ```
 
 **Type sizes** (follow the word/pointer size):
@@ -223,7 +228,7 @@ ETCA supports GCC-style inline assembly.
 **Constraints:** `r` (any GPR), `i` (immediate), `m` (memory), `0`–`7` (specific rN).
 
 **Register names in inline asm:** `r0`–`r15`, `d0`–`d15` (32-bit), `q0`–`q15` (64-bit).
-r8+ and their d/q variants require `-mattr=+rex`.
+r8+ and their d/q variants require `-mrex` (clang) or `-mattr=+rex` (llc).
 
 ```c
 int result;
@@ -268,10 +273,10 @@ model, and extension flags in one place:
 clang --target=etca-unknown-elf -mcpu=generic -c file.s -o file.o
 
 # With REX extension
-clang --target=etca-unknown-elf -mcpu=generic -mattr=+rex -c file.s
+clang --target=etca-unknown-elf -mcpu=generic -mrex -c file.s
 
 # 64-bit word, 64-bit pointer
-clang --target=etca-unknown-elf -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -c file.s
+clang --target=etca-unknown-elf -mcpu=generic -m64bit -mptr64 -mdw -mqw -c file.s
 
 # Generate assembly listing from C
 clang --target=etca-unknown-elf -mcpu=generic -S file.c -o file.s
@@ -322,7 +327,7 @@ clang --target=etca-unknown-elf -mcpu=generic -nostdlib -o program.elf program.c
 clang --target=etca-unknown-elf -mcpu=generic program.c cr0.o -o program.elf
 
 # 64-bit word, 64-bit pointer
-clang --target=etca-unknown-elf -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -nostdlib -o program.elf program.c
+clang --target=etca-unknown-elf -mcpu=generic -m64bit -mptr64 -mdw -mqw -nostdlib -o program.elf program.c
 ```
 
 **Emulation flags by pointer size:**

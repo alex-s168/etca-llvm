@@ -3,8 +3,8 @@
 ;; ===========================================================================
 ;; ETCA 64-bit arithmetic tests — CPUs with QW extension
 ;;
-;; Tests that 64-bit arithmetic works on QW-capable CPUs (etca64, etca32p64,
-;; etca64p32).  On these CPUs, 64-bit ops use native register names (rNq).
+;; Tests that 64-bit arithmetic works on QW-capable CPUs (word size >= 64).
+;; On these CPUs, 64-bit ops use native register names (rNq).
 ;; ===========================================================================
 
 define i64 @add_i64(i64 %a, i64 %b) {

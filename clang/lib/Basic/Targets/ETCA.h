@@ -8,14 +8,15 @@
 //
 // This file declares ETCA TargetInfo objects.
 //
-// ETCA supports multiple word/pointer width combinations via -mcpu:
-//   generic   → 16-bit word, 16-bit pointer (base ISA)
-//   etca32    → 32-bit word, 32-bit pointer (DW + DWAS)
-//   etca32p64 → 32-bit word, 64-bit pointer (DW + QWAS)
-//   etca64p32 → 64-bit word, 32-bit pointer (QW + DWAS)
-//   etca64    → 64-bit word, 64-bit pointer (QW + QWAS)
+// ETCA supports multiple word/pointer width combinations via -mattr
+// feature flags rather than separate CPU models.  The only valid CPU
+// name is "generic".  Select sizes via:
+//   32-bit word + 32-bit ptr:  -mattr=+32bit,+ptr32,+dw
+//   64-bit word + 64-bit ptr:  -mattr=+64bit,+ptr64,+dw,+qw
+//   64-bit word + 32-bit ptr:  -mattr=+64bit,+ptr32,+dw,+qw
+//   16-bit word + 16-bit ptr:  (default, no extra flags needed)
 //
-// The TargetInfo adjusts type sizes dynamically via setCPU().
+// The TargetInfo adjusts type sizes dynamically via handleTargetFeatures().
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_CLANG_LIB_BASIC_TARGETS_ETCA_H
@@ -30,16 +31,8 @@ namespace clang {
 namespace targets {
 
 class LLVM_LIBRARY_VISIBILITY ETCATargetInfo : public TargetInfo {
-  // CPU kind — determines word and pointer sizes
-  enum CPUKind {
-    CK_Generic,   // 16b word + 16b ptr
-    CK_ETCA32,    // 32b word + 32b ptr
-    CK_ETCA32P64, // 32b word + 64b ptr  (32-bit ops on 64-bit regs)
-    CK_ETCA64P32, // 64b word + 32b ptr  (64-bit ops, 32-bit addr)
-    CK_ETCA64,    // 64b word + 64b ptr
-  } CPU;
-
-  // Derived type sizes
+  // Derived type sizes — set from -mattr feature flags via
+  // handleTargetFeatures().
   unsigned WordSize = 16;
   unsigned PtrSize = 16;
 
@@ -49,7 +42,7 @@ class LLVM_LIBRARY_VISIBILITY ETCATargetInfo : public TargetInfo {
   // REX extension availability
   bool HasREX = false;
 
-  void setWidthsFromCPU();
+  void setWidthsFromFeatures();
 
   /// Build the DataLayout string from the current WordSize/PtrSize.
   void updateDataLayoutString();
@@ -57,9 +50,10 @@ class LLVM_LIBRARY_VISIBILITY ETCATargetInfo : public TargetInfo {
 public:
   ETCATargetInfo(const llvm::Triple &Triple, const TargetOptions &)
       : TargetInfo(Triple) {
-    // Default: base ISA (16-bit word, 16-bit pointer)
-    CPU = CK_Generic;
-    setWidthsFromCPU();
+    // Default: base ISA (16-bit word, 16-bit pointer).
+    // WordSize/PtrSize may be updated by handleTargetFeatures() when
+    // -mattr features are processed.
+    setWidthsFromFeatures();
     // Don't call resetDataLayout() — Triple.computeDataLayout doesn't know about
     // ETCA. Compute the data layout string directly.
     updateDataLayoutString();
@@ -71,6 +65,9 @@ public:
   bool isValidCPUName(StringRef Name) const override;
   void fillValidCPUList(SmallVectorImpl<StringRef> &Values) const override;
   bool setCPU(const std::string &Name) override;
+
+  bool handleTargetFeatures(std::vector<std::string> &Features,
+                            DiagnosticsEngine &Diags) override;
 
   bool hasFeature(StringRef Feature) const override;
 

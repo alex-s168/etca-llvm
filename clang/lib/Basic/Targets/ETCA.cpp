@@ -8,12 +8,9 @@
 //
 // This file implements ETCA TargetInfo objects.
 //
-// ETCA is a custom 16-bit RISC ISA with variable word/pointer widths:
-//   generic   → 16b word + 16b ptr (base ISA + SAF)
-//   etca32    → 32b word + 32b ptr (DW + DWAS)
-//   etca32p64 → 32b word + 64b ptr (DW + QWAS)
-//   etca64p32 → 64b word + 32b ptr (QW + DWAS)
-//   etca64    → 64b word + 64b ptr (QW + QWAS)
+// ETCA is a custom 16-bit RISC ISA with variable word/pointer widths.
+// Word size, pointer size and extensions are selected via -mattr flags,
+// not via separate CPU models.  The only valid CPU name is "generic".
 //===----------------------------------------------------------------------===//
 
 #include "ETCA.h"
@@ -86,21 +83,13 @@ ArrayRef<TargetInfo::GCCRegAlias> ETCATargetInfo::getGCCRegAliases() const {
 //===----------------------------------------------------------------------===//
 
 bool ETCATargetInfo::isValidCPUName(StringRef Name) const {
-  return llvm::StringSwitch<bool>(Name)
-      .Case("generic", true)
-      .Case("etca32", true)
-      .Case("etca32p64", true)
-      .Case("etca64p32", true)
-      .Case("etca64", true)
-      .Default(false);
+  // ETCA has a single CPU model: generic.  Select word/pointer sizes
+  // via -mattr features instead.
+  return Name == "generic";
 }
 
 void ETCATargetInfo::fillValidCPUList(SmallVectorImpl<StringRef> &Values) const {
   Values.emplace_back("generic");
-  Values.emplace_back("etca32");
-  Values.emplace_back("etca32p64");
-  Values.emplace_back("etca64p32");
-  Values.emplace_back("etca64");
 }
 
 void ETCATargetInfo::updateDataLayoutString() {
@@ -136,34 +125,7 @@ void ETCATargetInfo::updateDataLayoutString() {
   DataLayoutString = DL;
 }
 
-void ETCATargetInfo::setWidthsFromCPU() {
-  // Note: setWidthsFromCPU() is called before updateDataLayoutString() by
-  // both the constructor and setCPU(), so WordSize/PtrSize are current.
-  switch (CPU) {
-  case CK_Generic:
-    WordSize = 16;
-    PtrSize = 16;
-    break;
-  case CK_ETCA32:
-    WordSize = 32;
-    PtrSize = 32;
-    break;
-  case CK_ETCA32P64:
-    // 64-bit registers (required for 64-bit address space via QWAS),
-    // 64-bit pointers, 32-bit C int width.
-    WordSize = 64;
-    PtrSize = 64;
-    break;
-  case CK_ETCA64P32:
-    WordSize = 64;
-    PtrSize = 32;
-    break;
-  case CK_ETCA64:
-    WordSize = 64;
-    PtrSize = 64;
-    break;
-  }
-
+void ETCATargetInfo::setWidthsFromFeatures() {
   // Set C type sizes based on word and pointer widths.
   //
   // ETCA uses a LP-like model:
@@ -232,20 +194,35 @@ void ETCATargetInfo::setWidthsFromCPU() {
   TLSSupported = false;
 }
 
-bool ETCATargetInfo::setCPU(const std::string &Name) {
-  CPU = llvm::StringSwitch<CPUKind>(Name)
-            .Case("generic", CK_Generic)
-            .Case("etca32", CK_ETCA32)
-            .Case("etca32p64", CK_ETCA32P64)
-            .Case("etca64p32", CK_ETCA64P32)
-            .Case("etca64", CK_ETCA64)
-            .Default(CK_Generic);
+bool ETCATargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
+                                          DiagnosticsEngine &Diags) {
+  // Parse -mattr feature flags to determine word size, pointer size,
+  // and extension availability.
+  for (const auto &F : Features) {
+    if (F == "+32bit")
+      WordSize = 32;
+    else if (F == "+64bit")
+      WordSize = 64;
+    else if (F == "+ptr32")
+      PtrSize = 32;
+    else if (F == "+ptr64")
+      PtrSize = 64;
+    else if (F == "+rex")
+      HasREX = true;
+  }
 
-  setWidthsFromCPU();
-
-  // Recompute the data layout string for this CPU variant.
+  // Recompute type sizes and data layout from the new widths.
+  setWidthsFromFeatures();
   updateDataLayoutString();
 
+  return true;
+}
+
+bool ETCATargetInfo::setCPU(const std::string &Name) {
+  // ETCA has a single CPU model: generic.  Word/pointer sizes and
+  // extensions are selected via -mattr feature flags.
+  if (Name != "generic")
+    return false;
   return true;
 }
 
@@ -291,24 +268,18 @@ void ETCATargetInfo::getTargetDefines(const LangOptions &Opts,
   Builder.defineMacro("__SIZEOF_POINTER__", Twine(PtrSize / 8));
   Builder.defineMacro("__ETCA_PTR_SIZE__", Twine(PtrSize));
 
-  // CPU-specific macros
-  switch (CPU) {
-  case CK_Generic:
-    Builder.defineMacro("__ETCA_GENERIC__");
-    break;
-  case CK_ETCA32:
+  // Always define __ETCA_GENERIC__ (the only CPU model)
+  Builder.defineMacro("__ETCA_GENERIC__");
+
+  // Backward-compatibility CPU macros (derived from sizes, not CPU name)
+  if (WordSize >= 32)
     Builder.defineMacro("__ETCA32__");
-    break;
-  case CK_ETCA32P64:
-    Builder.defineMacro("__ETCA32P64__");
-    break;
-  case CK_ETCA64P32:
-    Builder.defineMacro("__ETCA64P32__");
-    break;
-  case CK_ETCA64:
+  if (WordSize >= 64)
     Builder.defineMacro("__ETCA64__");
-    break;
-  }
+  if (WordSize >= 32 && PtrSize == 64)
+    Builder.defineMacro("__ETCA32P64__");
+  if (WordSize == 64 && PtrSize == 32)
+    Builder.defineMacro("__ETCA64P32__");
 
   // Extension macros
   if (WordSize >= 32)
@@ -326,7 +297,7 @@ void ETCATargetInfo::getTargetDefines(const LangOptions &Opts,
   // BYTE extension always available
   Builder.defineMacro("__ETCA_HAS_BYTE__");
 
-  // REX extension (optional, enabled by -mattr=+rex or CPU feature)
+  // REX extension (optional, enabled by -mattr=+rex)
   if (HasREX)
     Builder.defineMacro("__ETCA_HAS_REX__");
 }

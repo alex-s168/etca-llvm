@@ -7,7 +7,7 @@
 ;; ===========================================================================
 ;; ETCA Stack Frame Layout Tests
 ;;
-;; Verifies correct stack frame set-up for all 5 CPU models.
+;; Verifies correct stack frame set-up for all width/pointer combinations.
 ;;
 ;; Key invariants:
 ;;   1. Prologue: push r5, movz r5, r6, sub r6, N

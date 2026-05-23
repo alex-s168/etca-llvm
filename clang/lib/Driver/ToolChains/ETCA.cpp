@@ -22,6 +22,7 @@
 #include "clang/Driver/InputInfo.h"
 #include "clang/Driver/Types.h"
 #include "clang/Options/Options.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
@@ -33,6 +34,29 @@ using namespace clang::driver::toolchains;
 using namespace clang::driver::tools;
 using namespace clang;
 using namespace llvm::opt;
+
+//===----------------------------------------------------------------------===//
+// Helper: extract pointer/word sizes from -mattr= or individual -m feature
+// flags
+//===----------------------------------------------------------------------===//
+
+static void parseETCAFeatures(const ArgList &Args, unsigned &WordSize,
+                              unsigned &PtrSize) {
+  // Parse individual ETCA -m feature flags to determine word and pointer
+  // sizes.  Default is 16-bit word + 16-bit pointer.
+  WordSize = 16;
+  PtrSize = 16;
+
+  if (Args.hasArg(options::OPT_m64bit))
+    WordSize = 64;
+  else if (Args.hasArg(options::OPT_m32bit))
+    WordSize = 32;
+
+  if (Args.hasArg(options::OPT_mptr64))
+    PtrSize = 64;
+  else if (Args.hasArg(options::OPT_mptr32))
+    PtrSize = 32;
+}
 
 //===----------------------------------------------------------------------===//
 // ETCA ToolChain
@@ -93,7 +117,7 @@ ETCAToolChain::ComputeEffectiveClangTriple(const ArgList &Args,
   // Start with the base triple (e.g., "etca-unknown-elf").
   std::string TripleStr = getTripleString().str();
 
-  // Determine if a CPU was specified that changes the pointer width.
+  // Determine pointer size from -mattr features.
   // We encode the pointer size in the OS field via a numeric suffix:
   //   etca-unknown-elf    → 16-bit pointer (default)
   //   etca-unknown-elf32  → 32-bit pointer
@@ -101,14 +125,8 @@ ETCAToolChain::ComputeEffectiveClangTriple(const ArgList &Args,
   //
   // The LLVM MC layer (ETCAMCAsmInfo factory) reads this suffix to set
   // CodePointerSize and CalleeSaveStackSlotSize correctly.
-  std::string CPU = getCPUName(getDriver(), Args, getTriple());
-  unsigned PtrSize = 16;
-
-  if (CPU == "etca32" || CPU == "etca64p32")
-    PtrSize = 32;
-  else if (CPU == "etca32p64" || CPU == "etca64")
-    PtrSize = 64;
-  // else: CPU == "generic" or unknown → 16-bit (default)
+  unsigned PtrSize, WordSize;
+  parseETCAFeatures(Args, WordSize, PtrSize);
 
   // If the pointer size doesn't match the default (16-bit), append the
   // size to the OS name. The base triple is e.g. "etca-unknown-elf".
@@ -142,7 +160,6 @@ void ETCA::Linker::ConstructJob(Compilation &C, const JobAction &JA,
                                 const ArgList &Args,
                                 const char *LinkingOutput) const {
   const ToolChain &ToolChain = getToolChain();
-  const Driver &D = ToolChain.getDriver();
 
   // Determine which linker to use (handles -fuse-ld=lld, -fuse-ld=bfd, etc.)
   bool LinkerIsLLD = false;
@@ -158,23 +175,28 @@ void ETCA::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   ArgStringList CmdArgs;
 
-  // Determine emulation from target CPU
-  std::string CPU = getCPUName(D, Args, ToolChain.getTriple());
+  // Determine emulation from -mattr features.
+  // The pointer size determines whether we need 64-bit or 32-bit ELF.
+  unsigned PtrSize, WordSize;
+  parseETCAFeatures(Args, WordSize, PtrSize);
   StringRef Emulation;
   if (LinkerIsLLD) {
-    // LLD emulation flags
-    if (CPU == "etca64" || CPU == "etca32p64")
+    // LLD emulation flags: ptr64 → elf64etca, ptr16/ptr32 → elf32etca
+    if (PtrSize == 64)
       Emulation = "elf64etca";
     else
-      Emulation = "elf32etca"; // all 32-bit pointer variants + generic
+      Emulation = "elf32etca";
   } else {
-    // Binutils emulation flags
-    if (CPU == "etca64" || CPU == "etca32p64")
+    // Binutils emulation flags:
+    //   ptr64  → elf64_etca
+    //   ptr32  → elf32_etca
+    //   ptr16  → elf16_etca
+    if (PtrSize == 64)
       Emulation = "elf64_etca";
-    else if (CPU == "etca64p32" || CPU == "etca32")
+    else if (PtrSize == 32)
       Emulation = "elf32_etca";
     else
-      Emulation = "elf16_etca"; // generic (16-bit)
+      Emulation = "elf16_etca";
   }
 
   if (!Emulation.empty()) {

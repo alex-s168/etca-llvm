@@ -29,9 +29,9 @@ NEVER drop any requirement. If something is not easily possible, ask the user. T
 
 | Extension | Status | Notes |
 |-----------|--------|-------|
-| base + saf + all word/address combos | ✅ DONE (2026-05-14) | 16/32/64-bit word & pointer, all 5 CPU models |
+| base + saf + all word/address combos | ✅ DONE (2026-05-14) | 16/32/64-bit word & pointer, all combinations via -mattr flags |
 | byte (SS=00, 8-bit ops) | ✅ DONE (2026-05-13) | All computation + LOAD8/STORE8, sign-extension semantics |
-| multiply / divide (libcall) | ✅ DONE (2026-05-14) | All 15 arithmetic libcall operations (mul/sdiv/udiv/srem/urem × 16/32/64-bit) work on all 5 CPU models |
+| multiply / divide (libcall) | ✅ DONE (2026-05-14) | All 15 arithmetic libcall operations (mul/sdiv/udiv/srem/urem × 16/32/64-bit) work on all width/pointer combinations |
 | extended registers (REX prefix) | ✅ DONE (2026-05-23) | r8-r15, d8-d15, q8-q15, REX prefix byte, MC assembly, disassembler, encoder, parser (incl. ABI names t0-t4/s2-s4), register classes, calling convention, CSR masks, MC tests |
 | fi: full immediates (VWI prefix) | ⬜ TODO | |
 | mo1/mo2: complex memory operands | ⬜ TODO | |
@@ -84,7 +84,7 @@ TableGen `-gen-disassembler` fails because CMP-RI and TEST-RI encodings overlap 
   store r4, r5-8     ; r4 at bp-8 (= sp) ✓
 ```
 
-Test: `llvm/test/CodeGen/ETCA/stack-frame.ll` verifies this on all 5 CPU models.
+Test: `llvm/test/CodeGen/ETCA/stack-frame.ll` verifies this for all width/pointer combinations.
 
 ### NOP encoding: 0x008F
 All NOP emission paths use `0x008F` ([0x8F, 0x00] LE) — the canonical 2-byte base-ISA NOP per binutils `etca_build_nop`:
@@ -122,7 +122,7 @@ generated code to call.
 - Instruction formats: RR/RI with SS bits (16/32/64-bit), branch (9-bit disp), SAF (call 12-bit disp, jmpr/callr, push/pop reg, push imm)
 - All base ISA + SAF + pseudo ops, with predicated patterns per extension
 - Calling convention: multi-width CC_ETCA / RetCC_ETCA (i16→r0-r3, i32→d0-d3, i64→q0-q3)
-- Processor models: generic (16b+16b), etca32 (32b+32b), etca32p64 (32b+64b), etca64p32 (64b+32b), etca64 (64b+64b)
+- Processor model: single `generic` CPU; word/pointer sizes via `-mattr` features (16b+16b default, 32b+32b, 32b+64b, 64b+32b, 64b+64b)
 - Schedule model: basic in-order with ALU/LdSt resources
 
 ### ✅ C++ Core Infrastructure
@@ -157,7 +157,7 @@ generated code to call.
 - [ ] LLVM test suite integration
 
 ### Clang & Tools
-- [x] clang driver support (`etca-unknown-elf` target triple, `-mcpu=` for 5 CPU models, proper DataLayout, preprocessor defines `__etca__`/`__ETCA__`, C++ name mangling, all word/address width combos supported)
+- [x] clang driver support (`etca-unknown-elf` target triple, `-mcpu=generic` with word/ptr sizes via `-mattr` flags, proper DataLayout, preprocessor defines `__etca__`/`__ETCA__`, C++ name mangling, all word/address width combos supported)
 - [ ] clang intrinsics for ETCa-specific operations (READCR, WRITECR, etc.)
 - [ ] compiler-rt builtins (soft-float, div/mod, etc.)
 - [x] lld linker support (ETCA ELF linking) — full LLD backend in `lld/ELF/Arch/ETCA.cpp` with:
@@ -178,7 +178,7 @@ generated code to call.
 - [ ] `writeNopData` odd-count fallback: when an extension adds 1-byte NOPs, update `writeNopData` to handle odd byte counts without falling back to trap instructions
 
 ### Driver Implementation Details
-- `clang/lib/Basic/Targets/ETCA.{h,cpp}` — TargetInfo: dynamic type sizes via `setCPU()`, 5 CPU models (generic/etca32/etca32p64/etca64p32/etca64), LP-like C type model, GCC register names and aliases for inline asm, preprocessor defines (`__etca__`, `__ETCA__`, `__ETCA_GENERIC__`, `__ETCA32__`, etc., `__ETCA_WORD_SIZE__`, `__ETCA_PTR_SIZE__`, extension detection macros)
+- `clang/lib/Basic/Targets/ETCA.{h,cpp}` — TargetInfo: dynamic type sizes via `-mattr` features (parsed by `handleTargetFeatures()`), single CPU model `generic`, LP-like C type model, GCC register names and aliases for inline asm, preprocessor defines (`__etca__`, `__ETCA__`, `__ETCA_GENERIC__`, `__ETCA32__`, etc., `__ETCA_WORD_SIZE__`, `__ETCA_PTR_SIZE__`, extension detection macros)
 - `clang/lib/Driver/ToolChains/ETCA.{h,cpp}` — ToolChain: `Generic_ELF`-based, GCC installation discovery, ELF linker (cta-elf-ld), bare-metal defaults
 - Registered in `Driver.cpp`, `Targets.cpp`, `Clang.cpp` (isSignedCharDefault), `CommonArgs.cpp` (getCPUName with `-mcpu=` mapping)
 

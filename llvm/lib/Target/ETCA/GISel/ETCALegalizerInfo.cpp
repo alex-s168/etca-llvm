@@ -9,11 +9,14 @@
 // This file defines the legalization rules for GlobalISel on ETCA.
 //
 // The ETCa ISA is natively variable width.  Legal types depend on the
-// subtarget's word size and enabled extensions:
-//   - 16-bit word (generic):       i16 is legal; i8, i32, i64 are narrowed.
-//   - 32-bit word (etca32):        i16 and i32 are legal; i8, i64 are narrowed.
-//   - 64-bit word (etca64, etc.):  i16, i32, and i64 are legal; i8 is narrowed.
-//   - BYTE extension:              i8 becomes legal (MinLegal = s8).
+// subtarget's word size (set via -mattr=+32bit/+64bit) and enabled
+// extensions:
+//   - 16-bit word (generic default):  i16 is legal; i8, i32, i64 are narrowed.
+//   - 32-bit word (word size >= 32):  i16 and i32 are legal; i8, i64 are
+//   narrowed.
+//   - 64-bit word (word size >= 64):  i16, i32, and i64 are legal; i8 is
+//   narrowed.
+//   - BYTE extension:                 i8 becomes legal (MinLegal = s8).
 //
 // == Design ==
 //

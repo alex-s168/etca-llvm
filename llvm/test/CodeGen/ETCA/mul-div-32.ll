@@ -3,7 +3,7 @@
 ; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -stop-after=legalizer < %s | FileCheck %s --check-prefix=GEN64
 
 ; Test that 32-bit MUL/DIV/REM operations are legalized as libcalls on
-; CPUs with the DW extension (etca32, etca64).
+; CPUs with the DW extension (word size >= 32).
 
 define i32 @mul32(i32 %a, i32 %b) {
 ; GEN32-LABEL: name: mul32

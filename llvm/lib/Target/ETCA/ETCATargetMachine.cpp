@@ -44,11 +44,10 @@ static Reloc::Model getEffectiveRelocModel(std::optional<Reloc::Model> RM) {
   return RM.value_or(Reloc::Static);
 }
 
-/// Build a DataLayout string from the CPU name and feature string.
-/// Checks -mattr features first for +64bit/+32bit and +ptr64/+ptr32;
-/// falls back to the CPU name for backward compatibility with CPU
-/// aliases (etca32, etca64, etc.); finally defaults to 16+16.
-static std::string computeDataLayout(StringRef CPU, StringRef FS) {
+/// Build a DataLayout string from the feature string.
+/// Parses -mattr features for +64bit/+32bit (word size) and +ptr64/+ptr32
+/// (pointer size); defaults to 16+16.
+static std::string computeDataLayout(StringRef FS) {
   unsigned WordSize = 16;
   unsigned PtrSize = 16;
 
@@ -68,24 +67,6 @@ static std::string computeDataLayout(StringRef CPU, StringRef FS) {
       PtrSize = 32;
   }
 
-  // If features didn't specify sizes, fall back to CPU name for backward
-  // compatibility with ProcessorModel aliases (etca32, etca64, etc.).
-  if (WordSize == 16 && PtrSize == 16) {
-    if (CPU == "etca32") {
-      WordSize = 32;
-      PtrSize = 32;
-    } else if (CPU == "etca32p64") {
-      WordSize = 64;
-      PtrSize = 64;
-    } else if (CPU == "etca64p32") {
-      WordSize = 64;
-      PtrSize = 32;
-    } else if (CPU == "etca64") {
-      WordSize = 64;
-      PtrSize = 64;
-    }
-  }
-
   return ETCASubtarget::buildDataLayoutString(WordSize, PtrSize);
 }
 
@@ -97,7 +78,7 @@ ETCATargetMachine::ETCATargetMachine(const Target &TheTarget,
                                      std::optional<CodeModel::Model> CodeModel,
                                      CodeGenOptLevel OptLevel, bool JIT)
     : CodeGenTargetMachineImpl(
-          TheTarget, computeDataLayout(Cpu, FeatureString), TargetTriple, Cpu,
+          TheTarget, computeDataLayout(FeatureString), TargetTriple, Cpu,
           FeatureString, Options, getEffectiveRelocModel(RM),
           getEffectiveCodeModel(CodeModel, CodeModel::Small), OptLevel),
       Subtarget(TargetTriple, Cpu, FeatureString, *this, Options, CodeModel,

@@ -244,6 +244,44 @@ def m_riscv_Features_Group : OptionGroup<"<riscv features group>">,
                              Group<m_Group>, DocName<"RISC-V">;
 def m_ve_Features_Group : OptionGroup<"<ve features group>">,
                           Group<m_Group>, DocName<"VE">;
+def m_etca_Features_Group : OptionGroup<"<etca features group>">,
+                            Group<m_Group>, DocName<"ETCA">;
+let Flags = [TargetSpecific] in {
+def m32bit : Flag<["-"], "m32bit">, Group<m_etca_Features_Group>,
+  HelpText<"Enable 32-bit word mode">;
+def mno_32bit : Flag<["-"], "mno-32bit">, Group<m_etca_Features_Group>,
+  HelpText<"Disable 32-bit word mode">;
+def m64bit : Flag<["-"], "m64bit">, Group<m_etca_Features_Group>,
+  HelpText<"Enable 64-bit word mode">;
+def mno_64bit : Flag<["-"], "mno-64bit">, Group<m_etca_Features_Group>,
+  HelpText<"Disable 64-bit word mode">;
+def mptr16 : Flag<["-"], "mptr16">, Group<m_etca_Features_Group>,
+  HelpText<"16-bit pointer mode">;
+def mptr32 : Flag<["-"], "mptr32">, Group<m_etca_Features_Group>,
+  HelpText<"32-bit pointer mode">;
+def mptr64 : Flag<["-"], "mptr64">, Group<m_etca_Features_Group>,
+  HelpText<"64-bit pointer mode">;
+def mdw : Flag<["-"], "mdw">, Group<m_etca_Features_Group>,
+  HelpText<"Enable doubleword (32-bit) operations">;
+def mno_dw : Flag<["-"], "mno-dw">, Group<m_etca_Features_Group>,
+  HelpText<"Disable doubleword (32-bit) operations">;
+def mqw : Flag<["-"], "mqw">, Group<m_etca_Features_Group>,
+  HelpText<"Enable quadword (64-bit) operations">;
+def mno_qw : Flag<["-"], "mno-qw">, Group<m_etca_Features_Group>,
+  HelpText<"Disable quadword (64-bit) operations">;
+def msaf : Flag<["-"], "msaf">, Group<m_etca_Features_Group>,
+  HelpText<"Enable stack and functions extension">;
+def mno_saf : Flag<["-"], "mno-saf">, Group<m_etca_Features_Group>,
+  HelpText<"Disable stack and functions extension">;
+def mbyte : Flag<["-"], "mbyte">, Group<m_etca_Features_Group>,
+  HelpText<"Enable byte operations extension">;
+def mno_byte : Flag<["-"], "mno-byte">, Group<m_etca_Features_Group>,
+  HelpText<"Disable byte operations extension">;
+def mrex : Flag<["-"], "mrex">, Group<m_etca_Features_Group>,
+  HelpText<"Enable extended registers (r8-r15)">;
+def mno_rex : Flag<["-"], "mno-rex">, Group<m_etca_Features_Group>,
+  HelpText<"Disable extended registers">;
+} // let Flags = [TargetSpecific]
 def m_loongarch_Features_Group : OptionGroup<"<loongarch features group>">,
                                  Group<m_Group>, DocName<"LoongArch">,
                                  Visibility<[ClangOption, CLOption, FlangOption]>;

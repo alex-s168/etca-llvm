@@ -3,11 +3,11 @@
 // RUN: llvm-readobj -h %t.elf | FileCheck %s --check-prefix=ELF32
 // RUN: llvm-objdump -d %t.elf | FileCheck %s --check-prefix=DISASM
 //
-// Also test 32-bit and 64-bit CPU models (backward-compat aliases).
-// RUN: %clang --target=etca-unknown-elf -mcpu=etca32 -nostdlib -Wl,--no-gc-sections -o %t32.elf %s
+// Also test 32-bit and 64-bit word/ptr combinations via -m feature flags.
+// RUN: %clang --target=etca-unknown-elf -mcpu=generic -m32bit -mptr32 -mdw -nostdlib -Wl,--no-gc-sections -o %t32.elf %s
 // RUN: llvm-readobj -h %t32.elf | FileCheck %s --check-prefix=ELF32
 //
-// RUN: %clang --target=etca-unknown-elf -mcpu=etca64 -nostdlib -Wl,--no-gc-sections -o %t64.elf %s
+// RUN: %clang --target=etca-unknown-elf -mcpu=generic -m64bit -mptr64 -mdw -mqw -nostdlib -Wl,--no-gc-sections -o %t64.elf %s
 // RUN: llvm-readobj -h %t64.elf | FileCheck %s --check-prefix=ELF64
 
 // ELF32: Format: elf32-{{.*}}
