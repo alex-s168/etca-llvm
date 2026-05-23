@@ -798,6 +798,13 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
             .addReg(LHS)
             .addReg(RHS)
             .addImm(PredVal);
+        // Constrain the ICMP_Pseudo result register to GPR (condition is
+        // always 16-bit).  In the normal G_ICMP handler this is done by
+        // the explicit constrainReg call, but in this reverse-order path
+        // the G_ICMP is erased before its handler ever runs, so we must
+        // constrain here.
+        if (!constrainReg(GICMPDst, LLT::scalar(16), RBI, *MRI))
+          return false;
         DefMI->eraseFromParent();
       }
     }
@@ -814,7 +821,7 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     }
 
     BuildMI(MBB, MI, MIMD, TII.get(ETCA::SELECT_Pseudo), Dst)
-        .addReg(Dst)
+        .addReg(Cond)
         .addReg(TrueVal)
         .addReg(FalseVal)
         .addImm(PredVal);
