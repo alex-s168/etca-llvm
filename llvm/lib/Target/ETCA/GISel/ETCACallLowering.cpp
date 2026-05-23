@@ -18,6 +18,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "ETCACallLowering.h"
+#include "ETCARegisterInfo.h"
 #include "ETCASubtarget.h"
 
 #define GET_INSTRINFO_ENUM
@@ -187,58 +188,57 @@ bool ETCACallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
   size_t NumStackArgs = (NumArgs > 4) ? (NumArgs - 4) : 0;
   unsigned StackArgSize = NumStackArgs * RegBytes;
 
-  if (StackArgSize > 0) {
-    // Allocate stack space for excess arguments.
-    int64_t Remaining = static_cast<int64_t>(StackArgSize);
-    while (Remaining > 0) {
-      int64_t Step = std::min<int64_t>(Remaining, 15);
-      auto Sub = MIRBuilder.buildInstr(ETCA::SUBI16);
-      Sub.addDef(Register(ETCA::R6));
-      Sub.addUse(Register(ETCA::R6));
-      Sub.addImm(Step);
-      Remaining -= Step;
-    }
+  // Emit ADJCALLSTACKDOWN marker — the actual SUBI R6, Amount is
+  // emitted later by eliminateCallFramePseudoInstr in PEI.
+  auto CallSeqStart = MIRBuilder.buildInstr(ETCA::ADJCALLSTACKDOWN);
 
-    // Store each excess argument at the correct stack offset.
-    for (size_t i = 4; i < NumArgs; ++i) {
-      Register ArgReg = Info.OrigArgs[i].Regs[0];
-      if (!ArgReg)
-        continue;
+  // Store each excess argument at the correct stack offset.
+  for (size_t i = 4; i < NumArgs; ++i) {
+    Register ArgReg = Info.OrigArgs[i].Regs[0];
+    if (!ArgReg)
+      continue;
 
-      unsigned Offset = (i - 4) * RegBytes;
+    // Determine the store opcode from the argument's bit width.
+    LLT ArgTy = MRI.getType(ArgReg);
+    unsigned ArgSize = ArgTy.getSizeInBits();
+    unsigned StoreOpc;
+    if (ArgSize >= 64)
+      StoreOpc = ETCA::STORE64;
+    else if (ArgSize >= 32)
+      StoreOpc = ETCA::STORE32;
+    else
+      StoreOpc = ETCA::STORE16;
 
-      if (Offset == 0) {
-        auto Store = MIRBuilder.buildInstr(ETCA::STORE16);
-        Store.addUse(ArgReg);
-        Store.addUse(Register(ETCA::R6));
-      } else {
-        // Create address register using pointer-type LLT.
-        LLT PtrTy = LLT::pointer(0, ST.getPtrSize());
-        Register AddrReg = MRI.createGenericVirtualRegister(PtrTy);
-        unsigned MovOpc = ST.getPtrSize() >= 64   ? ETCA::MOVZ64
-                          : ST.getPtrSize() >= 32 ? ETCA::MOVZ32
-                                                  : ETCA::MOVZ16;
-        auto Mov = MIRBuilder.buildInstr(MovOpc);
-        Mov.addDef(AddrReg);
-        Mov.addUse(Register(ETCA::R6));
+    unsigned Offset = (i - 4) * RegBytes;
 
-        int64_t RemOff = static_cast<int64_t>(Offset);
-        while (RemOff > 0) {
-          int64_t Step = std::min<int64_t>(RemOff, 15);
-          unsigned AddiOpc = ST.getPtrSize() >= 64   ? ETCA::ADDI64
-                             : ST.getPtrSize() >= 32 ? ETCA::ADDI32
-                                                     : ETCA::ADDI16;
-          auto Add = MIRBuilder.buildInstr(AddiOpc);
-          Add.addDef(AddrReg);
-          Add.addUse(AddrReg);
-          Add.addImm(Step);
-          RemOff -= Step;
-        }
+    if (Offset == 0) {
+      auto Store = MIRBuilder.buildInstr(StoreOpc);
+      Store.addUse(ArgReg);
+      Store.addUse(Register(ETCA::R6));
+    } else {
+      // Create address register by copying SP (R6).  Use a GPR COPY
+      // (via buildCopy) rather than a target MOVZ instruction so that
+      // the generic code (regbankselect, CSE) handles it correctly.
+      LLT AddrTy = LLT::scalar(ST.getPtrSize());
+      Register AddrReg = MRI.createGenericVirtualRegister(AddrTy);
+      MIRBuilder.buildCopy(AddrReg, Register(ETCA::R6));
 
-        auto Store = MIRBuilder.buildInstr(ETCA::STORE16);
-        Store.addUse(ArgReg);
-        Store.addUse(AddrReg);
+      int64_t RemOff = static_cast<int64_t>(Offset);
+      while (RemOff > 0) {
+        int64_t Step = std::min<int64_t>(RemOff, 15);
+        unsigned AddiOpc = ST.getPtrSize() >= 64   ? ETCA::ADDI64
+                           : ST.getPtrSize() >= 32 ? ETCA::ADDI32
+                                                   : ETCA::ADDI16;
+        auto Add = MIRBuilder.buildInstr(AddiOpc);
+        Add.addDef(AddrReg);
+        Add.addUse(AddrReg);
+        Add.addImm(Step);
+        RemOff -= Step;
       }
+
+      auto Store = MIRBuilder.buildInstr(StoreOpc);
+      Store.addUse(ArgReg);
+      Store.addUse(AddrReg);
     }
   }
 
@@ -266,18 +266,13 @@ bool ETCACallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
 
   MIRBuilder.insertInstr(CallInst);
 
-  // --- Deallocate stack space for excess args (after the call) ---
-  if (StackArgSize > 0) {
-    int64_t Remaining = static_cast<int64_t>(StackArgSize);
-    while (Remaining > 0) {
-      int64_t Step = std::min<int64_t>(Remaining, 15);
-      auto Add = MIRBuilder.buildInstr(ETCA::ADDI16);
-      Add.addDef(Register(ETCA::R6));
-      Add.addUse(Register(ETCA::R6));
-      Add.addImm(Step);
-      Remaining -= Step;
-    }
-  }
+  // --- Emit ADJCALLSTACKUP marker — the actual ADDI R6, Amount is
+  //     emitted later by eliminateCallFramePseudoInstr in PEI.
+  auto CallSeqEnd = MIRBuilder.buildInstr(ETCA::ADJCALLSTACKUP);
+
+  // Set the stack size on both markers (amt1 = size, amt2 = alignment = 0).
+  CallSeqStart.addImm(StackArgSize).addImm(0);
+  CallSeqEnd.addImm(StackArgSize).addImm(0);
 
   if (!Info.OrigRet.Regs.empty()) {
     Register RetVReg = Info.OrigRet.Regs[0];

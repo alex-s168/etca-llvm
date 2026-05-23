@@ -32,7 +32,8 @@ using namespace llvm;
 using namespace ETCA;
 
 ETCAInstrInfo::ETCAInstrInfo(ETCASubtarget &ST, const ETCARegisterInfo &RI)
-    : ETCAGenInstrInfo(ST, RI), RegInfo(RI), ST(ST) {}
+    : ETCAGenInstrInfo(ST, RI, ETCA::ADJCALLSTACKDOWN, ETCA::ADJCALLSTACKUP),
+      RegInfo(RI), ST(ST) {}
 
 const TargetRegisterInfo &ETCAInstrInfo::getRegisterInfo() const {
   return RegInfo;

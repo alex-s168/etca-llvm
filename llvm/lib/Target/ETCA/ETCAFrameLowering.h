@@ -49,6 +49,13 @@ public:
   StackOffset getFrameIndexReference(const MachineFunction &MF, int FI,
                                      Register &FrameReg) const override;
 
+  /// Eliminate ADJCALLSTACKDOWN/ADJCALLSTACKUP pseudo instructions,
+  /// emitting the actual SUBI/ADDI to SP when the call frame is not
+  /// reserved (i.e., when hasFP returns true).
+  MachineBasicBlock::iterator
+  eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
+                                MachineBasicBlock::iterator MI) const override;
+
   /// Assign fixed slot indices for callee-saved registers.
   bool
   assignCalleeSavedSpillSlots(MachineFunction &MF,

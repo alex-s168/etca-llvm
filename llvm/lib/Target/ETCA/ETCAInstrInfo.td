@@ -341,9 +341,12 @@ let isPseudo = 1, isCodeGenOnly = 1, hasSideEffects = 0 in {
 }
 
 // Frame setup/destroy pseudo instructions (for SAF prologue/epilogue)
-let hasSideEffects = 1, isPseudo = 1, isCodeGenOnly = 1 in {
-  def ADJCALLSTACKUP   : EInst<(outs), (ins i16imm:$amt), "", []>;
-  def ADJCALLSTACKDOWN : EInst<(outs), (ins i16imm:$amt), "", []>;
+// Mark R6 (SP) as both def and use so the register allocator tracks
+// stack pointer modifications across the call sequence.
+let hasSideEffects = 1, isPseudo = 1, isCodeGenOnly = 1,
+    Defs = [R6], Uses = [R6] in {
+  def ADJCALLSTACKDOWN : EInst<(outs), (ins i16imm:$amt1, i16imm:$amt2), "", []>;
+  def ADJCALLSTACKUP   : EInst<(outs), (ins i16imm:$amt1, i16imm:$amt2), "", []>;
 }
 
 // NOP: encoded as 0x008F (base ISA 2-byte NOP per binutils etca_build_nop:

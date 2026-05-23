@@ -7,31 +7,6 @@
 ---
 
 ## 🔴 Critical Issues
-
-### 1. `etca32p64` DataLayout–Subtarget Mismatch (ETCATargetMachine.cpp)
-
-**File**: `llvm/lib/Target/ETCA/ETCATargetMachine.cpp`, function `computeDataLayout()`
-```cpp
-} else if (CPU == "etca32p64") {
-    WordSize = 32;
-    PtrSize = 64;
-}
-```
-
-**File**: `llvm/lib/Target/ETCA/ETCA.td`
-```
-def : ProcessorModel<"etca32p64", ...,
-    [Feature64Bit, FeaturePtr64, ...]>;
-```
-
-**BUG**: `computeDataLayout()` says `WordSize=32` for `etca32p64`, but the subtarget feature set includes `Feature64Bit` which sets `WordSize=64`. The DataLayout is computed BEFORE the subtarget is created and passed to `CodeGenTargetMachineImpl`'s constructor. Meanwhile the subtarget's `ParseSubtargetFeatures` will set `WordSize=64` from `Feature64Bit`. This creates a fundamental mismatch:
-
-- **DataLayout**: i32 is native, i64 is 64-bit aligned but stack alignment is 32-bit → LLVM IR thinks the machine is 32-bit
-- **Subtarget**: `WordSize=64`, register classes are GPR64 → codegen thinks registers are 64-bit
-- **Result**: G_ZEXT from i16→i32 will be legal on the 32-bit DataLayout but the hardware operates on 64-bit registers. The MOVZ16+COPY bridge in the instruction selector may work around this, but the ABI type legalization (which promotes i8/i16 to i32 or i64 based on subtarget queries like `hasQW()`) will see `WordSize=64` and promote to i64, while the DataLayout says i32 is the preferred width.
-
-**Impact**: Potentially broken codegen for the `etca32p64` CPU model (32-bit word with 64-bit pointers).
-
 ### 2. `lowerCall` Hardcodes STORE16/ADDI16 for Stack Arguments (ETCACallLowering.cpp)
 
 **File**: `llvm/lib/Target/ETCA/GISel/ETCACallLowering.cpp`, function `lowerCall()`

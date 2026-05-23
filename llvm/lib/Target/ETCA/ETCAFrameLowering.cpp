@@ -354,3 +354,68 @@ bool ETCAFrameLowering::assignCalleeSavedSpillSlots(
   }
   return true;
 }
+
+MachineBasicBlock::iterator
+ETCAFrameLowering::eliminateCallFramePseudoInstr(
+    MachineFunction &MF, MachineBasicBlock &MBB,
+    MachineBasicBlock::iterator MI) const {
+  const auto &ST = MF.getSubtarget<ETCASubtarget>();
+  const TargetInstrInfo &TII = *ST.getInstrInfo();
+  DebugLoc DL = MI->getDebugLoc();
+  unsigned Opc = MI->getOpcode();
+  bool IsDestroy = (Opc == TII.getCallFrameDestroyOpcode());
+
+  // If we have a reserved call frame, the space was pre-allocated in
+  // the prologue; just erase the pseudo.
+  if (hasReservedCallFrame(MF)) {
+    return MBB.erase(MI);
+  }
+
+  // Otherwise, emit the actual SP adjustment using SUBI/ADDI.
+  // RI instructions have only 5-bit immediates (max 31), so we may
+  // need multiple instructions for large call frames.
+  int64_t Amount = MI->getOperand(0).getImm();
+  if (Amount == 0) {
+    return MBB.erase(MI);
+  }
+
+  unsigned RegWidth = ST.getRegWidth();
+  unsigned SubOpc, AddOpc;
+  switch (RegWidth) {
+  case 64:
+    SubOpc = SUBI64;
+    AddOpc = ADDI64;
+    break;
+  case 32:
+    SubOpc = SUBI32;
+    AddOpc = ADDI32;
+    break;
+  default:
+    SubOpc = SUBI16;
+    AddOpc = ADDI16;
+    break;
+  }
+
+  // Break up large adjustments into max-31-byte chunks (5-bit immediate
+  // gives range 0-31, but we use 31 as the max since negative immediates
+  // are not needed for positive offsets).
+  const int64_t MaxImm = 31;
+  int64_t Remaining = Amount;
+  while (Remaining > 0) {
+    int64_t Step = std::min<int64_t>(Remaining, MaxImm);
+    if (IsDestroy) {
+      // ADJCALLSTACKUP -> ADDI R6, Step  (restore SP after call)
+      BuildMI(MBB, MI, DL, TII.get(AddOpc), ETCA::R6)
+          .addReg(ETCA::R6)
+          .addImm(Step);
+    } else {
+      // ADJCALLSTACKDOWN -> SUBI R6, Step  (allocate call frame)
+      BuildMI(MBB, MI, DL, TII.get(SubOpc), ETCA::R6)
+          .addReg(ETCA::R6)
+          .addImm(Step);
+    }
+    Remaining -= Step;
+  }
+
+  return MBB.erase(MI);
+}
