@@ -7,52 +7,6 @@
 ---
 
 ## 🔴 Critical Issues
-### 2. `lowerCall` Hardcodes STORE16/ADDI16 for Stack Arguments (ETCACallLowering.cpp)
-
-**File**: `llvm/lib/Target/ETCA/GISel/ETCACallLowering.cpp`, function `lowerCall()`
-
-```cpp
-auto Sub = MIRBuilder.buildInstr(ETCA::SUBI16);   // ← should be SUBI{16,32,64}
-...
-auto Store = MIRBuilder.buildInstr(ETCA::STORE16); // ← should be STORE{16,32,64}
-```
-
-The call lowering unconditionally uses `SUBI16` and `STORE16` for stack argument allocation and storage, regardless of the actual register width. On a 64-bit machine, storing an i64 stack argument via `STORE16` will only write 16 bits. Similarly, stack pointer adjustments of 4 or 8 bytes per argument are wrong.
-
-Same pattern in `lowerFormalArguments` — uses `RegBytes` (correct) but the stores in `lowerCall` ignore it.
-
-**Impact**: Calls with stack arguments (≥5 args) are broken on 32-bit and 64-bit CPU models.
-
-### 3. `lowerCall` Stack Adjustment Bypasses LLVM Frame Handling (ETCACallLowering.cpp)
-
-The `lowerCall` function manually emits `SUBI16` / `ADDI16` for stack argument push/pop instead of using `ADJCALLSTACKDOWN` / `ADJCALLSTACKUP`. The `ADJCALLSTACK*` pseudo instructions ARE defined in `ETCAInstrInfo.td` but are NEVER emitted by the call lowering.
-
-Without proper frame handling:
-- Stack adjustments are invisible to the PEI / machine scheduler
-- Frame pointer chasing is incorrect
-- DWARF call frame information (CFI) is missing
-- Garbage collection and exception handling stack maps are broken
-
-**Impact**: Broken DWARF unwind info, incorrect stack tracking for anything beyond trivial calls.
-
-### 4. REX Copy-Is-No-Op Detection Is Wrong for Cross-Class Copies (ETCAInstrInfo.cpp)
-
-**File**: `llvm/lib/Target/ETCA/ETCAInstrInfo.cpp`, function `copyPhysReg()`
-
-```cpp
-unsigned DestEnc = TRI.getEncodingValue(DestReg);
-unsigned SrcEnc = TRI.getEncodingValue(SrcReg);
-if ((DestEnc & 0x7) == (SrcEnc & 0x7))
-    return; // Same physical register — copy is a no-op.
-```
-
-With REX extension, `R8` encodes as `8` (`0b1000`) and `D8` also encodes as `8`. The mask `& 0x7` gives `0` for both, so `copyPhysReg` treats a copy from `R8` ↔ `D8` as a no-op. But these ARE different physical registers — `R8` is a 16-bit register, `D8` is a 32-bit register. A copy between them is NOT a no-op and would require a MOVZ with the appropriate width.
-
-**Without REX** (registers R0-R7, D0-D7): R0 and D0 both encode as 0, and they ARE subregisters of the same physical location (D0 has sub_16 → R0), so the no-op IS correct for the base set.
-
-**With REX**: The no-op is a bug.
-
-**Impact**: Silent data corruption on REX targets when copies between different-width register classes involve high registers (R8-R15 ↔ D8-D15).
 
 ### 5. Missing `writeNopData` for Odd Counts Returns False But Can Crash Downstream (ETCAMCTargetDesc.cpp)
 

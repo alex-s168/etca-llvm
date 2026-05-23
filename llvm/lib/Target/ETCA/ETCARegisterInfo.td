@@ -55,6 +55,9 @@ foreach i = 0-15 in {
 
 // 32-bit doubleword registers (DW extension)
 // Binutils-compatible name: r0d, r1d, ..., r15d
+// All D registers share the same physical storage as the corresponding R
+// register (sub_16 → R), including REX extended registers (r8d has
+// sub_16 → r8).
 foreach i = 0-15 in {
   def D#i : ETCAReg<i, "r"#i#"d", [!cast<Register>("R"#i)], ["d"#i, "r"#i]>,
              DwarfRegNum<[!add(i, 16)]> {
@@ -65,6 +68,9 @@ foreach i = 0-15 in {
 
 // 64-bit quadword registers (QW extension)
 // Binutils-compatible name: r0q, r1q, ..., r15q
+// All Q registers share the same physical storage as the corresponding D
+// register (sub_32 → D, transitively sub_16 → R via D), including REX
+// extended registers.
 foreach i = 0-15 in {
   def Q#i : ETCAReg<i, "r"#i#"q",
                      [!cast<Register>("D"#i)],

@@ -93,15 +93,14 @@ void ETCAInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                 const DebugLoc &DL, Register DestReg,
                                 Register SrcReg, bool KillSrc,
                                 bool RenamableDest, bool RenamableSrc) const {
-  // If both registers map to the same underlying ETCa register number
-  // (e.g., R0 and D0 both encode as register 0), the copy is a no-op.
-  // MOVZ16/MOVS16/MOVZ32/MOVS32 all use 3-bit register fields in the
-  // encoding, and R0, D0, Q0 all share the same encoding (0).
+  // If both registers share the same underlying physical storage
+  // (e.g., D0 has sub_16 → R0), the copy is a no-op.
+  // REX extended registers (r8-r15, d8-d15) have coincident encoding
+  // numbers but are DIFFERENT physical registers, so regsOverlap
+  // correctly returns false for those.
   if (DestReg != SrcReg) {
     const TargetRegisterInfo &TRI = getRegisterInfo();
-    unsigned DestEnc = TRI.getEncodingValue(DestReg);
-    unsigned SrcEnc = TRI.getEncodingValue(SrcReg);
-    if ((DestEnc & 0x7) == (SrcEnc & 0x7))
+    if (TRI.regsOverlap(DestReg, SrcReg))
       return; // Same physical register — copy is a no-op.
   }
 
