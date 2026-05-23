@@ -295,7 +295,8 @@ ETCARegisterInfo::getCallPreservedMask(const MachineFunction &MF,
   // With REX: R13(s2), R14(s3), R15(s4) are also callee-saved.
   // The CSR mask is auto-generated from CalleeSavedRegs definitions
   // in ETCACallingConv.td.  Select the right mask based on word size
-  // and REX availability.
+  // and REX availability, and the calling convention.
+  //
   // getRegMasks() returns masks in the order they appear in the .td file:
   //   [0] = CSR_ETCA_RegMask (16-bit)
   //   [1] = CSR_ETCA_GPR32_RegMask (32-bit)
@@ -303,6 +304,62 @@ ETCARegisterInfo::getCallPreservedMask(const MachineFunction &MF,
   //   [3] = CSR_ETCA_REX_RegMask (16-bit + REX)
   //   [4] = CSR_ETCA_REX_GPR32_RegMask (32-bit + REX)
   //   [5] = CSR_ETCA_REX_GPR64_RegMask (64-bit + REX)
+  //   [6] = CSR_ETCA_PreserveMost_RegMask (16-bit)
+  //   [7] = CSR_ETCA_PreserveMost_GPR32_RegMask (32-bit)
+  //   [8] = CSR_ETCA_PreserveMost_GPR64_RegMask (64-bit)
+  //   [9] = CSR_ETCA_PreserveMost_REX_RegMask (16-bit + REX)
+  //  [10] = CSR_ETCA_PreserveMost_REX_GPR32_RegMask (32-bit + REX)
+  //  [11] = CSR_ETCA_PreserveMost_REX_GPR64_RegMask (64-bit + REX)
+  //  [12] = CSR_ETCA_PreserveAll_RegMask (16-bit)
+  //  [13] = CSR_ETCA_PreserveAll_GPR32_RegMask (32-bit)
+  //  [14] = CSR_ETCA_PreserveAll_GPR64_RegMask (64-bit)
+  //  [15] = CSR_ETCA_PreserveAll_REX_RegMask (16-bit + REX)
+  //  [16] = CSR_ETCA_PreserveAll_REX_GPR32_RegMask (32-bit + REX)
+  //  [17] = CSR_ETCA_PreserveAll_REX_GPR64_RegMask (64-bit + REX)
+  //  [18] = CSR_NoRegs_RegMask (empty — GHC)
+  //
+  // Select the mask group based on CC, then index by width/REX.
+
+  // GHC: no registers preserved.
+  if (CC == CallingConv::GHC)
+    return getRegMasks()[18];
+
+  // PreserveMost / Cold: preserve all registers except R0 (return/arg).
+  //   CSR_ETCA_PreserveMost_* — indices 6-11 (non-REX: 6-8, REX: 9-11)
+  if (CC == CallingConv::PreserveMost || CC == CallingConv::Cold) {
+    if (ST.hasREX()) {
+      if (ST.getWordSize() >= 64)
+        return getRegMasks()[11];
+      if (ST.getWordSize() >= 32)
+        return getRegMasks()[10];
+      return getRegMasks()[9];
+    }
+    if (ST.getWordSize() >= 64)
+      return getRegMasks()[8];
+    if (ST.getWordSize() >= 32)
+      return getRegMasks()[7];
+    return getRegMasks()[6];
+  }
+
+  // PreserveAll: preserve all registers including R0.
+  //   CSR_ETCA_PreserveAll_* — indices 12-17
+  if (CC == CallingConv::PreserveAll) {
+    if (ST.hasREX()) {
+      if (ST.getWordSize() >= 64)
+        return getRegMasks()[17];
+      if (ST.getWordSize() >= 32)
+        return getRegMasks()[16];
+      return getRegMasks()[15];
+    }
+    if (ST.getWordSize() >= 64)
+      return getRegMasks()[14];
+    if (ST.getWordSize() >= 32)
+      return getRegMasks()[13];
+    return getRegMasks()[12];
+  }
+
+  // Default (CallingConv::C): standard SAF ABI callee-saved set.
+  //   CSR_ETCA_*_RegMask — indices 0-5
   if (ST.hasREX()) {
     if (ST.getWordSize() >= 64)
       return getRegMasks()[5];

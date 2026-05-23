@@ -253,6 +253,11 @@ bool ETCACallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
   else if (Info.Callee.isSymbol())
     CallInst.addExternalSymbol(Info.Callee.getSymbolName());
 
+  // Add the call-preserved register mask so the register allocator
+  // knows which registers are preserved by this call.
+  const auto &TRI = *MF.getSubtarget().getRegisterInfo();
+  CallInst.addRegMask(TRI.getCallPreservedMask(MF, Info.CallConv));
+
   for (unsigned i = 0, e = std::min(NumArgs, size_t(4)); i < e; ++i) {
     Register ArgReg = Info.OrigArgs[i].Regs[0];
     if (ArgReg) {

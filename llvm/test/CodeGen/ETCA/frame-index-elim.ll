@@ -56,20 +56,26 @@ define i16 @spill_reload(i16 %v1, i16 %v2, i16 %v3, i16 %v4, i16 %v5) {
 ; GN:         push %r5
 ; GN-NEXT:    movz %r5, %r6
 ; GN:         push %r4
-; GN:         sub %r6, 2
-; GN:         movz %r4, %r0
+; GN:         sub %r6, 6
+; GN:         movz %r4, %r5
+; GN:         add %r4, -4
+; GN:         store %r0, %r4                          ; 2-byte Folded Spill
+; GN:         movz %r4, %r1
+; GN:         movz %r0, %r5
+; GN:         add %r0, -6
+; GN:         store %r2, %r0                          ; 2-byte Folded Spill
 ; GN:         movz %r0, %r5
 ; GN:         add %r0, 2
 ; GN:         load %r0, %r0
-; GN:         movz %r7, %r5
-; GN:         add %r7, -2
-; GN:         store %r0, %r7
+; GN:         movz %r1, %r5
+; GN:         add %r1, -2
+; GN:         store %r0, %r1                          ; 2-byte Folded Spill
 ; GN:         call callee
-; GN:         add %r4, %r1
-; GN:         add %r4, %r2
+; GN:         load %r0, %r0
+; GN:         add %r4, %r0
+; GN:         load %r0, %r0
+; GN:         add %r4, %r0
 ; GN:         add %r4, %r3
-; GN:         movz %r0, %r5
-; GN:         add %r0, -2
 ; GN:         load %r0, %r0
 ; GN:         add %r4, %r0
 ; GN:         movz %r0, %r4

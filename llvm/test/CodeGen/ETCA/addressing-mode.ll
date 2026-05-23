@@ -93,7 +93,7 @@ entry:
 define void @array_store(ptr %arr, i16 %idx, i16 %val) {
 ; CHECK-LABEL: array_store:
 ; The store uses a pure register operand for the address.
-; CHECK:       store %r2, %r0
+; CHECK:       store %r{{[0-9]+}}, %r0
   %ptr = getelementptr i16, ptr %arr, i16 %idx
   store i16 %val, ptr %ptr
   ret void

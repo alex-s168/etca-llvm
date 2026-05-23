@@ -108,3 +108,49 @@ def CSR_ETCA_GPR64_RegMask : CalleeSavedRegs<(add Q3, Q4, Q5, Q6)>;
 def CSR_ETCA_REX_RegMask : CalleeSavedRegs<(add R3, R4, R5, R6, R13, R14, R15)>;
 def CSR_ETCA_REX_GPR32_RegMask : CalleeSavedRegs<(add D3, D4, D5, D6, D13, D14, D15)>;
 def CSR_ETCA_REX_GPR64_RegMask : CalleeSavedRegs<(add Q3, Q4, Q5, Q6, Q13, Q14, Q15)>;
+
+//===----------------------------------------------------------------------===//
+// CSR masks for special calling conventions
+//
+// PreserveMost  — callee preserves all registers except R0 (return/arg reg).
+//                 Used for CallingConv::PreserveMost and CallingConv::Cold
+//                 (cold functions are rarely called, so minimize caller save).
+// PreserveAll   — callee preserves ALL registers (including R0).
+// NoRegs        — callee preserves nothing (GHC convention).
+//
+// Each convention has 6 variants: 16/32/64-bit × base/REX.
+// See getCallPreservedMask in ETCARegisterInfo.cpp for index mapping.
+//===----------------------------------------------------------------------===//
+
+// --- PreserveMost ---
+def CSR_ETCA_PreserveMost_RegMask : CalleeSavedRegs<
+    (add R1, R2, R3, R4, R5, R6, R7)>;
+def CSR_ETCA_PreserveMost_GPR32_RegMask : CalleeSavedRegs<
+    (add D1, D2, D3, D4, D5, D6, D7)>;
+def CSR_ETCA_PreserveMost_GPR64_RegMask : CalleeSavedRegs<
+    (add Q1, Q2, Q3, Q4, Q5, Q6, Q7)>;
+
+def CSR_ETCA_PreserveMost_REX_RegMask : CalleeSavedRegs<
+    (add R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15)>;
+def CSR_ETCA_PreserveMost_REX_GPR32_RegMask : CalleeSavedRegs<
+    (add D1, D2, D3, D4, D5, D6, D7, D8, D9, D10, D11, D12, D13, D14, D15)>;
+def CSR_ETCA_PreserveMost_REX_GPR64_RegMask : CalleeSavedRegs<
+    (add Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q9, Q10, Q11, Q12, Q13, Q14, Q15)>;
+
+// --- PreserveAll ---
+def CSR_ETCA_PreserveAll_RegMask : CalleeSavedRegs<
+    (add R0, R1, R2, R3, R4, R5, R6, R7)>;
+def CSR_ETCA_PreserveAll_GPR32_RegMask : CalleeSavedRegs<
+    (add D0, D1, D2, D3, D4, D5, D6, D7)>;
+def CSR_ETCA_PreserveAll_GPR64_RegMask : CalleeSavedRegs<
+    (add Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7)>;
+
+def CSR_ETCA_PreserveAll_REX_RegMask : CalleeSavedRegs<
+    (add R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15)>;
+def CSR_ETCA_PreserveAll_REX_GPR32_RegMask : CalleeSavedRegs<
+    (add D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, D10, D11, D12, D13, D14, D15)>;
+def CSR_ETCA_PreserveAll_REX_GPR64_RegMask : CalleeSavedRegs<
+    (add Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q9, Q10, Q11, Q12, Q13, Q14, Q15)>;
+
+// --- NoRegs (GHC convention) ---
+def CSR_NoRegs_RegMask : CalleeSavedRegs<(add)>;

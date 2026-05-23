@@ -8,18 +8,6 @@
 
 ## 🟡 Medium Severity Issues
 
-### 15. `CCCD::getCallPreservedMask` Doesn't Handle Variadic Call Conventions
-
-**File**: `llvm/lib/Target/ETCA/ETCARegisterInfo.cpp`
-
-```cpp
-const uint32_t *ETCARegisterInfo::getCallPreservedMask(
-    const MachineFunction &MF, CallingConv::ID CC) const {
-  // ...
-```
-
-Only handles the default calling convention (`CC` is ignored). If someone targets `PreserveMost`, `PreserveAll`, or `Cold`, the function returns an incorrect mask from the WS/REX-based index which may not match.
-
 ### 16. CALLR Instruction Has No R7 Def (ETCAInstrInfo.td)
 
 ```tablegen
