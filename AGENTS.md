@@ -6,6 +6,7 @@
 - Specification of future vendor extensions: `../etca-vnd-extensions/`
 - Existing binutils fork: `../etca-binutils-gdb/`
 - Compiled target binutil binaries: `../etca-binutils-gdb/install/bin/`
+- User documentation: `./ETCA-USER-DOCUMENTATION.md`
 
 ## Requirements
 
@@ -148,56 +149,9 @@ generated code to call.
 - ELFObjectWriter: relocation types matching binutils (R_ETCA_NONE through R_ETCA_IPREL_64)
 - EM_ETCA = 0xE7Ca added to LLVM BinaryFormat
 
-## Test Results
-
-**All source files compile successfully on their target CPUs**:
-
-### CodeGen Tests (15 source files)
-| Test | Runs on | Description |
-|------|---------|-------------|
-| `arithmetic.ll` | generic, etca32, etca64 | All arithmetic ops |
-| `byte-ops.ll` | generic +byte | BYTE extension (8-bit) |
-| `calling-conv.ll` | generic, etca32, etca64 | Calling conventions |
-| `constants.ll` | generic, etca32, etca64 | Constant materialization |
-| `control-flow.ll` | generic, etca32, etca64 | CMP + conditional branches |
-| `fibonacci.ll` | generic, etca32, etca64 | Recursive fib compiles (Greedy RA works!) |
-| `memory.ll` | generic, etca32, etca64 | LOAD/STORE |
-| `mul-div-16.ll` | generic, etca32, etca64 | 16-bit MIR libcall legalizer test |
-| `mul-div-32.ll` | etca32, etca64 | 32-bit MIR libcall legalizer test |
-| `mul-div-64.ll` | etca64 | 64-bit MIR libcall legalizer test |
-| `mul-div-asm-16.ll` | generic, etca32, etca64 | 16-bit assembly libcall test |
-| `multi-width-16.ll` | **all 5 CPUs** | 16-bit ops across all word/ptr combos |
-| `multi-width-32.ll` | etca32, etca64 | 32-bit ops (DW extension) |
-| `multi-width-64.ll` | etca64 | 64-bit ops (QW extension) |
-| `saf.ll` | generic, etca32, etca64 | SAF calls |
-| `signext.ll` | generic, etca32, etca64 | Sign-extension semantics |
-
-### MC Tests (18)
-| Test | Description |
-|------|-------------|
-| `addsub.s` | ADD/SUB RR+RI encodings for all widths |
-| `byte.s` | BYTE extension (8-bit) instruction encodings |
-| `cross-binutils.s` | Assembly syntax cross-check stub |
-| `cross-dw-qw.s` | Dword/qword cross-check stub |
-| `dword-qword.s` | All 32/64-bit RR + RI instruction encodings |
-| `edge-cases.s` | Boundary values: imm 0/±16/15/31, max branch ±512, etc. |
-| `logical.s` | AND/OR/XOR/TEST encodings |
-| `mov.s` | MOVZ/MOVS all widths |
-| `parser-errors.s` | Error message tests |
-| `rex-instructions.s` | REX extension: r8-r15 encoding + round-trip (NEW) |
-| `roundtrip-all.s` + `.dis` | Comprehensive decode(encode(inst)) round-trip |
-| `saf-instructions.s` | SAF encoding tests |
-| `simple.s` | Basic instruction encodings |
-| `word-instructions.s` | Word-level instruction tests |
-
-
 ## TODO — Extension Improvements
 
 ### Tests
-- [x] Legalizer subtarget-aware (HasDW/HasQW gate computation ops)
-- [x] Multi-width tests split by CPU capability (16/32/64 bit)
-- [x] Explicit FileCheck RUN lines for all 5 CPU models in CodeGen tests
-- [x] REX extension: r8-r15 register file, REX prefix encoder, parser (binutils-compatible ABI names t0-t4/s2-s4), disassembler, GPR_REX/GPR32_REX/GPR64_REX register classes, extended calling convention, CSR masks for REX callee-saved registers, feature flag, MC tests (encoding + round-trip), Clang integration
 - [ ] ELF object verification (EM_ETCA, section headers, relocations)
 - [ ] Integration tests (Fibonacci, memcpy, recursive factorial)
 - [ ] LLVM test suite integration
@@ -223,14 +177,6 @@ generated code to call.
 - [ ] Re-check memory semantics (unaligned access, pointer width, memory-mapped IO)
 - [ ] Re-check register file (Dwarf numbering, ABI names)
 - [ ] Verify relocation types match `etca-binutils-gdb/` exactly
-
-### Future Extensions
-- [ ] extended registers (REX prefix)
-- [ ] fi: full immediates (VWI prefix)
-- [ ] mo1/mo2: complex memory operands
-- [ ] expanded opcodes (EXOP prefix)
-- [ ] conditional prefix
-- [ ] bm1 (bit manipulation 1)
 
 ## Build Notes
 
