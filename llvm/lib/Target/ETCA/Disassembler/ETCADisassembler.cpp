@@ -360,6 +360,17 @@ ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
     unsigned Opc = 0;
     bool IsNonTied = false;
 
+    // PUSHI: CCCC=13 (0xD), rA=6(sp), imm=Imm5 (must be checked before the
+    // switch since CCCC=13 with RegA!=6 is an invalid encoding).
+    if (CCCC == 0xD && RegA == 6) {
+      if (SS == 0b00)
+        Instr.setOpcode(ETCA::PUSHI8);
+      else
+        Instr.setOpcode(ETCA::PUSHI);
+      Instr.addOperand(MCOperand::createImm(Imm5));
+      return MCDisassembler::Success;
+    }
+
     switch (CCCC) {
     case 0:
       Opc = SS == 0b00   ? ETCA::ADDI8
@@ -427,10 +438,7 @@ ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
       Opc = ETCA::SLO16;
       IsNonTied = true;
       break;
-    case 13:
-      Opc = ETCA::SLO16;
-      IsNonTied = true;
-      break;
+    // CCCC=13 (0xD) is intentionally absent — PUSHI handled above, otherwise invalid.
     case 14:
       Opc = ETCA::READCR;
       break;
@@ -441,16 +449,6 @@ ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
 
     if (!Opc)
       return MCDisassembler::Fail;
-
-    // PUSHI: CCCC=13 (0xD), rA=6(sp), imm=Imm5
-    if (CCCC == 0xD && RegA == 6) {
-      if (SS == 0b00)
-        Instr.setOpcode(ETCA::PUSHI8);
-      else
-        Instr.setOpcode(ETCA::PUSHI);
-      Instr.addOperand(MCOperand::createImm(Imm5));
-      return MCDisassembler::Success;
-    }
 
     Instr.setOpcode(Opc);
 
