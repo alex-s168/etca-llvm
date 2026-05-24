@@ -138,6 +138,22 @@ void ETCASubtarget::initLibcallLoweringInfo(LibcallLoweringInfo &Info) const {
   };
   for (const auto &LC : IntLibcalls)
     Info.setLibcallImpl(LC.Op, LC.Impl);
+
+  // Memory intrinsics — memcpy, memmove, memset
+  // The default RuntimeLibcallsInfo is empty for unknown triples (like
+  // ETCA's custom triple), so we must register these explicitly.
+  // The implementations map to the standard C library functions which
+  // must be provided by the runtime environment.
+  const struct {
+    const RTLIB::Libcall Op;
+    const RTLIB::LibcallImpl Impl;
+  } MemLibcalls[] = {
+      {RTLIB::MEMCPY, RTLIB::impl_memcpy},
+      {RTLIB::MEMMOVE, RTLIB::impl_memmove},
+      {RTLIB::MEMSET, RTLIB::impl_memset},
+  };
+  for (const auto &LC : MemLibcalls)
+    Info.setLibcallImpl(LC.Op, LC.Impl);
 }
 
 ETCASubtarget::ETCASubtarget(const Triple &TargetTriple, StringRef Cpu,

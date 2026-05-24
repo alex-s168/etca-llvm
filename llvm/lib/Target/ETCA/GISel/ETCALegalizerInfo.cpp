@@ -276,6 +276,17 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   SetupLibcall(G_LSHR);
 
   //===----------------------------------------------------------------===//
+  // Memory intrinsics — lowered to libcalls (memcpy, memmove, memset)
+  //
+  // G_MEMCPY, G_MEMMOVE, G_MEMSET are lowered to calls to the standard
+  // library functions.  G_MEMCPY_INLINE is lowered to an inline sequence
+  // of loads and stores.
+  //===----------------------------------------------------------------===//
+
+  getActionDefinitionsBuilder({G_MEMCPY, G_MEMMOVE, G_MEMSET}).libcall();
+  getActionDefinitionsBuilder(G_MEMCPY_INLINE).lower();
+
+  //===----------------------------------------------------------------===//
   // Narrow/widen helper ops — TIER 3
   //
   // These instructions are produced by the legalizer when narrowing wide
