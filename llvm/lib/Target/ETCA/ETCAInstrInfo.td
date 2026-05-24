@@ -403,7 +403,7 @@ let hasSideEffects = 1, isPseudo = 1, isCodeGenOnly = 1 in {
 // Marker pseudo for G_ICMP lowering.  The actual CMP is emitted separately;
 // this pseudo carries the predicate so G_BRCOND can find it.
 let isPseudo = 1, isCodeGenOnly = 1, hasSideEffects = 0 in {
-  def ICMP_Pseudo : EInst<(outs GPR:$dst), (ins GPR:$lhs, GPR:$rhs, i16imm:$pred),
+  def ICMP_Pseudo : EInst<(outs GPR:$dst), (ins i16imm:$pred),
                            "movz $dst, $pred", []>;
 }
 

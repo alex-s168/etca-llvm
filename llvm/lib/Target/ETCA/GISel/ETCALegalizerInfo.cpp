@@ -121,6 +121,11 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   IcmpActions.legalFor({{s16, s16}});
   IcmpActions.legalFor(HasDW, {{s16, s32}});
   IcmpActions.legalFor(HasQW, {{s16, s64}});
+  // Pointer comparisons are always legal (comparing addresses is the
+  // same as comparing integers of the pointer width).  The instruction
+  // selector handles p0 by using the pointer size to pick the right CMP
+  // opcode (CMP32 for ptr32, CMP64 for ptr64, CMP for ptr16).
+  IcmpActions.legalFor({{s16, p0}});
   IcmpActions.clampScalar(0, s16, s64);
   IcmpActions.clampScalar(1, MinLegal, MaxComp);
 

@@ -713,7 +713,7 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     if (auto *DefMI = MRI->getVRegDef(Cond)) {
       // Case 1: CMP already emitted by G_ICMP handler.
       if (DefMI->getOpcode() == ETCA::ICMP_Pseudo) {
-        int64_t Pred = DefMI->getOperand(3).getImm();
+        int64_t Pred = DefMI->getOperand(1).getImm();
         BuildMI(MBB, MI, MIMD, TII.get(getBranchOpcForPred(Pred)))
             .addMBB(Target);
         // Erase the consumed ICMP_Pseudo — its result has no remaining
@@ -748,8 +748,6 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
         // no-op when encountered later in the traversal.
         Register GICMPDst = DefMI->getOperand(0).getReg();
         BuildMI(MBB, *DefMI, MIMD, TII.get(ETCA::ICMP_Pseudo), GICMPDst)
-            .addReg(LHS)
-            .addReg(RHS)
             .addImm(EncPred);
         DefMI->eraseFromParent();
         MI.eraseFromParent();
@@ -798,8 +796,12 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
 
     if (auto *DefMI = MRI->getVRegDef(Cond)) {
       // Case 1: CMP already emitted by G_ICMP handler.
+      // ICMP_Pseudo carries the predicate in operand 1 (after its $lhs
+      // and $rhs operands were removed).  The ICMP_Pseudo will be erased
+      // by ETCASelectExpand (it has no real uses since SELECT_Pseudo
+      // only checks the opcode, not the register value).
       if (DefMI->getOpcode() == ETCA::ICMP_Pseudo) {
-        PredVal = DefMI->getOperand(3).getImm();
+        PredVal = DefMI->getOperand(1).getImm();
         CMPEmitted = true;
       }
       // Case 2: G_ICMP not yet selected (reverse-order traversal).
@@ -821,8 +823,6 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
         // no-op when encountered later in the traversal.
         Register GICMPDst = DefMI->getOperand(0).getReg();
         BuildMI(MBB, *DefMI, MIMD, TII.get(ETCA::ICMP_Pseudo), GICMPDst)
-            .addReg(LHS)
-            .addReg(RHS)
             .addImm(PredVal);
         // Constrain the ICMP_Pseudo result register to GPR (condition is
         // always 16-bit).  In the normal G_ICMP handler this is done by
@@ -1072,10 +1072,7 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     // ICMP_Pseudo is a non-pre-isel opcode, so the main select loop
     // will skip it.
     int64_t EncPred = encodeICMPPred(Pred);
-    BuildMI(MBB, MI, MIMD, TII.get(ETCA::ICMP_Pseudo), Dst)
-        .addReg(LHS)
-        .addReg(RHS)
-        .addImm(EncPred);
+    BuildMI(MBB, MI, MIMD, TII.get(ETCA::ICMP_Pseudo), Dst).addImm(EncPred);
 
     // Constrain the result register (result is always 16-bit condition).
     if (!constrainReg(Dst, LLT::scalar(16), RBI, *MRI))

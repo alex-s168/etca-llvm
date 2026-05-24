@@ -240,13 +240,12 @@ bool ETCAInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     return false;
   }
 
-  // ICMP_Pseudo is a marker carrying the G_ICMP predicate for G_BRCOND
-  // and G_SELECT consumers.  During instruction selection, G_BRCOND and
-  // G_SELECT match on ICMP_Pseudo and extract the predicate; the dst
-  // register becomes unused.  Just erase it.
+  // ICMP_Pseudo is expanded during instruction selection (by G_BRCOND and
+  // G_SELECT handlers) or during ETCASelectExpand (when the ICMP result
+  // is used by other instructions).  If we get here, it's a leftover that
+  // should have been handled — just leave it for the machine verifier.
   case ETCA::ICMP_Pseudo: {
-    MI.eraseFromParent();
-    return true;
+    return false;
   }
   }
 }
