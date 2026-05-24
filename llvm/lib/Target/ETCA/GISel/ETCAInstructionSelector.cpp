@@ -454,7 +454,7 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
   }
 
     //===----------------------------------------------------------------===//
-    // G_SHL — expanded as repeated ADD
+    // G_SHL — constant shift via SLO (16-bit) or linear ADD (32/64-bit)
     //===----------------------------------------------------------------===//
 
   case TargetOpcode::G_SHL: {
@@ -464,6 +464,7 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     LLT DstTy = MRI->getType(Dst);
     const TargetRegisterClass *RC = getRCForType(DstTy);
     unsigned Size = DstTy.getSizeInBits();
+    unsigned AddOpc = getETCAAluOpcode(TargetOpcode::G_ADD, Size);
 
     // SLO requires an immediate shift amount.
     int64_t ShiftAmt = 0;
@@ -486,60 +487,59 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
       return true;
     }
 
-    // Use power-of-2 decomposition to avoid O(N) code for large shifts.
-    //
-    // Precompute powers[0..MaxBit] where:
-    //   powers[0] = Src1 << 1   (one ADD)
-    //   powers[1] = Src1 << 2   (one ADD: powers[0]+powers[0])
-    //   powers[2] = Src1 << 4   (one ADD: powers[1]+powers[1])
-    //   powers[3] = Src1 << 8   (one ADD)
-    //   powers[4] = Src1 << 16  (one ADD)
-    //   powers[5] = Src1 << 32  (one ADD)
-    //
-    // Then for each set bit b in ShiftAmt, accumulate powers[b].
-    // Max: 5 powers + 5 adds = 10 instructions (vs 63 for O(N)).
-
-    unsigned MaxBit = 0;
-    uint64_t Tmp = ShiftAmt;
-    while (Tmp >>= 1)
-      ++MaxBit;
-    if (MaxBit > 5)
-      MaxBit = 5;
-
-    unsigned AddOpc = getETCAAluOpcode(TargetOpcode::G_ADD, Size);
-    SmallVector<Register, 6> Powers(MaxBit + 1);
-
-    // powers[0] = Src1 + Src1 = Src1 << 1
-    Powers[0] = MRI->createVirtualRegister(RC);
-    BuildMI(MBB, MI, MIMD, TII.get(AddOpc), Powers[0])
-        .addReg(Src1)
-        .addReg(Src1);
-    if (!constrainReg(Powers[0], DstTy, RBI, *MRI))
-      return false;
-
-    for (unsigned i = 1; i <= MaxBit; ++i) {
-      Powers[i] = MRI->createVirtualRegister(RC);
-      BuildMI(MBB, MI, MIMD, TII.get(AddOpc), Powers[i])
-          .addReg(Powers[i - 1])
-          .addReg(Powers[i - 1]);
-      if (!constrainReg(Powers[i], DstTy, RBI, *MRI))
+    // Poison for shift >= bit width or negative → produce 0 for safety.
+    if (ShiftAmt < 0 || ShiftAmt >= (int64_t)Size) {
+      BuildMI(MBB, MI, MIMD, TII.get(getMovziOpc(Size)), Dst).addImm(0);
+      if (!constrainReg(Dst, DstTy, RBI, *MRI))
         return false;
+      MI.eraseFromParent();
+      return true;
     }
 
-    // Accumulate set bits into Dst.
-    unsigned FirstBit = 0;
-    while (FirstBit <= MaxBit && !(ShiftAmt & (1ULL << FirstBit)))
-      ++FirstBit;
+    // === Shift implementation ===
+    //
+    // Strategy:
+    //   For 16-bit word size, use SLO16 (shift-left-by-5, OR-immediate) for
+    //   groups of 5 bits, then ADDs for the remainder.  Each SLO16 with imm=0
+    //   is Rd = Rd << 5, equivalent to 5 ADD instructions.
+    //
+    //   For wider sizes (32/64-bit), fall back to linear ADD decomposition
+    //   since SLO16 uses the GPR (16-bit) register class and would produce
+    //   a register-class mismatch on wider targets.
+    //
+    // With SLO: Quotient = N/5 SLOs + Remainder = N%5 ADDs, at most
+    // 3+4 = 7 instructions for 16-bit (N=15).
+    // Without SLO: N ADDs, at most 63 for 64-bit.
 
-    assert(FirstBit <= MaxBit && "ShiftAmt > 0 must have at least one set bit");
+    Register Acc = Src1;
 
-    Register Acc = Powers[FirstBit];
-    for (unsigned i = FirstBit + 1; i <= MaxBit; ++i) {
-      if (ShiftAmt & (1ULL << i)) {
+    if (Size == 16) {
+      // Use SLO16 for groups-of-5 shifts.
+      unsigned Quotient = ShiftAmt / 5;
+      unsigned Remainder = ShiftAmt % 5;
+
+      for (unsigned i = 0; i < Quotient; ++i) {
         Register Next = MRI->createVirtualRegister(RC);
-        BuildMI(MBB, MI, MIMD, TII.get(AddOpc), Next)
+        BuildMI(MBB, MI, MIMD, TII.get(ETCA::SLO16), Next)
             .addReg(Acc)
-            .addReg(Powers[i]);
+            .addImm(0);
+        if (!constrainReg(Next, DstTy, RBI, *MRI))
+          return false;
+        Acc = Next;
+      }
+
+      for (unsigned i = 0; i < Remainder; ++i) {
+        Register Next = MRI->createVirtualRegister(RC);
+        BuildMI(MBB, MI, MIMD, TII.get(AddOpc), Next).addReg(Acc).addReg(Acc);
+        if (!constrainReg(Next, DstTy, RBI, *MRI))
+          return false;
+        Acc = Next;
+      }
+    } else {
+      // Linear ADD decomposition for 32/64-bit: each ADD doubles = shift by 1.
+      for (unsigned i = 0; i < ShiftAmt; ++i) {
+        Register Next = MRI->createVirtualRegister(RC);
+        BuildMI(MBB, MI, MIMD, TII.get(AddOpc), Next).addReg(Acc).addReg(Acc);
         if (!constrainReg(Next, DstTy, RBI, *MRI))
           return false;
         Acc = Next;

@@ -18,26 +18,6 @@
 
 ---
 
-## 3. CRITICAL — `CMPI` / `TESTI` RI Instructions Have Incorrect Tied-Def Constraint
-
-**File:** `ETCAInstrFormats.td` / `ETCAInstrInfo.td`
-
-The CMP and TEST opcodes (CCCC=0011, 0111) **do not write a result register** per the spec:
-
-> CMP and TEST: These instructions do not have a destination register
-
-But `EInstRI16` (used by CMPI16/TESTI16) has `(outs GPR:$dst)` and a tied constraint `$src1 = $dst`. This means LLVM thinks CMP writes to a register, which:
-
-- Causes TwoAddressInstructionPass to insert a dead COPY (wastes instructions).
-- The register allocator may allocate a physical register for the dead $dst.
-- The generated code might have `sub rN, rN, imm` where rN is dead, confusing debuggers.
-
-The RI format encoder writes `$dst` to the AAA field, which the spec says should be ignored for CMP/TEST — but the spec says the bit pattern `AAA` is still present in the encoding. So the encoding is correct, but the LLVM IR semantics are wrong.
-
-**Fix:** Create a no-dest variant of the RI format for CMP/TEST that uses `(outs)`.
-
----
-
 ## 4. HIGH — `G_SHL` Expanded with Power-of-2 Decomposition Uses ADD Instead of SLO
 
 **File:** `GISel/ETCAInstructionSelector.cpp` (G_SHL handler)

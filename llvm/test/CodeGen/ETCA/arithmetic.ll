@@ -163,6 +163,87 @@ define i16 @shift_left_by_one(i16 %a) {
   ret i16 %r
 }
 
+;; --- SHL uses SLO for groups of 5, ADDs for remainder (16-bit) ---
+;; --- (wider widths fall back to linear ADD) ---
+
+define i16 @shift_left_by_3(i16 %a) {
+; CHECK-LABEL: shift_left_by_3:
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       {{movz %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       jmpr %r7
+  %r = shl i16 %a, 3
+  ret i16 %r
+}
+
+define i16 @shift_left_by_5(i16 %a) {
+; CHECK-LABEL: shift_left_by_5:
+; CHECK:       {{slo %r[0-9]+[dqh]?, 0}}
+; CHECK:       {{movz %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       jmpr %r7
+  %r = shl i16 %a, 5
+  ret i16 %r
+}
+
+define i16 @shift_left_by_6(i16 %a) {
+; CHECK-LABEL: shift_left_by_6:
+; CHECK:       {{slo %r[0-9]+[dqh]?, 0}}
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       {{movz %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       jmpr %r7
+  %r = shl i16 %a, 6
+  ret i16 %r
+}
+
+define i16 @shift_left_by_7(i16 %a) {
+; CHECK-LABEL: shift_left_by_7:
+; CHECK:       {{slo %r[0-9]+[dqh]?, 0}}
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       {{movz %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       jmpr %r7
+  %r = shl i16 %a, 7
+  ret i16 %r
+}
+
+define i16 @shift_left_by_10(i16 %a) {
+; CHECK-LABEL: shift_left_by_10:
+; CHECK:       {{slo %r[0-9]+[dqh]?, 0}}
+; CHECK:       {{slo %r[0-9]+[dqh]?, 0}}
+; CHECK:       {{movz %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       jmpr %r7
+  %r = shl i16 %a, 10
+  ret i16 %r
+}
+
+define i16 @shift_left_by_15(i16 %a) {
+; CHECK-LABEL: shift_left_by_15:
+; CHECK:       {{slo %r[0-9]+[dqh]?, 0}}
+; CHECK:       {{slo %r[0-9]+[dqh]?, 0}}
+; CHECK:       {{slo %r[0-9]+[dqh]?, 0}}
+; CHECK:       {{movz %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       jmpr %r7
+  %r = shl i16 %a, 15
+  ret i16 %r
+}
+
+define i16 @shift_left_overflow(i16 %a) {
+; CHECK-LABEL: shift_left_overflow:
+; CHECK:       {{movz %r[0-9]+[dqh]?, 0}}
+; CHECK:       jmpr %r7
+  %r = shl i16 %a, 16
+  ret i16 %r
+}
+
+define i16 @shift_left_negative(i16 %a) {
+; CHECK-LABEL: shift_left_negative:
+; CHECK:       {{movz %r[0-9]+[dqh]?, 0}}
+; CHECK:       jmpr %r7
+  %r = shl i16 %a, -1
+  ret i16 %r
+}
+
 ;; --- Commutative patterns ---
 
 define i16 @add_commuted(i16 %a, i16 %b) {
