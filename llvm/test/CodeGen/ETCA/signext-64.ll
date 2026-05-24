@@ -1,5 +1,5 @@
-; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw < %s | FileCheck %s --check-prefix=CHECK64
-; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr32,+dw,+qw < %s | FileCheck %s --check-prefix=CHECK64
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64 < %s | FileCheck %s --check-prefix=CHECK64
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr32 < %s | FileCheck %s --check-prefix=CHECK64
 
 ;; ===========================================================================
 ;; ETCA 64-bit sign-extension tests

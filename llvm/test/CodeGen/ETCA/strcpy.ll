@@ -1,7 +1,7 @@
 ; RUN: llc -march=etca -mcpu=generic < %s | FileCheck %s --check-prefix=GEN
-; RUN: llc -march=etca -mcpu=generic -mattr=+32bit,+ptr32,+dw < %s | FileCheck %s --check-prefix=DW
-; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw < %s | FileCheck %s --check-prefix=QW
-; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr32,+dw,+qw < %s | FileCheck %s --check-prefix=QW
+; RUN: llc -march=etca -mcpu=generic -mattr=+32bit,+ptr32 < %s | FileCheck %s --check-prefix=DW
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64 < %s | FileCheck %s --check-prefix=QW
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr32 < %s | FileCheck %s --check-prefix=QW
 
 ;; ===========================================================================
 ;; ETCA strcpy codegen tests

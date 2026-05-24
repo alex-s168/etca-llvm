@@ -1,8 +1,8 @@
 ; RUN: llc -march=etca -mcpu=generic < %s | FileCheck %s --check-prefixes=CHK,GN
-; RUN: llc -march=etca -mcpu=generic -mattr=+32bit,+ptr32,+dw < %s | FileCheck %s --check-prefixes=CHK,EW
-; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw < %s | FileCheck %s --check-prefixes=CHK,QW
-; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw < %s | FileCheck %s --check-prefixes=CHK,P64
-; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr32,+dw,+qw < %s | FileCheck %s --check-prefixes=CHK,W64
+; RUN: llc -march=etca -mcpu=generic -mattr=+32bit,+ptr32 < %s | FileCheck %s --check-prefixes=CHK,EW
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64 < %s | FileCheck %s --check-prefixes=CHK,QW
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64 < %s | FileCheck %s --check-prefixes=CHK,P64
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr32 < %s | FileCheck %s --check-prefixes=CHK,W64
 
 ;; ===========================================================================
 ;; ETCA Stack Frame Layout Tests

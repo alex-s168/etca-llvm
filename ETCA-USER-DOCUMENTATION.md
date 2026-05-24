@@ -92,13 +92,13 @@ flags:
 clang --target=etca-unknown-elf -mcpu=generic -c file.c
 
 # 32-bit word, 32-bit pointer
-clang --target=etca-unknown-elf -mcpu=generic -m32bit -mptr32 -mdw -c file.c
+clang --target=etca-unknown-elf -mcpu=generic -m32bit -mptr32 -c file.c
 
 # 64-bit word, 64-bit pointer
-clang --target=etca-unknown-elf -mcpu=generic -m64bit -mptr64 -mdw -mqw -c file.c
+clang --target=etca-unknown-elf -mcpu=generic -m64bit -mptr64 -c file.c
 
 # 64-bit word, 32-bit pointer
-clang --target=etca-unknown-elf -mcpu=generic -m64bit -mptr32 -mdw -mqw -c file.c
+clang --target=etca-unknown-elf -mcpu=generic -m64bit -mptr32 -c file.c
 ```
 
 The code generation data layout (pointer size, type sizes) is computed from the
@@ -125,13 +125,13 @@ To select other word / pointer combinations, use `-m` feature flags (see §2.3):
 
 ```sh
 # 32-bit word + 32-bit pointer
-clang --target=etca-unknown-elf -mcpu=generic -m32bit -mptr32 -mdw -c file.c
+clang --target=etca-unknown-elf -mcpu=generic -m32bit -mptr32 -c file.c
 
 # 64-bit word + 64-bit pointer
-clang --target=etca-unknown-elf -mcpu=generic -m64bit -mptr64 -mdw -mqw -c file.c
+clang --target=etca-unknown-elf -mcpu=generic -m64bit -mptr64 -c file.c
 
 # 64-bit word + 32-bit pointer
-clang --target=etca-unknown-elf -mcpu=generic -m64bit -mptr32 -mdw -mqw -c file.c
+clang --target=etca-unknown-elf -mcpu=generic -m64bit -mptr32 -c file.c
 ```
 
 ### 2.3 Extension Flags
@@ -156,8 +156,8 @@ llc -march=etca -mcpu=generic -mattr=-saf file.ll
 |---------|-----------|---------------|-------------|
 | SAF | `-msaf` / `-mno-saf` | `+saf` / `-saf` | Stack and Functions (calls, push/pop). Enabled by default. |
 | BYTE | `-mbyte` / `-mno-byte` | `+byte` / `-byte` | 8-bit byte operations (SS=00). Enabled by default. |
-| DW | `-mdw` / `-mno-dw` | `+dw` / `-dw` | 32-bit doubleword operations |
-| QW | `-mqw` / `-mno-qw` | `+qw` / `-qw` | 64-bit quadword operations |
+| DW | `-mdw` / `-mno-dw` | `+dw` / `-dw` | 32-bit doubleword operations (implied by +32bit) |
+| QW | `-mqw` / `-mno-qw` | `+qw` / `-qw` | 64-bit quadword operations (implied by +64bit) |
 | REX | `-mrex` / `-mno-rex` | `+rex` / `-rex` | Expanded registers (r8-r15) |
 | 16-bit word | — | `+16bit` / `-16bit` | 16-bit word mode (default) |
 | 32-bit word | `-m32bit` / `-mno-32bit` | `+32bit` / `-32bit` | 32-bit word mode |
@@ -168,8 +168,7 @@ llc -march=etca -mcpu=generic -mattr=-saf file.ll
 
 **Important notes:**
 - `-mcpu=generic` enables SAF, BYTE by default. It does NOT enable REX (you need `-mrex`).
-- When using `-m64bit`, also add `-mqw` to enable 64-bit operations (required for 64-bit pointers).
-- When using `-m32bit`, also add `-mdw` to enable 32-bit operations.
+- `-m32bit` implies `-mdw`; `-m64bit` implies `-mqw`. You do not need to specify them separately.
 - The ELF format (32-bit vs 64-bit) is selected automatically based on the pointer size:
   `-mptr32` → ELF32, `-mptr64` → ELF64.
 - The `DWAS` and `QWAS` features are not exposed as separate clang `-m` flags; they
@@ -276,7 +275,7 @@ clang --target=etca-unknown-elf -mcpu=generic -c file.s -o file.o
 clang --target=etca-unknown-elf -mcpu=generic -mrex -c file.s
 
 # 64-bit word, 64-bit pointer
-clang --target=etca-unknown-elf -mcpu=generic -m64bit -mptr64 -mdw -mqw -c file.s
+clang --target=etca-unknown-elf -mcpu=generic -m64bit -mptr64 -c file.s
 
 # Generate assembly listing from C
 clang --target=etca-unknown-elf -mcpu=generic -S file.c -o file.s
@@ -327,7 +326,7 @@ clang --target=etca-unknown-elf -mcpu=generic -nostdlib -o program.elf program.c
 clang --target=etca-unknown-elf -mcpu=generic program.c cr0.o -o program.elf
 
 # 64-bit word, 64-bit pointer
-clang --target=etca-unknown-elf -mcpu=generic -m64bit -mptr64 -mdw -mqw -nostdlib -o program.elf program.c
+clang --target=etca-unknown-elf -mcpu=generic -m64bit -mptr64 -nostdlib -o program.elf program.c
 ```
 
 **Emulation flags by pointer size:**

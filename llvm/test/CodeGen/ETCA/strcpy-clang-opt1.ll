@@ -19,9 +19,9 @@
 ; loop body with direct pointer increments.
 
 ; RUN: llc -march=etca -mcpu=generic -O1 < %s | FileCheck %s --check-prefix=GEN
-; RUN: llc -march=etca -mcpu=generic -mattr=+32bit,+ptr32,+dw -O1 < %s | FileCheck %s --check-prefix=DW
-; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -O1 < %s | FileCheck %s --check-prefix=QW
-; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr32,+dw,+qw -O1 < %s | FileCheck %s --check-prefix=QW
+; RUN: llc -march=etca -mcpu=generic -mattr=+32bit,+ptr32 -O1 < %s | FileCheck %s --check-prefix=DW
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64 -O1 < %s | FileCheck %s --check-prefix=QW
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr32 -O1 < %s | FileCheck %s --check-prefix=QW
 
 ;; ===========================================================================
 ;; strcpy at -O1 — phi-node loop with GEP-based pointer increment

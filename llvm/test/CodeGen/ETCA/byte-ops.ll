@@ -1,8 +1,8 @@
 ; RUN: llc -march=etca -mcpu=generic -mattr=+byte < %s | FileCheck %s
-; RUN: llc -march=etca -mcpu=generic -mattr=+32bit,+ptr32,+dw -mattr=+byte < %s | FileCheck %s
-; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -mattr=+byte < %s | FileCheck %s
-; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw -mattr=+byte < %s | FileCheck %s
-; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr32,+dw,+qw -mattr=+byte < %s | FileCheck %s
+; RUN: llc -march=etca -mcpu=generic -mattr=+32bit,+ptr32 -mattr=+byte < %s | FileCheck %s
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64 -mattr=+byte < %s | FileCheck %s
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64 -mattr=+byte < %s | FileCheck %s
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr32 -mattr=+byte < %s | FileCheck %s
 ; REQUIRES: etca-registered-target
 
 ; Test 8-bit (BYTE extension) code generation.

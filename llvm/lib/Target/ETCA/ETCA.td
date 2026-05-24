@@ -16,24 +16,9 @@ include "llvm/Target/Target.td"
 // Subtarget Features
 //===----------------------------------------------------------------------===//
 
-// Word size: determines physical register width
-def Feature16Bit : SubtargetFeature<"16bit", "WordSize", "16",
-    "16-bit word size (base ISA)">;
-def Feature32Bit : SubtargetFeature<"32bit", "WordSize", "32",
-    "32-bit word size (DW extension)">;
-def Feature64Bit : SubtargetFeature<"64bit", "WordSize", "64",
-    "64-bit word size (QW extension)">;
-
-// Pointer size: determines address register width
-def FeaturePtr16 : SubtargetFeature<"ptr16", "PtrSize", "16",
-    "16-bit pointer size">;
-def FeaturePtr32 : SubtargetFeature<"ptr32", "PtrSize", "32",
-    "32-bit pointer size (DWAS extension)">;
-def FeaturePtr64 : SubtargetFeature<"ptr64", "PtrSize", "64",
-    "64-bit pointer size (QWAS extension)">;
-
 // Extension features — enable specific ISA extensions
 // Base is always enabled.
+// NOTE: Extension defs must come before word-size features which reference them.
 def FeatureSAF : SubtargetFeature<"saf", "HasSAF", "true",
     "Stack and Functions extension">;
 def FeatureDW  : SubtargetFeature<"dw", "HasDW", "true",
@@ -49,6 +34,23 @@ def FeatureDWAS : SubtargetFeature<"dwas", "HasDWAS", "true",
 def FeatureQWAS : SubtargetFeature<"qwas", "HasQWAS", "true",
     "64-bit Address Space extension">;
 
+// Word size: determines physical register width
+// +32bit implies +dw, +64bit implies +qw (extension defs must be above).
+def Feature16Bit : SubtargetFeature<"16bit", "WordSize", "16",
+    "16-bit word size (base ISA)">;
+def Feature32Bit : SubtargetFeature<"32bit", "WordSize", "32",
+    "32-bit word size (implies DW)", [FeatureDW]>;
+def Feature64Bit : SubtargetFeature<"64bit", "WordSize", "64",
+    "64-bit word size (implies DW+QW)", [FeatureDW, FeatureQW]>;
+
+// Pointer size: determines address register width
+def FeaturePtr16 : SubtargetFeature<"ptr16", "PtrSize", "16",
+    "16-bit pointer size">;
+def FeaturePtr32 : SubtargetFeature<"ptr32", "PtrSize", "32",
+    "32-bit pointer size (DWAS extension)">;
+def FeaturePtr64 : SubtargetFeature<"ptr64", "PtrSize", "64",
+    "64-bit pointer size (QWAS extension)">;
+
 //===----------------------------------------------------------------------===//
 // Schedule Model (must be before ProcessorModel references)
 //===----------------------------------------------------------------------===//
@@ -60,13 +62,13 @@ include "ETCASchedule.td"
 //
 // The ETCA backend uses a single "generic" CPU model.  Word size, pointer
 // size, and extensions are selected via -mattr feature flags:
-//   Word size:  +16bit | +32bit | +64bit
+//   Word size:  +16bit | +32bit | +64bit  (≥32bit implies +dw; ≥64bit implies +qw)
 //   Ptr size:   +ptr16 | +ptr32 | +ptr64
 //   Extensions: +dw, +qw, +byte, +saf, +rex, +dwas, +qwas
 //
-// Example: 64-bit word + 64-bit pointer → -mattr=+64bit,+ptr64,+dw,+qw
-// Example: 32-bit word + 32-bit pointer → -mattr=+32bit,+ptr32,+dw
-// Example: 64-bit word + 32-bit pointer → -mattr=+64bit,+ptr32,+dw,+qw
+// Example: 64-bit word + 64-bit pointer → -mattr=+64bit,+ptr64
+// Example: 32-bit word + 32-bit pointer → -mattr=+32bit,+ptr32
+// Example: 64-bit word + 32-bit pointer → -mattr=+64bit,+ptr32
 //===----------------------------------------------------------------------===//
 
 def : ProcessorModel<"generic", ETCASchedModel,

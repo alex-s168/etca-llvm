@@ -1,6 +1,6 @@
 ; RUN: llc -march=etca -mcpu=generic < %s | FileCheck %s --check-prefix=GEN
-; RUN: llc -march=etca -mcpu=generic -mattr=+32bit,+ptr32,+dw < %s | FileCheck %s --check-prefix=GEN
-; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw < %s | FileCheck %s --check-prefix=GEN
+; RUN: llc -march=etca -mcpu=generic -mattr=+32bit,+ptr32 < %s | FileCheck %s --check-prefix=GEN
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64 < %s | FileCheck %s --check-prefix=GEN
 
 ;; Test that 16-bit MUL/DIV/REM operations are lowered to libcalls in
 ;; final assembly on all CPUs.

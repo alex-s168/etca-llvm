@@ -122,7 +122,7 @@ generated code to call.
 - Instruction formats: RR/RI with SS bits (16/32/64-bit), branch (9-bit disp), SAF (call 12-bit disp, jmpr/callr, push/pop reg, push imm)
 - All base ISA + SAF + pseudo ops, with predicated patterns per extension
 - Calling convention: multi-width CC_ETCA / RetCC_ETCA (i16→r0-r3, i32→d0-d3, i64→q0-q3)
-- Processor model: single `generic` CPU; word/pointer sizes via `-mattr` features (16b+16b default, 32b+32b, 32b+64b, 64b+32b, 64b+64b)
+- Processor model: single `generic` CPU; word/pointer sizes via `-mattr` features (16b+16b default, 32b+32b, 32b+64b, 64b+32b, 64b+64b; +32bit implies +dw, +64bit implies +qw)
 - Schedule model: basic in-order with ALU/LdSt resources
 
 ### ✅ C++ Core Infrastructure

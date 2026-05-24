@@ -1,5 +1,5 @@
 ; RUN: llc -march=etca -mcpu=generic < %s | FileCheck %s --check-prefix=CHECK16
-; RUN: llc -march=etca -mcpu=generic -mattr=+32bit,+ptr32,+dw < %s | FileCheck %s --check-prefix=CHECK32
+; RUN: llc -march=etca -mcpu=generic -mattr=+32bit,+ptr32 < %s | FileCheck %s --check-prefix=CHECK32
 
 ;; ===========================================================================
 ;; ETCA sign-extension tests — 16-bit and 32-bit word sizes.

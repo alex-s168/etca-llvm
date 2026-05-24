@@ -1,5 +1,5 @@
 # REQUIRES: etca
-# RUN: llvm-mc -filetype=obj -arch=etca -mcpu=generic -mattr=+64bit,+ptr64,+dw,+qw %s -o %t.o
+# RUN: llvm-mc -filetype=obj -arch=etca -mcpu=generic -mattr=+64bit,+ptr64 %s -o %t.o
 # RUN: ld.lld -m elf64etca -o %t.exe %t.o
 # RUN: llvm-readobj -h %t.exe | FileCheck %s
 # RUN: llvm-objdump -d %t.exe | FileCheck --check-prefix=DISASM %s
