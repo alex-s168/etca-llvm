@@ -152,6 +152,7 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
 
   auto &ConstActions = getActionDefinitionsBuilder(G_CONSTANT);
   dataFlowTypes(ConstActions);
+  ConstActions.legalFor({p0});
   ConstActions.widenScalarToNextPow2(0, MinLegal.getSizeInBits());
   ConstActions.clampScalar(0, MinLegal, s64);
 
@@ -195,11 +196,26 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
 
   auto &ImpDefActions = getActionDefinitionsBuilder(G_IMPLICIT_DEF);
   dataFlowTypes(ImpDefActions);
+  ImpDefActions.legalFor({p0});
   ImpDefActions.clampScalar(0, MinLegal, s64);
 
   getActionDefinitionsBuilder(G_FRAME_INDEX).legalFor({p0});
 
   getActionDefinitionsBuilder(G_GLOBAL_VALUE).legalFor({p0});
+
+  //===---------------------------------------------------------------===//
+  // INTTOPTR / PTRTOINT — TIER 1 (always-legal)
+  //
+  // G_INTTOPTR: int-to-pointer conversion (result is p0, src is scalar).
+  // G_PTRTOINT: pointer-to-int conversion (result is scalar, src is p0).
+  // These are register-class changes at the MIR level and the
+  // instruction selector emits COPY for both.  They must be always-legal
+  // because the IR's pointer type may differ from the target's
+  // (e.g., when -mattr changes the pointer size but the IR was compiled
+  // with a different datalayout).
+  //===---------------------------------------------------------------===//
+
+  getActionDefinitionsBuilder({G_INTTOPTR, G_PTRTOINT}).alwaysLegal();
 
   //===----------------------------------------------------------------===//
   // Pointer arithmetic — TIER 1 (data-flow)

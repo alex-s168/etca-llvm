@@ -373,6 +373,27 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
   }
 
     //===----------------------------------------------------------------===//
+    // G_INTTOPTR / G_PTRTOINT — pointer-integer conversions
+    //
+    // These are register-class changes at the MIR level.  G_INTTOPTR converts
+    // an integer (sizeof(pointer)) to a pointer; G_PTRTOINT does the reverse.
+    // Since the GPR register class is determined by size (not by int/ptr
+    // type), both are simple COPY operations.
+    //===----------------------------------------------------------------===//
+
+  case TargetOpcode::G_INTTOPTR:
+  case TargetOpcode::G_PTRTOINT: {
+    Register Dst = MI.getOperand(0).getReg();
+    Register Src = MI.getOperand(1).getReg();
+    LLT DstTy = MRI->getType(Dst);
+    BuildMI(MBB, MI, MIMD, TII.get(TargetOpcode::COPY), Dst).addReg(Src);
+    if (!constrainReg(Dst, DstTy, RBI, *MRI))
+      return false;
+    MI.eraseFromParent();
+    return true;
+  }
+
+    //===----------------------------------------------------------------===//
     // Arithmetic and logical operations
     //
     // ALU ops (ADD, SUB, etc.) have tied-def: $src1 = $dst.
