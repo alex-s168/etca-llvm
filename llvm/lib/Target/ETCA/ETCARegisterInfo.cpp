@@ -68,18 +68,33 @@ ETCARegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
 BitVector ETCARegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   BitVector Reserved(getNumRegs());
   // R0 is a regular argument/return register.  It is NOT reserved — the
-  // register allocator can allocate vregs to R0.  The calling convention
-  // and CALL_Pseudo's implicit operands handle the liveness correctly.
+  // register allocator can allocate vregs to R0.
   //
-  // R7 (ln) is the link register — stores the return address on CALL and is
-  // used by JMPR (return).  It is NOT reserved either.  The register
-  // allocator handles the liveness of R7 across CALL_Pseudo via the
-  // implicit-def on CALL_Pseudo and the use in JMPR.
+  // R7 (ln) IS reserved.  It serves as a dedicated scratch register for
+  // frame index elimination (see eliminateFrameIndex STORE path).  Since
+  // ETCa LOAD/STORE instructions have no immediate offset field, address
+  // computation requires a register.  Using a dedicated scratch avoids
+  // the recursive spill problem where spilling to find a scratch register
+  // creates new frame indices needing resolution.  R7 is also the link
+  // register (return address), but CALL_Pseudo's Defs=[R7] and JMPR's use
+  // of R7 work correctly with a reserved register.
   //
-  // With SAF: reserve sp (r6) and bp (r5) as frame registers.
+  // With SAF: reserve sp (r6), bp (r5), and ln (r7) as frame registers.
+  // r7 is reserved as a dedicated scratch register for frame index
+  // elimination (see eliminateFrameIndex STORE path).  Since ETCa
+  // LOAD/STORE instructions have no immediate offset field, address
+  // computation requires a register.  Using a dedicated scratch avoids
+  // the recursive spill problem.
+  // With SAF: reserve bp (r5), sp (r6), and ln (r7) as frame/scratch
+  // registers.  Reserve ALL aliases (d5, q5, etc.) so that wider
+  // register classes (GPR32, GPR64) correctly exclude them.
   if (ST.hasSAF()) {
-    Reserved.set(R5); // bp
-    Reserved.set(R6); // sp
+    for (MCRegAliasIterator AI(ETCA::R5, this, true); AI.isValid(); ++AI)
+      Reserved.set(*AI); // bp
+    for (MCRegAliasIterator AI(ETCA::R6, this, true); AI.isValid(); ++AI)
+      Reserved.set(*AI); // sp
+    for (MCRegAliasIterator AI(ETCA::R7, this, true); AI.isValid(); ++AI)
+      Reserved.set(*AI); // ln (dedicated scratch)
   }
   return Reserved;
 }
@@ -186,18 +201,22 @@ bool ETCARegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
       return false;
     }
 
-    // For STORE, use a scratch register from the register scavenger to
-    // compute the address, then use that register for the STORE.
-    //   MOVZ scratch, FrameReg
-    //   ADDI scratch, scratch, offset  (chained for large offsets)
-    //   STORE val, scratch
+    // For STORE, use the dedicated scratch register R7/D7/Q7 (reserved
+    // in getReservedRegs) to compute the address, then use that register
+    // for the STORE.  Using a dedicated scratch avoids calling the
+    // register scavenger here, which would create a circular dependency:
+    // the scavenger might spill a register via storeRegToStackSlot (which
+    // has its own frame index), and eliminating that frame index would
+    // need another scratch register — ad infinitum.
     //
     // WARNING: We must NOT modify FrameReg in place (e.g. ADDI FrameReg, +
-    // ADDI FrameReg, -), because an interrupt between the modification and
-    // the restore would leave the frame register corrupted.  Since
-    // requiresRegisterScavenging() returns true, RS is always available.
-    assert(RS && "STORE frame index elimination requires register scavenger");
-    Register ScratchReg = RS->scavengeRegisterBackwards(*RC, II, false, SPAdj);
+    // ADDI FrameReg, -), because an interrupt between the modification
+    // and the restore would leave the frame register corrupted.
+    //
+    // Map R7 to the right register class.
+    Register ScratchReg = RC == &GPR64RegClass   ? ETCA::Q7
+                          : RC == &GPR32RegClass ? ETCA::D7
+                                                 : ETCA::R7;
 
     BuildMI(MBB, II, DL, TII.get(MovOpc), ScratchReg).addReg(FrameReg);
 
@@ -281,11 +300,11 @@ bool ETCARegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
 bool ETCARegisterInfo::requiresRegisterScavenging(
     const MachineFunction &MF) const {
-  // We need the register scavenger during frame index elimination to
-  // provide a scratch register for addressing spills (STORE frame
-  // operands), so that the frame pointer (r5) does not need to be
-  // temporarily modified for each spill slot.
-  return true;
+  // The register scavenger is not needed because ETCa's
+  // eliminateFrameIndex uses the dedicated scratch register R7/D7/Q7
+  // (reserved in getReservedRegs) for STORE address computation,
+  // instead of scavenging.  This avoids recursive spill-while-spilling.
+  return false;
 }
 
 const uint32_t *

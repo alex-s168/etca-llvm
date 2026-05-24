@@ -86,6 +86,40 @@ TableGen `-gen-disassembler` fails because CMP-RI and TEST-RI encodings overlap 
 
 Test: `llvm/test/CodeGen/ETCA/stack-frame.ll` verifies this for all width/pointer combinations.
 
+### R7 (ln) reserved as dedicated scratch register (2026-05-24)
+The ETCa LOAD/STORE instructions have no immediate offset field — they use a
+pure register for the address.  When `eliminateFrameIndex` replaces a frame
+index operand with `FrameReg + Offset`, it needs a scratch register for the
+`MOVZ+ADDI` address computation.
+
+**Before**: `eliminateFrameIndex` called `RS->scavengeRegisterBackwards()` for
+the STORE path to get a scratch register.  Inside `spill()`, the scavenger emits
+`storeRegToStackSlot` (which has a frame index), and that frame index requires
+another `eliminateFrameIndex` call — creating a recursive spill chain.  With
+all registers in use, this chain exhausted emergency slots or the search limit.
+
+**Fix**: Reserve R7 (and its aliases D7/Q7) as a dedicated scratch register.
+`eliminateFrameIndex` uses R7/D7/Q7 directly for the STORE address computation,
+completely avoiding the recursive scavenger call.  R7 is also the link register
+(used by CALL_Pseudo's Defs=[R7] and JMPR), which works correctly with a
+reserved register.
+
+Affected files:
+- `ETCARegisterInfo.cpp`: `getReservedRegs` now aliases R5/R6/R7 (with
+  `MCRegAliasIterator`) so GPR32/GPR64 correctly exclude D5/D6/D7 and Q5/Q6/Q7.
+  `eliminateFrameIndex` uses `RC == &GPR64RegClass ? Q7 : RC == &GPR32RegClass
+  ? D7 : R7` for STORE address computation.  `requiresRegisterScavenging`
+  returns `false` since R7 is always available.
+- `ETCAFrameLowering.h/.cpp`: Removed `processFunctionBeforeFrameFinalized`
+  (no longer needed — no emergency spill slots required).
+- `ETCARegisterInfo.h`: No `requiresFrameIndexScavenging` override needed.
+
+**Impact**: One fewer register per width class (7 instead of 8).  The still has
+enough registers for reasonable codegen; more register-heavy functions will
+spill more often.  This is an acceptable trade-off for correctness.
+
+Test: `llvm/test/CodeGen/ETCA/scavenger-emergency-slot.ll`
+
 ### NOP encoding: 0x008F
 All NOP emission paths use `0x008F` ([0x8F, 0x00] LE) — the canonical 2-byte base-ISA NOP per binutils `etca_build_nop`:
 - `ETCAInstrInfo.td: NOP Inst{15-0}` = `0x008F`

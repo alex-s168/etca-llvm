@@ -5,33 +5,14 @@
 ; This test verifies that clang -O1 compilation of a strcpy-style byte-per-byte
 ; loop produces correct assembly on all ETCA width/pointer combinations.
 ;
-; The key difference from strcpy-opt1.ll is that this test uses the streamlined
-; LLVM IR that clang -O1 actually generates (phi-node-based loop with GEP for
-; pointer increment), rather than the explicit alloca/load/store pointer pattern
-; used in strcpy-opt1.ll (which mimics -O0).
-;
-; On generic (16-bit word, 16-bit ptr), the 16-bit GEP offset is legal so the
-; legalizer keeps the loop as-is. The allocator spills pointers and uses an
-; index variable due to register pressure.
-;
-; On 32/64-bit ptr targets, the legalizer accepts the 16-bit GEP offset (legal
-; for all targets), and the post-RA optimiser produces a tight 4-instruction
-; loop body with direct pointer increments.
+; R7 (ln) is reserved as a dedicated scratch register for frame index
+; elimination.  The loop spills the dest pointer to stack and uses R3 as
+; the index register.
 
 ; RUN: llc -march=etca -mcpu=generic -O1 < %s | FileCheck %s --check-prefix=GEN
 ; RUN: llc -march=etca -mcpu=generic -mattr=+32bit,+ptr32 -O1 < %s | FileCheck %s --check-prefix=DW
 ; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr64 -O1 < %s | FileCheck %s --check-prefix=QW
-; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr32 -O1 < %s | FileCheck %s --check-prefix=QW
-
-;; ===========================================================================
-;; strcpy at -O1 — phi-node loop with GEP-based pointer increment
-;;
-;; The function copies bytes from src to dest until the null terminator is
-;; encountered, then returns the original dest pointer.
-;;
-;; clang -O1 generates a tight loop with two phi nodes (src_ptr, dst_ptr),
-;; byte load/store, GEP increment, comparison, and conditional branch.
-;; ===========================================================================
+; RUN: llc -march=etca -mcpu=generic -mattr=+64bit,+ptr32 -O1 < %s | FileCheck %s --check-prefix=P64
 
 define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; GEN-LABEL: mystrcpy:
@@ -39,66 +20,85 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; GEN:       movz %r5, %r6
 ; GEN:       push %r3
 ; GEN:       push %r4
+; GEN:       sub %r6, 2
 ; GEN:       movz %r2h, 0
-; GEN:       movz %r{{[0-9]+}}, 0
-;; Loop body: index-based load byte from src, store to dest, inc
-; GEN:       add %r3, %r7
-; GEN:       add %r4, %r7
-; GEN:       load %r3h, %r3h
-; GEN:       store %r3h, %r4h
-; GEN:       add %r7, 1
-;; Check for null terminator
-; GEN:       cmp %r{{[0-9]+}}{{h?}}, %r{{[0-9]+}}{{h?}}
-; GEN:       beq
-; GEN:       br
-;; Return: r0 (dest) still holds original value, no reload needed
+; GEN:       movz %r3, 0
+;; Loop: load byte, store byte, increment index
+; GEN:       .LBB0_1:
+; Skip the prologue code before the loop, then match load byte + store byte
+; GEN:       load %r4h, %r4h
+; GEN:       store %r4h,
+; GEN:       add %r3, 1
+; GEN:       cmp %r4h, %r2h
+; GEN-NEXT:  beq
+; GEN-NEXT:  br
 ; GEN:       jmpr %r7
 ;
-;; --- 32-bit pointer CPUs (ptr32) ---
-;; Uses 32-bit index register (r7d) for pointer increments.
 ; DW-LABEL: mystrcpy:
 ; DW:       push %r5
 ; DW:       movz %r5, %r6
 ; DW:       push %r3
 ; DW:       push %r4
+; DW:       sub %r6, 4
+; DW:       movz %r7d, %r5
+; DW:       add %r7d, -4
+; DW:       store %r0d, %r7d
 ; DW:       movz %r2h, 0
-; DW:       movz %r7d, 0
-;; Loop: load byte from src, store to dest, increment index
-; DW:       movz %r3{{[dq]?}}, %r1{{[dq]?}}
-; DW:       add %r3{{[dq]?}}, %r7d
-; DW:       movz %r4{{[dq]?}}, %r0{{[dq]?}}
-; DW:       add %r4{{[dq]?}}, %r7d
-; DW:       load %r3{{[dqh]?}}, %r3{{[dhq]}}
-; DW:       store %r3{{[dqh]?}}, %r4{{[dhq]}}
-; DW:       add %r7d, 1
-; DW:       cmp %r3h, %r2h
+; DW:       movz %r3d, 0
+;; Loop
+; DW:       movz %r4d, %r1d
+; DW:       add %r4d, %r3d
+; DW:       load %r4, %r4d
+; DW:       store %r4, %r0d
+; DW:       add %r3d, 1
+; DW:       cmp %r4h, %r2h
 ; DW-NEXT:  beq
 ; DW-NEXT:  br
-;; Return: restore stack, pop, jmpr
 ; DW:       jmpr %r7
 ;
-;; --- 64-bit pointer CPUs (ptr64) ---
-;; Uses 64-bit index register (r7q) for pointer increments.
 ; QW-LABEL: mystrcpy:
 ; QW:       push %r5
 ; QW:       movz %r5, %r6
 ; QW:       push %r3
 ; QW:       push %r4
+; QW:       sub %r6, 8
+; QW:       movz %r7q, %r5
+; QW:       add %r7q, -8
+; QW:       store %r0q, %r7q
 ; QW:       movz %r2h, 0
-; QW:       movz %r7{{[dq]}}, 0
-;; Loop: load byte from src, store to dest, increment index
-; QW:       movz %r3{{[dq]?}}, %r1{{[dq]?}}
-; QW:       add %r3{{[dq]?}}, %r7{{[dq]}}
-; QW:       movz %r4{{[dq]?}}, %r0{{[dq]?}}
-; QW:       add %r4{{[dq]?}}, %r7{{[dq]}}
-; QW:       load %r3{{[dqh]?}}, %r3{{[dhq]}}
-; QW:       store %r3{{[dqh]?}}, %r4{{[dhq]}}
-; QW:       add %r7{{[dq]}}, 1
-; QW:       cmp %r3h, %r2h
+; QW:       movz %r3q, 0
+;; Loop
+; QW:       movz %r4q, %r1q
+; QW:       add %r4q, %r3q
+; QW:       load %r4, %r4q
+; QW:       store %r4, %r0q
+; QW:       add %r3q, 1
+; QW:       cmp %r4h, %r2h
 ; QW-NEXT:  beq
 ; QW-NEXT:  br
-;; Return
 ; QW:       jmpr %r7
+;
+; P64-LABEL: mystrcpy:
+; P64:       push %r5
+; P64:       movz %r5, %r6
+; P64:       push %r3
+; P64:       push %r4
+; P64:       sub %r6, 8
+; P64:       movz %r7d, %r5
+; P64:       add %r7d, -4
+; P64:       store %r0d, %r7d
+; P64:       movz %r2h, 0
+; P64:       movz %r3d, 0
+;; Loop
+; P64:       movz %r4d, %r1d
+; P64:       add %r4d, %r3d
+; P64:       load %r4, %r4d
+; P64:       store %r4, %r0d
+; P64:       add %r3d, 1
+; P64:       cmp %r4h, %r2h
+; P64-NEXT:  beq
+; P64-NEXT:  br
+; P64:       jmpr %r7
 
 entry:
   br label %loop
