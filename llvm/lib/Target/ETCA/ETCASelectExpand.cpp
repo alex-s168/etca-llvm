@@ -85,7 +85,27 @@ FunctionPass *llvm::createETCASelectExpandPass() {
 
 bool ETCASelectExpand::runOnMachineFunction(MachineFunction &MF) {
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
+  const auto &ST = MF.getSubtarget<ETCASubtarget>();
   bool Changed = false;
+
+  // Ensure $r6 (SP) is a live-in to every basic block.  $r6 is a reserved
+  // register (set up by the prologue) and is used implicitly by call
+  // instructions (via ADJCALLSTACKDOWN/UP).  LLVM's LiveIntervals requires
+  // that any physical register used in a block is either defined there or
+  // listed as live-in.  Without this, empty intermediate blocks in the CFG
+  // (e.g. a block that just branches to another block) would lack $r6 as
+  // live-in, causing:
+  //   "The register $r6 needs to be live in to %bb.N, but is missing from
+  //    the live-in list"
+  // This is safe because $r6 is reserved and never allocated to a vreg.
+  if (ST.hasSAF()) {
+    for (MachineBasicBlock &MBB : MF) {
+      if (!MBB.isLiveIn(ETCA::R6)) {
+        MBB.addLiveIn(ETCA::R6);
+        Changed = true;
+      }
+    }
+  }
 
   // Erase any leftover ICMP_Pseudo markers.  These are created during
   // instruction selection (by the G_ICMP handler) and consumed by the
