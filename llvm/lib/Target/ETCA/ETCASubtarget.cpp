@@ -103,7 +103,7 @@ void ETCASubtarget::initLibcallLoweringInfo(LibcallLoweringInfo &Info) const {
   // available for unrecognized target triples (like ETCA's custom triple).
   // Each target must register its own available implementations.
 
-  // Integer arithmetic libcalls
+  // Integer arithmetic and shift libcalls
   const struct {
     const RTLIB::Libcall Op;
     const RTLIB::LibcallImpl Impl;
@@ -128,6 +128,13 @@ void ETCASubtarget::initLibcallLoweringInfo(LibcallLoweringInfo &Info) const {
       {RTLIB::UREM_I16, RTLIB::impl___umodhi3},
       {RTLIB::UREM_I32, RTLIB::impl___umodsi3},
       {RTLIB::UREM_I64, RTLIB::impl___umoddi3},
+      // Integer shift-right libcalls
+      {RTLIB::SRA_I16, RTLIB::impl___ashrhi3},
+      {RTLIB::SRA_I32, RTLIB::impl___ashrsi3},
+      {RTLIB::SRA_I64, RTLIB::impl___ashrdi3},
+      {RTLIB::SRL_I16, RTLIB::impl___lshrhi3},
+      {RTLIB::SRL_I32, RTLIB::impl___lshrsi3},
+      {RTLIB::SRL_I64, RTLIB::impl___lshrdi3},
   };
   for (const auto &LC : IntLibcalls)
     Info.setLibcallImpl(LC.Op, LC.Impl);

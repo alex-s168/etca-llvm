@@ -432,6 +432,23 @@ static RTLIB::Libcall getRTLibDesc(unsigned Opcode, unsigned Size) {
     }                                                                          \
   } while (0)
 
+// Shift-right libcalls only support 16/32/64/128-bit sizes (no 8-bit).
+#define RTLIBCASE_INT_SHIFT(LibcallPrefix)                                     \
+  do {                                                                         \
+    switch (Size) {                                                            \
+    case 16:                                                                   \
+      return RTLIB::LibcallPrefix##16;                                         \
+    case 32:                                                                   \
+      return RTLIB::LibcallPrefix##32;                                         \
+    case 64:                                                                   \
+      return RTLIB::LibcallPrefix##64;                                         \
+    case 128:                                                                  \
+      return RTLIB::LibcallPrefix##128;                                        \
+    default:                                                                   \
+      llvm_unreachable("unexpected size");                                     \
+    }                                                                          \
+  } while (0)
+
   switch (Opcode) {
   case TargetOpcode::G_LROUND:
     RTLIBCASE(LROUND_F);
@@ -447,6 +464,10 @@ static RTLIB::Libcall getRTLibDesc(unsigned Opcode, unsigned Size) {
     RTLIBCASE_INT_ARITH(SREM_I);
   case TargetOpcode::G_UREM:
     RTLIBCASE_INT_ARITH(UREM_I);
+  case TargetOpcode::G_ASHR:
+    RTLIBCASE_INT_SHIFT(SRA_I);
+  case TargetOpcode::G_LSHR:
+    RTLIBCASE_INT_SHIFT(SRL_I);
   case TargetOpcode::G_CTLZ_ZERO_UNDEF:
     RTLIBCASE_INT_CTLZ(CTLZ_I);
   case TargetOpcode::G_FADD:
@@ -1338,6 +1359,8 @@ LegalizerHelper::libcall(MachineInstr &MI, LostDebugLocObserver &LocObserver) {
   case TargetOpcode::G_UDIV:
   case TargetOpcode::G_SREM:
   case TargetOpcode::G_UREM:
+  case TargetOpcode::G_ASHR:
+  case TargetOpcode::G_LSHR:
   case TargetOpcode::G_CTLZ_ZERO_UNDEF: {
     LLT LLTy = MRI.getType(MI.getOperand(0).getReg());
     unsigned Size = LLTy.getSizeInBits();

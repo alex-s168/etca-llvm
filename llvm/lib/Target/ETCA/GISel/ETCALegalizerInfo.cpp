@@ -247,12 +247,16 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   PhiActions.legalFor({p0});
 
   //===----------------------------------------------------------------===//
-  // MUL/DIV/REM — libcalls (available for all widths via software)
+  // MUL/DIV/REM/SHIFT — libcalls (available for all widths via software)
   //
   // These use runtime library calls (__mulhi3, __divhi3, __modhi3, etc.)
   // provided by compiler-rt.  The libcall routing is set via libcallFor(),
   // and the actual Libcall→LibcallImpl name mapping is established in
   // ETCASubtarget::initLibcallLoweringInfo().
+  //
+  // G_ASHR and G_LSHR are also lowered to libcalls (__ashrhi3, __lshrhi3,
+  // etc.) because the base ETCa ISA has no shift-right instruction.
+  // G_SHL is handled inline by the instruction selector (using SLO/ADD).
   //===----------------------------------------------------------------===//
 
   auto SetupLibcall = [&](unsigned Opc) {
@@ -268,6 +272,8 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   SetupLibcall(G_SDIV);
   SetupLibcall(G_UREM);
   SetupLibcall(G_SREM);
+  SetupLibcall(G_ASHR);
+  SetupLibcall(G_LSHR);
 
   //===----------------------------------------------------------------===//
   // Narrow/widen helper ops — TIER 3

@@ -7,30 +7,6 @@
 
 ---
 
-## Severity Legend
-
-| Severity | Description |
-|----------|-------------|
-| 🔴 **CRITICAL** | Wrong code generation, silent miscompilation, or crash on valid inputs |
-| 🟠 **HIGH** | Potential miscompilation, missing feature that breaks programs, spec violation |
-| 🟡 **MEDIUM** | Suboptimal code, missing tests, code quality issues |
-| 🔵 **LOW** | Minor issues, documentation gaps, naming inconsistencies |
-
----
-
-## 4. HIGH — `G_SHL` Expanded with Power-of-2 Decomposition Uses ADD Instead of SLO
-
-**File:** `GISel/ETCAInstructionSelector.cpp` (G_SHL handler)
-
-The spec defines SLO as `A ← (A << 5) | B` for building large immediates. For a general shift, the implementation uses power-of-2 decomposition via repeated ADD instructions. This is correct for any shift amount, but:
-
-- **SLO is never used for general shifts**, even when the shift amount is ≤ 5 and an SLO with a zero low part would suffice.
-- For shift amounts that are multiples of 5, SLO would be much cheaper.
-- **No check for shift amount > bit width** — shifting a 16-bit value by 63 produces garbage.
-
-**Mitigation:** The repeated-ADD approach is correct but suboptimal for many cases.
-
----
 
 ## 5. HIGH — Missing `G_ASHR` / `G_LSHR` Support
 
