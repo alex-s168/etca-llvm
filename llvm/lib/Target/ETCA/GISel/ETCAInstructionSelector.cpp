@@ -944,6 +944,32 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     //   skips the copy as a no-op, eliminating redundant MOVZ instructions.
     //===----------------------------------------------------------------===//
 
+  case TargetOpcode::G_ANYEXT: {
+    // G_ANYEXT is a zero-cost extension — high bits are undefined.
+    // Just emit a COPY to bridge register classes.
+    Register Dst = MI.getOperand(0).getReg();
+    Register Src = MI.getOperand(1).getReg();
+    LLT DstTy = MRI->getType(Dst);
+    LLT SrcTy = MRI->getType(Src);
+    if (DstTy == SrcTy) {
+      // Same register class: direct COPY (no extension needed).
+      BuildMI(MBB, MI, MIMD, TII.get(TargetOpcode::COPY), Dst).addReg(Src);
+    } else {
+      // Different register classes (but same underlying register) or
+      // same class, different size: just COPY to bridge.
+      const TargetRegisterClass *SrcRC = getRCForType(SrcTy);
+      Register Tmp = MRI->createVirtualRegister(SrcRC);
+      BuildMI(MBB, MI, MIMD, TII.get(TargetOpcode::COPY), Tmp).addReg(Src);
+      if (!constrainReg(Tmp, SrcTy, RBI, *MRI))
+        return false;
+      BuildMI(MBB, MI, MIMD, TII.get(TargetOpcode::COPY), Dst).addReg(Tmp);
+    }
+    if (!constrainReg(Dst, DstTy, RBI, *MRI))
+      return false;
+    MI.eraseFromParent();
+    return true;
+  }
+
   case TargetOpcode::G_ZEXT:
   case TargetOpcode::G_SEXT: {
     Register Dst = MI.getOperand(0).getReg();
