@@ -37,6 +37,9 @@
 #define GET_INSTRINFO_ENUM
 #include "ETCAGenInstrInfo.inc"
 
+#define GET_REGINFO_ENUM
+#include "ETCAGenRegisterInfo.inc"
+
 using namespace llvm;
 
 /// Return the MOVZ opcode for the given register width.
@@ -83,6 +86,23 @@ FunctionPass *llvm::createETCASelectExpandPass() {
 bool ETCASelectExpand::runOnMachineFunction(MachineFunction &MF) {
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   bool Changed = false;
+
+  // Erase any leftover ICMP_Pseudo markers.  These are created during
+  // instruction selection (by the G_ICMP handler) and consumed by the
+  // G_BRCOND / G_SELECT handlers.  After SELECT_Pseudo expansion there
+  // are no consumers left, so any surviving ICMP_Pseudo is dead code.
+  // We must erase them here to avoid machine verifier errors about
+  // register class mismatches (GPR vs GPR32/GPR64 operands).
+  for (MachineBasicBlock &MBB : MF) {
+    for (auto MI = MBB.begin(); MI != MBB.end();) {
+      if (MI->getOpcode() == ETCA::ICMP_Pseudo) {
+        MI = MBB.erase(MI);
+        Changed = true;
+      } else {
+        ++MI;
+      }
+    }
+  }
 
   // Collect all SELECT_Pseudo instructions first, then expand them.
   // We collect iterators to avoid iterator invalidation during expansion.
@@ -163,6 +183,16 @@ bool ETCASelectExpand::runOnMachineFunction(MachineFunction &MF) {
     // Use sequential insert after the previous element.
     MF.insert(std::next(MBB.getIterator()), FalseBB);
     MF.insert(std::next(FalseBB->getIterator()), TrueBB);
+
+    // Propagate $r6 (SP) as live-in to all new blocks.  The original MBB
+    // always has $r6 live (it is set up in the prologue), and the blocks
+    // created here may contain instructions that reference SP (e.g.
+    // ADJCALLSTACKDOWN/UP from function calls after the SELECT_Pseudo).
+    // Without this, LiveIntervals fails with "The register $r6 needs to
+    // be live in to %bb.N, but is missing from the live-in list".
+    MBBCont->addLiveIn(ETCA::R6);
+    FalseBB->addLiveIn(ETCA::R6);
+    TrueBB->addLiveIn(ETCA::R6);
     // MBB is already in MF.  MBBCont is also in MF (after MBB).
     // After inserting FalseBB after MBB and TrueBB after FalseBB:
     // MBB → FalseBB → TrueBB → ...

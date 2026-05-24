@@ -695,6 +695,11 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
         int64_t Pred = DefMI->getOperand(3).getImm();
         BuildMI(MBB, MI, MIMD, TII.get(getBranchOpcForPred(Pred)))
             .addMBB(Target);
+        // Erase the consumed ICMP_Pseudo — its result has no remaining
+        // uses after G_BRCOND is removed, and leaving it would cause
+        // machine verifier errors about register class mismatches
+        // (GPR vs GPR32/GPR64 input operands).
+        DefMI->eraseFromParent();
         MI.eraseFromParent();
         return true;
       }
