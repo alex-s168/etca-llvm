@@ -1317,8 +1317,8 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     Inst.setLoc(IDLoc);
 
     // CMP and TEST RR form (dedicated format) have NO output — 2 operands.
-    // CMPI and TESTI RI form follow the EInstRI template with $dst output
-    // and $src1=$dst constraint — 3 operands like other ALU ops.
+    // CMPI and TESTI RI form (EInstCmpRI, no-dest) also have NO output —
+    // 2 operands [src1, imm].
     // MOVZ/MOVS RR and MOVZI/MOVSI RI use non-tied formats (EInstRR_NT /
     // EInstRI_NT) with only 2 operands: [dst, src] for RR, [dst, imm] for RI.
     // All other ALU ops use the tied format with 3 operands: [dst, src1,
@@ -1336,11 +1336,22 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
         (Opc == ETCA::CMP8 || Opc == ETCA::CMP || Opc == ETCA::CMP32 ||
          Opc == ETCA::CMP64 || Opc == ETCA::TEST8 || Opc == ETCA::TEST ||
          Opc == ETCA::TEST32 || Opc == ETCA::TEST64);
+    bool IsCmpRI =
+        (Opc == ETCA::CMPI8 || Opc == ETCA::CMPI16 || Opc == ETCA::CMPI32 ||
+         Opc == ETCA::CMPI64 || Opc == ETCA::TESTI8 || Opc == ETCA::TESTI16 ||
+         Opc == ETCA::TESTI32 || Opc == ETCA::TESTI64);
 
     if (IsCmpRR) {
       // 2-operand layout for CMP/TEST RR: [src1, src2]
       Inst.addOperand(MCOperand::createReg(Op1.getReg())); // src1
       Inst.addOperand(MCOperand::createReg(Op2.getReg())); // src2
+    } else if (IsCmpRI) {
+      // 2-operand layout for CMPI/TESTI RI (no-dest): [src1, imm]
+      Inst.addOperand(MCOperand::createReg(Op1.getReg())); // src1
+      if (Op2.isImm())
+        Inst.addOperand(MCOperand::createImm(Op2.getImm()));
+      else
+        Inst.addOperand(MCOperand::createExpr(Op2.getExpr()));
     } else if (IsMovRR) {
       // 2-operand layout for MOVZ/MOVS RR: [dst, src]
       Inst.addOperand(MCOperand::createReg(Op1.getReg())); // dst
@@ -1362,7 +1373,6 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
         Inst.addOperand(MCOperand::createExpr(Op2.getExpr()));
     } else {
       // Standard 3-operand layout for tied ALU ops: [dst, src1, src2/imm]
-      // CMPI/TESTI fall here: they have a $dst in AsmString.
       Inst.addOperand(MCOperand::createReg(Op1.getReg())); // dst
       Inst.addOperand(MCOperand::createReg(Op1.getReg())); // src1 = dst
       if (IsRR) {

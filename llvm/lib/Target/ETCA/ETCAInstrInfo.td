@@ -181,11 +181,11 @@ let isCommutable = 1, hasSideEffects = 0, mayLoad = 0, mayStore = 0,
   def ADDI16  : EInstRI16<0, "add $dst, $imm", []>;
   def SUBI16  : EInstRI16<1, "sub $dst, $imm", []>;
   def RSUBI16 : EInstRI16<2, "rsub $dst, $imm", []>;
-  def CMPI16  : EInstRI16<3, "cmp $dst, $imm", []>;
+  def CMPI16  : EInstCmpRI16<3, "cmp $src1, $imm", []>;
   def ORI16   : EInstRI16<4, "or $dst, $imm", []>;
   def XORI16  : EInstRI16<5, "xor $dst, $imm", []>;
   def ANDI16  : EInstRI16<6, "and $dst, $imm", []>;
-  def TESTI16 : EInstRI16<7, "test $dst, $imm", []>;
+  def TESTI16 : EInstCmpRI16<7, "test $src1, $imm", []>;
   // Note: MOVZ/MOVS RI use the non-tied format.  The $dst is encoded in AAA
   // but its value for the $src1 tied-operand is a don't-care at the hardware
   // level, so we use the simpler 2-operand (non-tied) format.
@@ -241,11 +241,11 @@ let isCommutable = 1, hasSideEffects = 0, mayLoad = 0, mayStore = 0,
   def ADDI8   : EInstRI8<0, "add $dst, $imm", []>;
   def SUBI8   : EInstRI8<1, "sub $dst, $imm", []>;
   def RSUBI8  : EInstRI8<2, "rsub $dst, $imm", []>;
-  def CMPI8   : EInstRI8<3, "cmp $dst, $imm", []>;
+  def CMPI8   : EInstCmpRI8<3, "cmp $src1, $imm", []>;
   def ORI8    : EInstRI8<4, "or $dst, $imm", []>;
   def XORI8   : EInstRI8<5, "xor $dst, $imm", []>;
   def ANDI8   : EInstRI8<6, "and $dst, $imm", []>;
-  def TESTI8  : EInstRI8<7, "test $dst, $imm", []>;
+  def TESTI8  : EInstCmpRI8<7, "test $src1, $imm", []>;
   def MOVZI8  : EInstRI8_NT<8, "movz $dst, $imm", []>;
   def MOVSI8  : EInstRI8_NT<9, "movs $dst, $imm", []>;
 }
@@ -295,11 +295,11 @@ let isCommutable = 1, hasSideEffects = 0, mayLoad = 0, mayStore = 0,
   def ADDI32  : EInstRI32<0, "add $dst, $imm", []>;
   def SUBI32  : EInstRI32<1, "sub $dst, $imm", []>;
   def RSUBI32 : EInstRI32<2, "rsub $dst, $imm", []>;
-  def CMPI32  : EInstRI32<3, "cmp $dst, $imm", []>;
+  def CMPI32  : EInstCmpRI32<3, "cmp $src1, $imm", []>;
   def ORI32   : EInstRI32<4, "or $dst, $imm", []>;
   def XORI32  : EInstRI32<5, "xor $dst, $imm", []>;
   def ANDI32  : EInstRI32<6, "and $dst, $imm", []>;
-  def TESTI32 : EInstRI32<7, "test $dst, $imm", []>;
+  def TESTI32 : EInstCmpRI32<7, "test $src1, $imm", []>;
   def MOVZI32 : EInstRI32_NT<8, "movz $dst, $imm", []>;
   def MOVSI32 : EInstRI32_NT<9, "movs $dst, $imm", []>;
 }
@@ -333,11 +333,11 @@ let isCommutable = 1, hasSideEffects = 0, mayLoad = 0, mayStore = 0,
   def ADDI64  : EInstRI64<0, "add $dst, $imm", []>;
   def SUBI64  : EInstRI64<1, "sub $dst, $imm", []>;
   def RSUBI64 : EInstRI64<2, "rsub $dst, $imm", []>;
-  def CMPI64  : EInstRI64<3, "cmp $dst, $imm", []>;
+  def CMPI64  : EInstCmpRI64<3, "cmp $src1, $imm", []>;
   def ORI64   : EInstRI64<4, "or $dst, $imm", []>;
   def XORI64  : EInstRI64<5, "xor $dst, $imm", []>;
   def ANDI64  : EInstRI64<6, "and $dst, $imm", []>;
-  def TESTI64 : EInstRI64<7, "test $dst, $imm", []>;
+  def TESTI64 : EInstCmpRI64<7, "test $src1, $imm", []>;
   def MOVZI64 : EInstRI64_NT<8, "movz $dst, $imm", []>;
   def MOVSI64 : EInstRI64_NT<9, "movs $dst, $imm", []>;
 }

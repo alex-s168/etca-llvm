@@ -123,38 +123,30 @@ static bool hasTiedOperands(unsigned Opc) {
   case ETCA::ADDI8:
   case ETCA::SUBI8:
   case ETCA::RSUBI8:
-  case ETCA::CMPI8:
   case ETCA::ORI8:
   case ETCA::XORI8:
   case ETCA::ANDI8:
-  case ETCA::TESTI8:
   // --- 16-bit tied RI ---
   case ETCA::ADDI16:
   case ETCA::SUBI16:
   case ETCA::RSUBI16:
-  case ETCA::CMPI16:
   case ETCA::ORI16:
   case ETCA::XORI16:
   case ETCA::ANDI16:
-  case ETCA::TESTI16:
   // --- 32-bit tied RI ---
   case ETCA::ADDI32:
   case ETCA::SUBI32:
   case ETCA::RSUBI32:
-  case ETCA::CMPI32:
   case ETCA::ORI32:
   case ETCA::XORI32:
   case ETCA::ANDI32:
-  case ETCA::TESTI32:
   // --- 64-bit tied RI ---
   case ETCA::ADDI64:
   case ETCA::SUBI64:
   case ETCA::RSUBI64:
-  case ETCA::CMPI64:
   case ETCA::ORI64:
   case ETCA::XORI64:
   case ETCA::ANDI64:
-  case ETCA::TESTI64:
   // --- CR access (tied RI) ---
   case ETCA::READCR:
   case ETCA::WRITECR:

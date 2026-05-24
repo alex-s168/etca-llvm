@@ -596,7 +596,7 @@ class EInstStoreRR16P64<string asmstr, list<dag> pattern>
 class EInstStoreRR32P64<string asmstr, list<dag> pattern>
     : EInstStoreRRBase<0b10, GPR32, GPR64, asmstr, pattern>;
 
-// Compare/test instruction format — takes SS parameter for width.
+// Compare/test RR instruction format — takes SS parameter for width.
 // SS=01 (word, base), SS=10 (dword, DW), SS=11 (qword, QW)
 // Byte0 bits [7:6]=00 (RR format), [5:4]=SS (size), [3:0]=CCCC (opcode)
 //
@@ -632,3 +632,51 @@ class EInstCmp32<bits<4> opcod, string asmstr, list<dag> pattern>
 // Convenience: qword CMP/TEST (SS=11) — uses GPR64 (64-bit QW)
 class EInstCmp64<bits<4> opcod, string asmstr, list<dag> pattern>
     : EInstCmp<0b11, opcod, GPR64, asmstr, pattern>;
+
+//===----------------------------------------------------------------------===//
+// Compare/test register-immediate format — no destination register
+//
+// CMPI and TESTI have the same encoding format as other RI instructions
+// (AAA in bits [15:13], IIIII in bits [12:8]) but DO NOT write a result
+// register.  The AAA field encodes the source register only.
+//
+// SS=00 (byte, BYTE ext), SS=01 (word, base), SS=10 (dword, DW),
+// SS=11 (qword, QW)
+//
+// The register class is parameterized so width-specific variants use
+// the correct register class.
+//===----------------------------------------------------------------------===//
+
+class EInstCmpRI<bits<2> ss, bits<4> opcod, RegisterClass RC,
+                  string asmstr, list<dag> pattern>
+    : EInst<(outs), (ins RC:$src1, i16imm:$imm), asmstr, pattern> {
+  bits<3> src1;
+  bits<5> imm;
+
+  // Actual encoding (16-bit LE):
+  //   Byte 0 (low): 0b01SSCCCC  — format[7:6]=01, SS[5:4], CCCC[3:0]
+  //   Byte 1 (high): 0bAAAIIIII — AAA[7:5], IIIII[4:0]
+  //   16-bit value: (AAA << 13) | (IIIII << 8) | (0b01 << 6) | (SS << 4) | CCCC
+  let Inst{15-13} = src1;    // AAA: source register
+  let Inst{12-8}  = imm;     // IIIII: 5-bit immediate
+  let Inst{7-6}   = 0b01;    // format marker (01 = RI)
+  let Inst{5-4}   = ss;      // SS: size bits
+  let Inst{3-0}   = opcod;   // CCCC: opcode
+  let hasSideEffects = 0;
+}
+
+// Convenience: byte CMPI/TESTI (SS=00) — uses GPR (8-bit via GPR class)
+class EInstCmpRI8<bits<4> opcod, string asmstr, list<dag> pattern>
+    : EInstCmpRI<0b00, opcod, GPR, asmstr, pattern>;
+
+// Convenience: word CMPI/TESTI (SS=01) — uses GPR (16-bit)
+class EInstCmpRI16<bits<4> opcod, string asmstr, list<dag> pattern>
+    : EInstCmpRI<0b01, opcod, GPR, asmstr, pattern>;
+
+// Convenience: dword CMPI/TESTI (SS=10) — uses GPR32 (32-bit DW)
+class EInstCmpRI32<bits<4> opcod, string asmstr, list<dag> pattern>
+    : EInstCmpRI<0b10, opcod, GPR32, asmstr, pattern>;
+
+// Convenience: qword CMPI/TESTI (SS=11) — uses GPR64 (64-bit QW)
+class EInstCmpRI64<bits<4> opcod, string asmstr, list<dag> pattern>
+    : EInstCmpRI<0b11, opcod, GPR64, asmstr, pattern>;
