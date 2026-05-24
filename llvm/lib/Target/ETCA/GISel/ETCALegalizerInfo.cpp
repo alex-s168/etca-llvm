@@ -202,6 +202,7 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   auto &ImpDefActions = getActionDefinitionsBuilder(G_IMPLICIT_DEF);
   dataFlowTypes(ImpDefActions);
   ImpDefActions.legalFor({p0});
+  ImpDefActions.widenScalarToNextPow2(0, MinLegal.getSizeInBits());
   ImpDefActions.clampScalar(0, MinLegal, s64);
 
   getActionDefinitionsBuilder(G_FRAME_INDEX).legalFor({p0});
@@ -266,6 +267,8 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   auto &PhiActions = getActionDefinitionsBuilder(G_PHI);
   dataFlowTypes(PhiActions);
   PhiActions.legalFor({p0});
+  PhiActions.widenScalarToNextPow2(0, MinLegal.getSizeInBits());
+  PhiActions.clampScalar(0, MinLegal, s64);
 
   //===----------------------------------------------------------------===//
   // MUL/DIV/REM/SHIFT — libcalls (available for all widths via software)
