@@ -143,7 +143,8 @@ void ETCAInstrInfo::storeRegToStackSlot(
     StoreOpc = STORE16;
     break;
   }
-  auto MIB = BuildMI(MBB, I, I->getDebugLoc(), get(StoreOpc))
+  DebugLoc DL = (I != MBB.end()) ? I->getDebugLoc() : DebugLoc();
+  auto MIB = BuildMI(MBB, I, DL, get(StoreOpc))
                  .addReg(SrcReg, getKillRegState(isKill))
                  .addFrameIndex(FrameIndex)
                  .addMemOperand(MF.getMachineMemOperand(
@@ -176,7 +177,8 @@ void ETCAInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
     LoadOpc = LOAD16;
     break;
   }
-  auto MIB = BuildMI(MBB, I, I->getDebugLoc(), get(LoadOpc), DestReg)
+  DebugLoc DL = (I != MBB.end()) ? I->getDebugLoc() : DebugLoc();
+  auto MIB = BuildMI(MBB, I, DL, get(LoadOpc), DestReg)
                  .addFrameIndex(FrameIndex)
                  .addMemOperand(MF.getMachineMemOperand(
                      MachinePointerInfo::getFixedStack(MF, FrameIndex),
