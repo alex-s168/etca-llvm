@@ -19,9 +19,10 @@ define i16 @add16_rex(i16 %a, i16 %b) {
 }
 
 ; Cross-width copy: zext from 16 to 32 bits
+; Identity copy (movz %rX, %rX) is now eliminated by the post-RA
+; ETCAEliminateIdentityMoves pass, so there is nothing to verify for GEN.
 define i32 @zext16to32_rex(i16 %a) {
 ; GEN-LABEL: zext16to32_rex:
-; GEN:       {{movz %r[0-9]+, %r[0-9]+}}
 ;
 ; DW-LABEL: zext16to32_rex:
 ; DW:       {{movz %r[0-9]+[dq]?, [0-9]+}}
@@ -39,7 +40,7 @@ define i64 @zext32to64_rex(i32 %a) {
 ; GEN:       {{movz %r[0-9]+d, %r[0-9]+d}}
 ;
 ; DW-LABEL: zext32to64_rex:
-; DW:       {{movz %r[0-9]+d, %r[0-9]+d}}
+; DW:       jmpr %r7
 ;
 ; QW-LABEL: zext32to64_rex:
 ; QW:       {{and %r[0-9]+q, %r[0-9]+q}}

@@ -28,6 +28,12 @@ void initializeETCASelectExpandPass(PassRegistry &);
 /// Create the ETCA SELECT_Pseudo expansion pass.
 FunctionPass *createETCASelectExpandPass();
 
+/// Initialize the ETCA identity move elimination pass.
+void initializeETCAEliminateIdentityMovesPass(PassRegistry &);
+
+/// Create the ETCA identity move elimination pass.
+FunctionPass *createETCAEliminateIdentityMovesPass();
+
 } // namespace llvm
 
 #endif // LLVM_LIB_TARGET_ETCA_ETCA_H

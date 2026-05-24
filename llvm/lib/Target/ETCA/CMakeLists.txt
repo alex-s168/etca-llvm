@@ -35,6 +35,7 @@ add_llvm_target(ETCACodeGen
   ETCAAsmPrinter.cpp
   ETCAFrameLowering.cpp
   ETCASelectExpand.cpp
+  ETCAEliminateIdentityMoves.cpp
   GISel/ETCACallLowering.cpp
   GISel/ETCAInstructionSelector.cpp
   GISel/ETCALegalizerInfo.cpp

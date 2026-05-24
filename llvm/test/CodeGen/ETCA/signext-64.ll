@@ -15,7 +15,6 @@ define i64 @zext_i32_to_i64(i32 %a) {
 
 define i64 @sext_i32_to_i64(i32 %a) {
 ; CHECK64-LABEL: sext_i32_to_i64:
-; CHECK64:       {{movz %r[0-9]+q, %r[0-9]+q}}
 ; CHECK64:       {{movs %r[0-9]+d, %r[0-9]+d}}
 ; CHECK64:       jmpr %r7
   %ext = sext i32 %a to i64
@@ -32,7 +31,6 @@ define i64 @zext_i16_to_i64(i16 %a) {
 
 define i64 @sext_i16_to_i64(i16 %a) {
 ; CHECK64-LABEL: sext_i16_to_i64:
-; CHECK64:       {{movz %r[0-9]+q, %r[0-9]+q}}
 ; CHECK64:       movs %r0, %r0
 ; CHECK64:       jmpr %r7
   %ext = sext i16 %a to i64
@@ -49,7 +47,6 @@ define i32 @zext_i16_to_i32(i16 %a) {
 
 define i32 @sext_i16_to_i32(i16 %a) {
 ; CHECK64-LABEL: sext_i16_to_i32:
-; CHECK64:       {{movz %r[0-9]+q, %r[0-9]+q}}
 ; CHECK64:       movs %r0, %r0
 ; CHECK64:       jmpr %r7
   %ext = sext i16 %a to i32
@@ -58,7 +55,6 @@ define i32 @sext_i16_to_i32(i16 %a) {
 
 define i16 @trunc_i32_to_i16(i32 %a) {
 ; CHECK64-LABEL: trunc_i32_to_i16:
-; CHECK64:       {{movz %r[0-9]+q, %r[0-9]+q}}
 ; CHECK64:       movs %r0, %r0
 ; CHECK64:       jmpr %r7
   %tr = trunc i32 %a to i16

@@ -37,6 +37,7 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeETCATarget() {
   PassRegistry &PR = *PassRegistry::getPassRegistry();
   initializeGlobalISel(PR);
   initializeETCASelectExpandPass(PR);
+  initializeETCAEliminateIdentityMovesPass(PR);
   RegisterTargetMachine<ETCATargetMachine> X(getTheETCATarget());
 }
 
@@ -135,6 +136,11 @@ public:
     if (!TM->requiresStructuredCFG())
       addPass(&TailDuplicateLegacyID);
     addPass(&MachineCopyPropagationID);
+    // Eliminate MOVZ/MOVS identity copies ($rX = MOVZ $rX) that arise
+    // from G_TRUNC/G_ZEXT/G_SEXT temp vregs landing on the same physical
+    // register as the source, or from SELECT_Pseudo expansions of
+    // identical true/false values.
+    addPass(createETCAEliminateIdentityMovesPass());
   }
 
   void addBlockPlacement() override {
