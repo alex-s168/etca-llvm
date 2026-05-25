@@ -408,6 +408,24 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   getActionDefinitionsBuilder(G_SMULH).alwaysLegal();
 
   //===----------------------------------------------------------------===//
+  // Min/Max — lowered to G_ICMP + G_SELECT
+  //
+  // ETCa has no dedicated min/max instructions.  These are expanded by the
+  // generic LegalizerHelper::lowerMinMax() into:
+  //   G_ICMP (pred, a, b) + G_SELECT (cmp, a, b)
+  // Both G_ICMP and G_SELECT are already fully supported with subtarget
+  // gating (HasByte/HasDW/HasQW), so no additional plumbing is needed.
+  //
+  // We use plain .lower() without type clamping.  The lowered G_ICMP and
+  // G_SELECT are then legalized by their own rules (which include proper
+  // widenScalarToNextPow2 + clampScalar for each subtarget configuration).
+  // This avoids the need for a narrowScalar implementation for G_SMIN,
+  // which the generic LegalizerHelper does not provide.
+  //===----------------------------------------------------------------===//
+
+  getActionDefinitionsBuilder({G_SMIN, G_SMAX, G_UMIN, G_UMAX}).lower();
+
+  //===----------------------------------------------------------------===//
   // Mark unhandled ops as unsupported (will cause GISel abort)
   //===----------------------------------------------------------------===//
 
