@@ -50,6 +50,12 @@
 #include "ETCALegalizerInfo.h"
 #include "ETCASubtarget.h"
 #include "llvm/CodeGen/GlobalISel/LegalizerHelper.h"
+#include "llvm/CodeGen/GlobalISel/MachineIRBuilder.h"
+#include "llvm/CodeGen/MachineFrameInfo.h"
+#include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/MachineJumpTableInfo.h"
+#include "llvm/CodeGen/MachineMemOperand.h"
+#include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/Support/Debug.h"
 
 #define DEBUG_TYPE "etca-legalizer"
@@ -307,6 +313,26 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   // of loads and stores.
   //===----------------------------------------------------------------===//
 
+  //===----------------------------------------------------------------===//
+  // Jump tables
+  //===----------------------------------------------------------------===//
+
+  // G_JUMP_TABLE materializes the address of a jump table (always pointer).
+  getActionDefinitionsBuilder(G_JUMP_TABLE).legalFor({p0});
+
+  // G_BRINDIRECT is used for indirect jumps via register (jmpr).
+  // Mark it legal for pointer types (the selectWidth in the AsmParser
+  // and the JMPR instruction handle all pointer widths via register class).
+  getActionDefinitionsBuilder(G_BRINDIRECT).legalFor({p0});
+
+  // G_BRJT branches via a jump table entry.  We expand it in the legalizer
+  // into: load entry from table, then G_BRINDIRECT.
+  auto &BrjtActions = getActionDefinitionsBuilder(G_BRJT);
+  BrjtActions.customFor({{p0, s16}});
+  BrjtActions.customFor(HasDW, {{p0, s32}});
+  BrjtActions.customFor(HasQW, {{p0, s64}});
+  BrjtActions.clampScalar(1, MinLegal, MaxComp);
+
   getActionDefinitionsBuilder({G_MEMCPY, G_MEMMOVE, G_MEMSET}).libcall();
   getActionDefinitionsBuilder(G_MEMCPY_INLINE).lower();
 
@@ -371,4 +397,83 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   // Finalize the legalization tables.  This must be called after all
   // getActionDefinitionsBuilder calls are complete.
   getLegacyLegalizerInfo().computeTables();
+}
+
+bool ETCALegalizerInfo::legalizeCustom(
+    LegalizerHelper &Helper, MachineInstr &MI,
+    LostDebugLocObserver &LocObserver) const {
+  MachineIRBuilder &MIRBuilder = Helper.MIRBuilder;
+
+  switch (MI.getOpcode()) {
+  default:
+    return false;
+  case TargetOpcode::G_BRJT:
+    return legalizeBRJT(MI, MIRBuilder);
+  }
+}
+
+bool ETCALegalizerInfo::legalizeBRJT(MachineInstr &MI,
+                                     MachineIRBuilder &MIRBuilder) const {
+  // G_BRJT operands: [tablePtr (p0), JTI (imm), index (scalar)]
+  MachineRegisterInfo &MRI = *MIRBuilder.getMRI();
+  MachineFunction &MF = MIRBuilder.getMF();
+  const MachineJumpTableInfo *MJTI = MF.getJumpTableInfo();
+  if (!MJTI)
+    return false;
+
+  Register PtrReg = MI.getOperand(0).getReg();
+  unsigned JTI = MI.getOperand(1).getIndex();
+  Register IndexReg = MI.getOperand(2).getReg();
+
+  LLT PtrTy = MRI.getType(PtrReg);
+  LLT IndexTy = MRI.getType(IndexReg);
+  unsigned EntrySize = MJTI->getEntrySize(MF.getDataLayout());
+  unsigned EntryAlign = MJTI->getEntryAlignment(MF.getDataLayout());
+
+  // Shift index by log2(EntrySize) to get byte offset.
+  // EntrySize is always a power of 2 (2 for 16-bit ptrs, 4 for 32-bit, etc.).
+  Register ScaledIndex;
+  if (EntrySize > 1) {
+    auto ShiftAmt = MIRBuilder.buildConstant(IndexTy, Log2_32(EntrySize));
+    ScaledIndex = MIRBuilder.buildShl(IndexTy, IndexReg, ShiftAmt).getReg(0);
+  } else {
+    ScaledIndex = IndexReg;
+  }
+
+  // Compute table address + offset.
+  auto LoadAddr = MIRBuilder.buildPtrAdd(PtrTy, PtrReg, ScaledIndex);
+
+  // Load the jump target address from the table.
+  // The entry kind determines how the address is encoded.
+  // For ETCa (embedded, absolute addressing), we use EK_BlockAddress.
+  MachineMemOperand *MMO = MF.getMachineMemOperand(
+      MachinePointerInfo::getJumpTable(MF), MachineMemOperand::MOLoad,
+      EntrySize, Align(EntryAlign));
+
+  Register TargetReg;
+  switch (MJTI->getEntryKind()) {
+  default:
+    return false;
+  case MachineJumpTableInfo::EK_BlockAddress:
+    // Each entry is a plain absolute address of the target block.
+    // Load the pointer-sized entry.
+    TargetReg = MIRBuilder.buildLoad(PtrTy, LoadAddr, *MMO).getReg(0);
+    break;
+  case MachineJumpTableInfo::EK_LabelDifference32:
+  case MachineJumpTableInfo::EK_Custom32: {
+    // For PIC-style entries, load a 32-bit PC-relative delta and add the
+    // table base to get the absolute address.
+    LLT LoadTy = LLT::scalar(32);
+    auto Loaded = MIRBuilder.buildLoad(LoadTy, LoadAddr, *MMO);
+    auto LoadedSExt = MIRBuilder.buildSExt(PtrTy, Loaded);
+    TargetReg = MIRBuilder.buildPtrAdd(PtrTy, PtrReg, LoadedSExt).getReg(0);
+    break;
+  }
+  }
+
+  // Indirect branch to the target address.
+  MIRBuilder.buildBrIndirect(TargetReg);
+
+  MI.eraseFromParent();
+  return true;
 }

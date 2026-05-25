@@ -1288,7 +1288,10 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     bool IsRR = Op2.isReg();
 
     // Validate: some ops are RI-only or RR-only.
-    if (!IsRR && Op2.isExpr())
+    // Labels are allowed on MOVZ/MOVS (produce R_ETCA_MOV_* relocations)
+    // and SLO (for multi-instruction chain continuation).
+    if (!IsRR && Op2.isExpr() && Mnemonic != "movz" && Mnemonic != "movs" &&
+        Mnemonic != "slo")
       return Error(IDLoc, "second operand must be a register or integer "
                           "immediate (labels not allowed here)");
 

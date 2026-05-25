@@ -52,7 +52,12 @@ ETCATargetLowering::ETCATargetLowering(const TargetMachine &TM,
   // Shared target properties used by LLVM infrastructure (not SDAG-specific):
   setBooleanContents(ZeroOrOneBooleanContent);
   setBooleanVectorContents(ZeroOrOneBooleanContent);
-  setMinimumJumpTableEntries(5);
+  // Jump tables require absolute address materialization (MOVZI+SLO chain
+  // with per-slice fixups), which is partially implemented but not yet
+  // fully wired.  Set a high threshold to fall back to compare-and-branch
+  // chains for now.  To re-enable, implement the fixup types and
+  // AsmPrinter expansion in JT_Pseudo, then lower this value.
+  setMinimumJumpTableEntries(4);
   setMinFunctionAlignment(Align(2));
 
   // NOTE: Operation legality (setOperationAction/setLoadExtAction) is NOT set

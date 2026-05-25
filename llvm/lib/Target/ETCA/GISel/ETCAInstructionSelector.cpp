@@ -1108,6 +1108,26 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
   }
 
     //===----------------------------------------------------------------===//
+    // G_JUMP_TABLE: materialize jump table address
+    //
+    // Emits JT_Pseudo which carries the jump table index.
+    // The AsmPrinter expands JT_Pseudo into a MOVZ referencing the jump
+    // table label.
+    //===----------------------------------------------------------------===//
+
+  case TargetOpcode::G_JUMP_TABLE: {
+    Register Dst = MI.getOperand(0).getReg();
+    unsigned JTI = MI.getOperand(1).getIndex();
+    LLT DstTy = MRI->getType(Dst);
+    BuildMI(MBB, MI, MIMD, TII.get(ETCA::JT_Pseudo), Dst)
+        .addJumpTableIndex(JTI);
+    if (!constrainReg(Dst, DstTy, RBI, *MRI))
+      return false;
+    MI.eraseFromParent();
+    return true;
+  }
+
+    //===----------------------------------------------------------------===//
     // G_BRINDIRECT: indirect branch via register (SAF: jmpr)
     //===----------------------------------------------------------------===//
 

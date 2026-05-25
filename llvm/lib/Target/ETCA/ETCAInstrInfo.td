@@ -400,6 +400,14 @@ let hasSideEffects = 1, isPseudo = 1, isCodeGenOnly = 1 in {
                              "select $dst, $cond, $t, $f", []>;
 }
 
+// Jump table address pseudo: materializes the address of a jump table.
+// Takes a jump table index and produces a pointer to the jump table.
+// The AsmPrinter expands this to a MOVZI referencing the jump table label.
+let isPseudo = 1, isCodeGenOnly = 1, hasSideEffects = 0 in {
+  def JT_Pseudo : EInst<(outs GPR:$dst), (ins i16imm:$jti),
+                         "jti $dst, $jti", []>;
+}
+
 // Marker pseudo for G_ICMP lowering.  The actual CMP is emitted separately;
 // this pseudo carries the predicate so G_BRCOND can find it.
 let isPseudo = 1, isCodeGenOnly = 1, hasSideEffects = 0 in {

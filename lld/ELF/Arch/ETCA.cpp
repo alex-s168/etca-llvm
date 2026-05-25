@@ -402,6 +402,8 @@ void ETCA::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
 }
 
 bool ETCA::usesOnlyLowPageBits(RelType type) const {
-  // ETCA has no paging, so no relocation uses only low page bits.
+  // ETCA doesn't use page-relative relocations (no ADRP-like instructions
+  // that need linker relaxation of page-offset pairs), so no relocation
+  // uses only low page bits.
   return false;
 }

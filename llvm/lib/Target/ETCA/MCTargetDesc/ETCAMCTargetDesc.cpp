@@ -217,6 +217,24 @@ public:
     (void)MCII;
   }
 
+  /// Emit a MOV_* spanning chain (MOVZI + SLOs) for an address materialization.
+  /// Called from encodeInstruction for JT_Pseudo, or when MOVZI/MOVS has a
+  /// label expression operand.
+  void emitMovChain(unsigned Opcode, unsigned DstReg, const MCOperand &LabelOp,
+                    SmallVectorImpl<char> &CB, SmallVectorImpl<MCFixup> &Fixups,
+                    const MCSubtargetInfo &STI) const;
+
+  /// Return true if this is a MOVZI/MOVS instruction variant.
+  static bool isMovImmOpcode(unsigned Opcode);
+
+  /// Return the SS field from a MOVZI/MOVS opcode.
+  static unsigned getMovSS(unsigned Opcode);
+
+  /// Emit a MOV_* spanning chain (MOVZI + SLOs) for a jump table address.
+  void emitJTChain(const MCInst &MI, SmallVectorImpl<char> &CB,
+                   SmallVectorImpl<MCFixup> &Fixups,
+                   const MCSubtargetInfo &STI) const;
+
   void encodeInstruction(const MCInst &MI, SmallVectorImpl<char> &CB,
                          SmallVectorImpl<MCFixup> &Fixups,
                          const MCSubtargetInfo &STI) const override;
@@ -279,9 +297,9 @@ ETCAMCCodeEmitter::getMachineOpValue(const MCInst &MI, const MCOperand &MO,
   if (MO.isImm())
     return static_cast<unsigned>(MO.getImm());
   if (MO.isExpr()) {
-    // Expression operands with fixups should have custom encoder methods.
-    // If we reach here, it means an expression reached an operand without
-    // a fixup -- this shouldn't happen for ETCA.
+    // Expression operands should use custom encoder methods (e.g.,
+    // encodeBranchTarget, encodeCallTarget) which create fixups.
+    // If an Expr reaches here without a custom encoder, return 0.
     return 0;
   }
   return 0;
@@ -394,10 +412,151 @@ unsigned ETCAMCCodeEmitter::computeRexPrefix(const MCInst &MI) const {
   return Rex;
 }
 
+bool ETCAMCCodeEmitter::isMovImmOpcode(unsigned Opcode) {
+  switch (Opcode) {
+  case ETCA::MOVZI8:
+  case ETCA::MOVZI16:
+  case ETCA::MOVZI32:
+  case ETCA::MOVZI64:
+  case ETCA::MOVSI8:
+  case ETCA::MOVSI16:
+  case ETCA::MOVSI32:
+  case ETCA::MOVSI64:
+    return true;
+  default:
+    return false;
+  }
+}
+
+unsigned ETCAMCCodeEmitter::getMovSS(unsigned Opcode) {
+  switch (Opcode) {
+  case ETCA::MOVZI8:
+  case ETCA::MOVSI8:
+    return 0; // byte
+  case ETCA::MOVZI32:
+  case ETCA::MOVSI32:
+    return 2; // dword
+  case ETCA::MOVZI64:
+  case ETCA::MOVSI64:
+    return 3; // qword
+  default:
+    return 1; // word (16-bit)
+  }
+}
+
+void ETCAMCCodeEmitter::emitMovChain(unsigned Opcode, unsigned DstReg,
+                                     const MCOperand &LabelOp,
+                                     SmallVectorImpl<char> &CB,
+                                     SmallVectorImpl<MCFixup> &Fixups,
+                                     const MCSubtargetInfo &STI) const {
+  unsigned RegEnc = Ctx.getRegisterInfo()->getEncodingValue(DstReg) & 0x7;
+  unsigned SS = getMovSS(Opcode);
+
+  // Determine MOV_* fixup type and chain size from the SS bits.
+  // SS=0 (byte)  → MOV_8  (2 insns, 4 bytes)
+  // SS=1 (word)  → MOV_16 (4 insns, 8 bytes)
+  // SS=2 (dword) → MOV_32 (7 insns, 14 bytes)
+  // SS=3 (qword) → MOV_64 (13 insns, 26 bytes)
+  ETCA::Fixups MovFixup;
+  unsigned ChainBytes;
+  switch (SS) {
+  case 0:
+    MovFixup = ETCA::fixup_ETCA_MOV_8;
+    ChainBytes = 4;
+    break;
+  case 2:
+    MovFixup = ETCA::fixup_ETCA_MOV_32;
+    ChainBytes = 14;
+    break;
+  case 3:
+    MovFixup = ETCA::fixup_ETCA_MOV_64;
+    ChainBytes = 26;
+    break;
+  default:
+    MovFixup = ETCA::fixup_ETCA_MOV_16;
+    ChainBytes = 8;
+    break;
+  }
+
+  // Determine MOVZI/MOVS opcode byte based on the instruction type.
+  // RI format: bits[7:6]=01, bits[5:4]=SS, bits[3:0]=opcode
+  //   MOVZI opcode = 8 (0b1000)
+  //   MOVSI opcode = 9 (0b1001)
+  //   SLO   opcode = 12 (0b1100)
+  unsigned FirstOpc;
+  switch (Opcode) {
+  case ETCA::MOVSI8:
+  case ETCA::MOVSI16:
+  case ETCA::MOVSI32:
+  case ETCA::MOVSI64:
+    FirstOpc = 9; // MOVSI
+    break;
+  default:
+    FirstOpc = 8; // MOVZI
+    break;
+  }
+
+  // Emit placeholder chain.
+  unsigned NumInsns = ChainBytes / 2;
+  for (unsigned i = 0; i < NumInsns; ++i) {
+    uint16_t Inst;
+    if (i == 0)
+      Inst = 0b01000000 | (SS << 4) | FirstOpc;
+    else
+      Inst = 0b01000000 | (SS << 4) | 12; // SLO
+    Inst |= (RegEnc << 13);               // AAA: destination register
+    CB.push_back(static_cast<char>(Inst & 0xFF));
+    CB.push_back(static_cast<char>((Inst >> 8) & 0xFF));
+  }
+
+  // Create a spanning fixup on the first byte of the chain.
+  if (LabelOp.isExpr()) {
+    Fixups.push_back(
+        MCFixup::create(0, LabelOp.getExpr(), MCFixupKind(MovFixup)));
+  }
+}
+
+void ETCAMCCodeEmitter::emitJTChain(const MCInst &MI, SmallVectorImpl<char> &CB,
+                                    SmallVectorImpl<MCFixup> &Fixups,
+                                    const MCSubtargetInfo &STI) const {
+  // JT_Pseudo uses pointer-size-dependent chain.
+  unsigned DstReg = MI.getOperand(0).getReg();
+  const MCOperand &LabelOp = MI.getOperand(1);
+
+  // Determine pointer size from subtarget features.
+  unsigned Opcode;
+  if (STI.hasFeature(ETCA::FeaturePtr64))
+    Opcode = ETCA::MOVZI64;
+  else if (STI.hasFeature(ETCA::FeaturePtr32))
+    Opcode = ETCA::MOVZI32;
+  else
+    Opcode = ETCA::MOVZI16;
+
+  emitMovChain(Opcode, DstReg, LabelOp, CB, Fixups, STI);
+}
+
 void ETCAMCCodeEmitter::encodeInstruction(const MCInst &MI,
                                           SmallVectorImpl<char> &CB,
                                           SmallVectorImpl<MCFixup> &Fixups,
                                           const MCSubtargetInfo &STI) const {
+  unsigned Opcode = MI.getOpcode();
+
+  // Handle JT_Pseudo specially: emit MOV_* chain with spanning fixup.
+  if (Opcode == ETCA::JT_Pseudo) {
+    emitJTChain(MI, CB, Fixups, STI);
+    return;
+  }
+
+  // When MOVZI/MOVS has a label expression as its immediate operand,
+  // emit a MOV_* spanning chain so the linker can expand it.
+  // This handles assembly like "movz r0, label" from user-written asm.
+  if (isMovImmOpcode(Opcode) && MI.getNumOperands() >= 2 &&
+      MI.getOperand(1).isExpr()) {
+    emitMovChain(Opcode, MI.getOperand(0).getReg(), MI.getOperand(1), CB,
+                 Fixups, STI);
+    return;
+  }
+
   // Determine if a REX prefix is needed based on register operands.
   unsigned RexByte = computeRexPrefix(MI);
 
@@ -521,6 +680,14 @@ public:
       break;
     }
     default:
+      // For MOV_* spanning fixups, write the absolute address as raw bytes
+      // (placeholder chain will be replaced by the linker's build_mov_ri).
+      if (Kind >= ETCA::fixup_ETCA_MOV_5 && Kind <= ETCA::fixup_ETCA_MOV_32) {
+        unsigned Size = getMovChainBytes(static_cast<ETCA::Fixups>(Kind));
+        for (unsigned i = 0; i < Size; ++i)
+          Data[i] = static_cast<uint8_t>((Value >> (i * 8)) & 0xFF);
+        break;
+      }
       llvm_unreachable("unknown ETCA fixup kind");
     }
   }
@@ -532,10 +699,30 @@ public:
 
   MCFixupKindInfo getFixupKindInfo(MCFixupKind Kind) const override {
     static const MCFixupKindInfo Infos[] = {
-        {"fixup_ETCA_NONE", 0, 0, 0},      {"fixup_ETCA_BASE_JMP", 0, 16, 0},
-        {"fixup_ETCA_8", 0, 8, 0},         {"fixup_ETCA_16", 0, 16, 0},
-        {"fixup_ETCA_32", 0, 32, 0},       {"fixup_ETCA_64", 0, 64, 0},
+        {"fixup_ETCA_NONE", 0, 0, 0},
+        {"fixup_ETCA_BASE_JMP", 0, 16, 0},
         {"fixup_ETCA_SAF_CALL", 0, 16, 0},
+        {"fixup_ETCA_8", 0, 8, 0},
+        {"fixup_ETCA_16", 0, 16, 0},
+        {"fixup_ETCA_32", 0, 32, 0},
+        {"fixup_ETCA_64", 0, 64, 0},
+        // MOV_* spanning: size is the full chain byte count.
+        {"fixup_ETCA_MOV_5", 0, 16, 0},
+        {"fixup_ETCA_MOV_10", 0, 16, 0},
+        {"fixup_ETCA_MOV_15", 0, 16, 0},
+        {"fixup_ETCA_MOV_20", 0, 16, 0},
+        {"fixup_ETCA_MOV_25", 0, 16, 0},
+        {"fixup_ETCA_MOV_30", 0, 16, 0},
+        {"fixup_ETCA_MOV_35", 0, 16, 0},
+        {"fixup_ETCA_MOV_40", 0, 16, 0},
+        {"fixup_ETCA_MOV_45", 0, 16, 0},
+        {"fixup_ETCA_MOV_50", 0, 16, 0},
+        {"fixup_ETCA_MOV_55", 0, 16, 0},
+        {"fixup_ETCA_MOV_60", 0, 16, 0},
+        {"fixup_ETCA_MOV_64", 0, 16, 0},
+        {"fixup_ETCA_MOV_8", 0, 16, 0},
+        {"fixup_ETCA_MOV_16", 0, 16, 0},
+        {"fixup_ETCA_MOV_32", 0, 16, 0},
     };
     enum { NumETCAFixups = std::size(Infos) };
 
@@ -593,6 +780,23 @@ enum ETCARelocType : unsigned {
   R_ETCA_IPREL_16 = 54,
   R_ETCA_IPREL_32 = 55,
   R_ETCA_IPREL_64 = 56,
+  // MOV_* spanning relocations (must match binutils numbering).
+  R_ETCA_MOV_5 = 17,
+  R_ETCA_MOV_10 = 18,
+  R_ETCA_MOV_15 = 19,
+  R_ETCA_MOV_20 = 20,
+  R_ETCA_MOV_25 = 21,
+  R_ETCA_MOV_30 = 22,
+  R_ETCA_MOV_35 = 23,
+  R_ETCA_MOV_40 = 24,
+  R_ETCA_MOV_45 = 25,
+  R_ETCA_MOV_50 = 26,
+  R_ETCA_MOV_55 = 27,
+  R_ETCA_MOV_60 = 28,
+  R_ETCA_MOV_64 = 29,
+  R_ETCA_MOV_8 = 30,
+  R_ETCA_MOV_16 = 31,
+  R_ETCA_MOV_32 = 32,
 };
 
 class ETCAELFObjectWriter : public MCELFObjectTargetWriter {
@@ -628,14 +832,8 @@ public:
     static constexpr unsigned FixupBase = ETCA::fixup_ETCA_NONE;
     unsigned ETCAKind = Kind - FixupBase;
 
-    // Map to relocation types matching the Fixups enum order.
-    // fixup_ETCA_NONE → R_ETCA_NONE
-    // fixup_ETCA_BASE_JMP → R_ETCA_BASE_JMP
-    // fixup_ETCA_8 → R_ETCA_8
-    // fixup_ETCA_16 → R_ETCA_16
-    // fixup_ETCA_32 → R_ETCA_32
-    // fixup_ETCA_64 → R_ETCA_64
-    // fixup_ETCA_SAF_CALL → R_ETCA_SAF_CALL
+    // Map to relocation types matching the Fixups enum order in
+    // ETCAFixupKinds.h.  Keep this in sync with that enum.
     static constexpr unsigned RelocMap[] = {
         R_ETCA_NONE,     // 0: fixup_ETCA_NONE
         R_ETCA_BASE_JMP, // 1: fixup_ETCA_BASE_JMP
@@ -644,6 +842,23 @@ public:
         R_ETCA_32,       // 4: fixup_ETCA_32
         R_ETCA_64,       // 5: fixup_ETCA_64
         R_ETCA_SAF_CALL, // 6: fixup_ETCA_SAF_CALL
+        // MOV_* spanning relocs: indices 7-26 → R_ETCA_MOV_5..R_ETCA_MOV_32
+        R_ETCA_MOV_5,
+        R_ETCA_MOV_10,
+        R_ETCA_MOV_15,
+        R_ETCA_MOV_20,
+        R_ETCA_MOV_25,
+        R_ETCA_MOV_30,
+        R_ETCA_MOV_35,
+        R_ETCA_MOV_40,
+        R_ETCA_MOV_45,
+        R_ETCA_MOV_50,
+        R_ETCA_MOV_55,
+        R_ETCA_MOV_60,
+        R_ETCA_MOV_64,
+        R_ETCA_MOV_8,
+        R_ETCA_MOV_16,
+        R_ETCA_MOV_32,
     };
     if (ETCAKind < std::size(RelocMap))
       return RelocMap[ETCAKind];

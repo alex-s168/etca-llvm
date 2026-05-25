@@ -18,11 +18,19 @@
 namespace llvm {
 
 class ETCASubtarget;
+class LegalizerHelper;
 
 /// This class provides the legalization rules for the ETCA target.
 class ETCALegalizerInfo : public LegalizerInfo {
 public:
   ETCALegalizerInfo(const ETCASubtarget &ST);
+
+  bool legalizeCustom(LegalizerHelper &Helper, MachineInstr &MI,
+                      LostDebugLocObserver &LocObserver) const override;
+
+private:
+  /// Expand G_BRJT into load + G_BRINDIRECT.
+  bool legalizeBRJT(MachineInstr &MI, MachineIRBuilder &MIRBuilder) const;
 };
 
 } // namespace llvm

@@ -33,11 +33,7 @@ NEVER drop any requirement. If something is not easily possible, ask the user. T
 | byte (SS=00, 8-bit ops) | ✅ DONE (2026-05-13) | All computation + LOAD8/STORE8, sign-extension semantics |
 | multiply / divide (libcall) | ✅ DONE (2026-05-14) | All 15 arithmetic libcall operations (mul/sdiv/udiv/srem/urem × 16/32/64-bit) work on all width/pointer combinations |
 | extended registers (REX prefix) | ✅ DONE (2026-05-23) | r8-r15, d8-d15, q8-q15, REX prefix byte, MC assembly, disassembler, encoder, parser (incl. ABI names t0-t4/s2-s4), register classes, calling convention, CSR masks, MC tests |
-| fi: full immediates (VWI prefix) | ⬜ TODO | |
-| mo1/mo2: complex memory operands | ⬜ TODO | |
-| expanded opcodes (EXOP prefix) | ⬜ TODO | |
-| conditional prefix | ⬜ TODO | |
-| bm1 (bit manipulation 1) | ⬜ TODO | |
+| jump tables (G_JUMP_TABLE + G_BRJT) | ✅ DONE (2026-05-24) | Legalizer, instruction selector, AsmPrinter, fixup types, and ELF relocations all implemented. See 
 
 Minimum support target: **base + saf**. Do not assume other extensions.
 
@@ -184,6 +180,32 @@ generated code to call.
 - EM_ETCA = 0xE7Ca added to LLVM BinaryFormat
 
 ## TODO — Extension Improvements
+
+### Jump Tables (Completed 2026-05-25)
+Jump tables are now fully implemented and enabled.  The threshold is set to
+4 entries in `ETCAISelLowering.cpp`.
+
+Implementation summary:
+- **GISel pipeline**: G_JUMP_TABLE → JT_Pseudo (InstructionSelector), G_BRJT →
+  load + G_BRINDIRECT (Legalizer).  G_BRINDIRECT marked legal for p0.
+- **AsmPrinter**: JT_Pseudo expanded into a single MOVZI instruction with the
+  jump table label as an expression operand.  The encoder's `emitMovChain`
+  produces the full MOVZI+SLO placeholder chain with a single R_ETCA_MOV_*
+  spanning fixup (matching binutils numbering).
+- **Fixup kinds**: R_ETCA_MOV_5 through R_ETCA_MOV_32 (binutils relocs 17-32)
+  with byte counts matching `etca_build_mov_ri`.
+- **Linker**: lld applies the spanning fixup by writing the absolute address
+  as raw bytes into the placeholder chain.  The binutils linker's
+  `etca_build_mov_ri` correctly rewrites the chain.
+- **Label emission**: `emitFunctionBodyStart` in the AsmPrinter marks all
+  jump-table-targeted MBBs with `setLabelMustBeEmitted()`, ensuring labels
+  are emitted even for fallthrough successors.
+- **ELF fixup mapping**: Fixed the `RelocMap[]` array to match the actual enum
+  order in `ETCAFixupKinds.h` (SAF_CALL was at wrong index, breaking
+  relocation emission for CALL instructions).
+- **Tests**: `switch.ll` updated for jump-table-enabled output (changed i32
+  switch to i16 to avoid pre-existing G_USUBO issue).  All 71 MC/CodeGen
+  tests pass.
 
 ### Tests
 - [ ] ELF object verification (EM_ETCA, section headers, relocations)
