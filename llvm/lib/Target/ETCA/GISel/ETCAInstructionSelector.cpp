@@ -749,6 +749,13 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
         Register GICMPDst = DefMI->getOperand(0).getReg();
         BuildMI(MBB, *DefMI, MIMD, TII.get(ETCA::ICMP_Pseudo), GICMPDst)
             .addImm(EncPred);
+        // Constrain the ICMP_Pseudo result register to GPR (condition is
+        // always 16-bit).  In the normal G_ICMP handler this is done by
+        // the explicit constrainReg call, but in this reverse-order path
+        // the G_ICMP is erased before its handler ever runs, so we must
+        // constrain here.
+        if (!constrainReg(GICMPDst, LLT::scalar(16), RBI, *MRI))
+          return false;
         DefMI->eraseFromParent();
         MI.eraseFromParent();
         return true;
