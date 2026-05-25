@@ -146,6 +146,10 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   SelectActions.legalFor({{s16, s16}});
   SelectActions.legalFor(HasDW, {{s32, s16}});
   SelectActions.legalFor(HasQW, {{s64, s16}});
+  // Pointer-typed SELECT (e.g. select between two pointers) is always legal.
+  // p0 size matches the pointer width (16/32/64) and is handled by the
+  // instruction selector's G_SELECT handler via getRCForType.
+  SelectActions.legalFor({{p0, s16}});
   SelectActions.clampScalar(0, MinLegal, MaxComp);
   SelectActions.clampScalar(1, s16, s64);
 
