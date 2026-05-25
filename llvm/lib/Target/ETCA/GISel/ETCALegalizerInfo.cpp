@@ -79,6 +79,7 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
 
   // Minimum legal scalar — i8 if BYTE extension, otherwise i16.
   LLT MinLegal = HasByte ? s8 : s16;
+  MinLegalSize = MinLegal.getSizeInBits();
 
   //===----------------------------------------------------------------===//
   // Tier 1 helpers — register all scalar types for data-flow ops
@@ -191,6 +192,13 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   LoadActions.legalForTypesWithMemDesc({{s64, p0, s64, 8}});
   // Pointer loads: result type p0, addr p0, memory is PS-bit scalar
   LoadActions.legalForTypesWithMemDesc({{p0, p0, PtrMemTy, PtrAlign}});
+  // Sub-MinLegal types (e.g., s1 from i1 loads) can't use widenScalar
+  // because LLVM's generic widenScalar for G_LOAD returns UnableToLegalize.
+  // Handle them via custom legalization that loads MinLegal bits and
+  // truncates.
+  LoadActions.customIf([=](const LegalityQuery &Q) {
+    return Q.Types[0].getSizeInBits() < MinLegal.getSizeInBits();
+  });
   LoadActions.widenScalarToNextPow2(0, MinLegal.getSizeInBits());
   LoadActions.clampScalar(0, MinLegal, s64);
 
@@ -202,6 +210,11 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   StoreActions.legalForTypesWithMemDesc({{s64, p0, s64, 8}});
   // Pointer stores: value type p0, addr p0, memory is PS-bit scalar
   StoreActions.legalForTypesWithMemDesc({{p0, p0, PtrMemTy, PtrAlign}});
+  // Sub-MinLegal types — widen via custom legalization (same reasoning
+  // as G_LOAD: the generic widenScalar for G_STORE isn't supported).
+  StoreActions.customIf([=](const LegalityQuery &Q) {
+    return Q.Types[0].getSizeInBits() < MinLegal.getSizeInBits();
+  });
   StoreActions.widenScalarToNextPow2(0, MinLegal.getSizeInBits());
   StoreActions.clampScalar(0, MinLegal, s64);
 
@@ -413,7 +426,67 @@ bool ETCALegalizerInfo::legalizeCustom(
     return false;
   case TargetOpcode::G_BRJT:
     return legalizeBRJT(MI, MIRBuilder);
+  case TargetOpcode::G_LOAD:
+    return legalizeSubMinLegalLoad(MI, MIRBuilder);
+  case TargetOpcode::G_STORE:
+    return legalizeSubMinLegalStore(MI, MIRBuilder);
   }
+}
+
+bool ETCALegalizerInfo::legalizeSubMinLegalLoad(
+    MachineInstr &MI, MachineIRBuilder &MIRBuilder) const {
+  // Widen a sub-MinLegal G_LOAD to the minimum legal scalar type.
+  // Load MinLegal bits, then truncate to the original (narrow) type.
+  Register Dst = MI.getOperand(0).getReg();
+  Register Addr = MI.getOperand(1).getReg();
+  LLT DstTy = MIRBuilder.getMRI()->getType(Dst);
+  unsigned DstBits = DstTy.getSizeInBits();
+
+  // Safety: only handle types smaller than MinLegalSize.
+  if (DstBits >= MinLegalSize)
+    return false;
+
+  // Create a new MMO with the widened memory type so that the
+  // legalizeInstrStep → legalForTypesWithMemDesc rules match.
+  // The original MMO has a narrow MemoryType (e.g., s8 for a 1-byte i1)
+  // which doesn't match the legal-width rule (s16, p0, s16, 2).
+  MachineMemOperand &OldMMO = **MI.memoperands_begin();
+  MachineFunction &MF = MIRBuilder.getMF();
+  LLT WideTy = LLT::scalar(MinLegalSize);
+  auto *NewMMO = MF.getMachineMemOperand(
+      OldMMO.getPointerInfo(), OldMMO.getFlags(), WideTy, OldMMO.getBaseAlign(),
+      OldMMO.getAAInfo());
+  auto WideLoad = MIRBuilder.buildLoad(WideTy, Addr, *NewMMO);
+  MIRBuilder.buildTrunc(Dst, WideLoad);
+  MI.eraseFromParent();
+  return true;
+}
+
+bool ETCALegalizerInfo::legalizeSubMinLegalStore(
+    MachineInstr &MI, MachineIRBuilder &MIRBuilder) const {
+  // Widen a sub-MinLegal G_STORE to the minimum legal scalar type.
+  // Extend the value to MinLegal bits (anyext — upper bits are undefined),
+  // then store the wider type.
+  Register Val = MI.getOperand(0).getReg();
+  Register Addr = MI.getOperand(1).getReg();
+  LLT ValTy = MIRBuilder.getMRI()->getType(Val);
+  unsigned ValBits = ValTy.getSizeInBits();
+
+  if (ValBits >= MinLegalSize)
+    return false;
+
+  // Create a new MMO with the widened memory type so the legalizer knows
+  // this is a legal-width memory access.
+  MachineMemOperand &OldMMO = **MI.memoperands_begin();
+  MachineFunction &MF = MIRBuilder.getMF();
+  LLT WideTy = LLT::scalar(MinLegalSize);
+  auto *NewMMO = MF.getMachineMemOperand(
+      OldMMO.getPointerInfo(), OldMMO.getFlags(), WideTy, OldMMO.getBaseAlign(),
+      OldMMO.getAAInfo());
+  auto WideVal = MIRBuilder.buildAnyExt(WideTy, Val);
+  MIRBuilder.buildStore(WideVal, Addr, *NewMMO);
+  MI.eraseFromParent();
+  return true;
 }
 
 bool ETCALegalizerInfo::legalizeBRJT(MachineInstr &MI,

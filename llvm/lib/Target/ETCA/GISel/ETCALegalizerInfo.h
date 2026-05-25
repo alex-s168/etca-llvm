@@ -29,8 +29,21 @@ public:
                       LostDebugLocObserver &LocObserver) const override;
 
 private:
+  /// Minimum legal scalar size in bits (8 with byte ext, 16 otherwise).
+  unsigned MinLegalSize;
+
   /// Expand G_BRJT into load + G_BRINDIRECT.
   bool legalizeBRJT(MachineInstr &MI, MachineIRBuilder &MIRBuilder) const;
+
+  /// Widen a sub-MinLegal G_LOAD to the minimum legal scalar type,
+  /// then truncate to the original type.
+  bool legalizeSubMinLegalLoad(MachineInstr &MI,
+                               MachineIRBuilder &MIRBuilder) const;
+
+  /// Widen a sub-MinLegal G_STORE to the minimum legal scalar type
+  /// by extending the value before storing.
+  bool legalizeSubMinLegalStore(MachineInstr &MI,
+                                MachineIRBuilder &MIRBuilder) const;
 };
 
 } // namespace llvm
