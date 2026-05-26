@@ -592,13 +592,17 @@ MCCodeEmitter *llvm::createETCAMCCodeEmitter(const MCInstrInfo &MCII,
 namespace {
 class ETCAAsmBackend : public MCAsmBackend {
   bool Is64Bit;
+  bool HasVWI;
 
 public:
   ETCAAsmBackend(const MCSubtargetInfo &STI, const MCTargetOptions &Options)
-      : MCAsmBackend(llvm::endianness::little), Is64Bit(false) {
+      : MCAsmBackend(llvm::endianness::little), Is64Bit(false), HasVWI(false) {
     // Use 64-bit ELF when pointers are 64-bit (any CPU model with ptr64).
     if (STI.hasFeature(ETCA::FeaturePtr64))
       Is64Bit = true;
+    // VWI extension enables single-byte NOP for padding.
+    if (STI.hasFeature(ETCA::FeatureVWI))
+      HasVWI = true;
   }
 
   ~ETCAAsmBackend() override = default;
@@ -734,13 +738,22 @@ public:
     return {"fixup_ETCA_unknown", 0, 16, 0};
   }
 
-  unsigned getMinimumNopSize() const override { return 2; }
+  unsigned getMinimumNopSize() const override { return HasVWI ? 1 : 2; }
 
   bool writeNopData(raw_ostream &OS, uint64_t Count,
                     const MCSubtargetInfo *STI) const override {
-    // NOP = 2-byte NOP (0x008F LE: [0x8F, 0x00]) per binutils etca_build_nop.
-    // Write as many full NOPs as the even-aligned portion allows, then return
-    // false for the odd remainder so LLVM's generic fallback emits a trap.
+    if (HasVWI) {
+      // Single-byte NOP (0xAE = 10101110) per VWI extension spec:
+      // "All CPUs which support at least 1 VWI extension must also accept
+      //  1010 1110 as a single byte NOP instruction."
+      for (uint64_t i = 0; i < Count; ++i)
+        OS.write("\xAE", 1);
+      return true;
+    }
+    // Base ISA: 2-byte NOP (0x008F LE: [0x8F, 0x00]) per binutils
+    // etca_build_nop. Write as many full NOPs as the even-aligned portion
+    // allows, then return false for the odd remainder so LLVM's generic
+    // fallback emits a trap.
     uint64_t NopCount = Count / 2;
     for (uint64_t i = 0; i < NopCount; ++i)
       OS.write("\x8F\x00", 2);

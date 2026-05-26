@@ -33,6 +33,8 @@ NEVER drop any requirement. If something is not easily possible, ask the user. T
 | byte (SS=00, 8-bit ops) | ✅ DONE (2026-05-13) | All computation + LOAD8/STORE8, sign-extension semantics |
 | multiply / divide libcall | ✅ DONE (2026-05-14) | All 15 arithmetic libcall operations (mul/sdiv/udiv/srem/urem × 16/32/64-bit) work on all width/pointer combinations |
 | extended registers (REX prefix) | ✅ DONE (2026-05-23) | r8-r15, d8-d15, q8-q15, REX prefix byte, MC assembly, disassembler, encoder, parser (incl. ABI names t0-t4/s2-s4), register classes, calling convention, CSR masks, MC tests |
+| variable width instruction (VWI) | ✅ DONE (2026-05-26) | Single-byte NOP (0xAE) for padding, 11xx prefix for VWI. REX implies VWI. |
+| extended registers (REX prefix) | ✅ DONE (2026-05-23) | r8-r15, d8-d15, q8-q15, REX prefix byte, MC assembly, disassembler, encoder, parser (incl. ABI names t0-t4/s2-s4), register classes, calling convention, CSR masks, MC tests |
 | jump tables (G_JUMP_TABLE + G_BRJT) | ✅ DONE (2026-05-24) | Legalizer, instruction selector, AsmPrinter, fixup types, and ELF relocations all implemented. See 
 
 Minimum support target: **base + saf**. Do not assume other extensions.
@@ -116,12 +118,18 @@ spill more often.  This is an acceptable trade-off for correctness.
 
 Test: `llvm/test/CodeGen/ETCA/scavenger-emergency-slot.ll`
 
-### NOP encoding: 0x008F
-All NOP emission paths use `0x008F` ([0x8F, 0x00] LE) — the canonical 2-byte base-ISA NOP per binutils `etca_build_nop`:
+### NOP encoding: 0x008F (base ISA), 0xAE (VWI)
+**Base ISA**: 2-byte NOP = `0x008F` ([0x8F, 0x00] LE) — the canonical base-ISA NOP per binutils `etca_build_nop`:
 - `ETCAInstrInfo.td: NOP Inst{15-0}` = `0x008F`
-- `ETCAMCTargetDesc.cpp: encodeInstruction` case ETCA::NOP → `0x008F`
-- `ETCAMCTargetDesc.cpp: writeNopData` → writes `"\x8F\x00"`
-- `ETCADisassembler.cpp` → checks for `0x008F`
+- `ETCAMCTargetDesc.cpp: encodeInstruction` → `getBinaryCodeForInstr` (auto-generated)
+- `ETCAMCTargetDesc.cpp: writeNopData` → writes `"\x8F\x00"` (base ISA)
+- `ETCADisassembler.cpp` → `0x008F` decodes as `ETCA::NOP`
+
+**VWI extension**: Single-byte NOP = `0xAE` per spec ("all CPUs which support at least 1 VWI
+  extension must also accept 1010 1110 as a single byte NOP instruction". When the VWI feature
+  is enabled, `writeNopData` emits `"\xAE"` bytes for all padding, and the disassembler
+  decodes `0xAE` as `ETCA::NOP` with `Size = 1`. REX implies VWI, so any target with REX
+  automatically gets the single-byte NOP padding.
 
 ### LLVM 21+ API notes
 - `copyPhysReg` uses 8-param signature (`RenamableDest`, `RenamableSrc`)

@@ -285,6 +285,16 @@ DecodeStatus ETCADisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
   RexFlags = 0;
   Size = 0;
 
+  // Single-byte NOP (0xAE = 10101110) — VWI extension.
+  // This encoding is in the reserved 10 1xxxxx space, so no base ISA
+  // instruction conflicts.  Decode unconditionally; writeNopData only
+  // emits 0xAE when VWI is enabled.
+  if (!Bytes.empty() && Bytes[0] == 0xAE) {
+    Instr.setOpcode(ETCA::NOP);
+    Size = 1;
+    return MCDisassembler::Success;
+  }
+
   if (Bytes.size() < 2) {
     Size = 0;
     return MCDisassembler::Fail;

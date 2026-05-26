@@ -54,6 +54,7 @@ class ETCASubtarget : public ETCAGenSubtargetInfo {
   // Extension flags
   bool HasSAF = false;
   bool HasByte = false;
+  bool HasVWI = false;
   bool HasREX = false;
   bool HasDW = false;
   bool HasQW = false;
@@ -110,6 +111,7 @@ public:
   // Extension accessors
   bool hasSAF() const { return HasSAF; }
   bool hasByte() const { return HasByte; }
+  bool hasVWI() const { return HasVWI; }
   bool hasREX() const { return HasREX; }
   bool hasDW() const { return HasDW; }
   bool hasQW() const { return HasQW; }
