@@ -44,6 +44,30 @@ private:
   /// by extending the value before storing.
   bool legalizeSubMinLegalStore(MachineInstr &MI,
                                 MachineIRBuilder &MIRBuilder) const;
+
+  /// Lower G_UADDSAT via MinMax expansion: a + umin(~a, b).
+  bool legalizeUAddSat(MachineInstr &MI, MachineIRBuilder &MIRBuilder) const;
+
+  /// Lower G_USUBSAT via MinMax expansion: a - umin(a, b).
+  bool legalizeUSubSat(MachineInstr &MI, MachineIRBuilder &MIRBuilder) const;
+
+  /// Lower G_SADDSAT via MinMax expansion.
+  bool legalizeSAddSat(MachineInstr &MI, MachineIRBuilder &MIRBuilder) const;
+
+  /// Lower G_SSUBSAT via MinMax expansion.
+  bool legalizeSSubSat(MachineInstr &MI, MachineIRBuilder &MIRBuilder) const;
+
+  /// Expand G_UADDO to G_ADD + G_ICMP.
+  bool legalizeUAddo(MachineInstr &MI, MachineIRBuilder &MIRBuilder) const;
+
+  /// Expand G_USUBO to G_SUB + G_ICMP.
+  bool legalizeUSubo(MachineInstr &MI, MachineIRBuilder &MIRBuilder) const;
+
+  /// Expand G_UADDE to G_ADD chain + G_ICMP + G_OR.
+  bool legalizeUAdde(MachineInstr &MI, MachineIRBuilder &MIRBuilder) const;
+
+  /// Expand G_USUBE to G_SUB chain + G_ICMP + G_OR.
+  bool legalizeUSube(MachineInstr &MI, MachineIRBuilder &MIRBuilder) const;
 };
 
 } // namespace llvm

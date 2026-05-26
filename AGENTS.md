@@ -31,7 +31,7 @@ NEVER drop any requirement. If something is not easily possible, ask the user. T
 |-----------|--------|-------|
 | base + saf + all word/address combos | ✅ DONE (2026-05-14) | 16/32/64-bit word & pointer, all combinations via -mattr flags |
 | byte (SS=00, 8-bit ops) | ✅ DONE (2026-05-13) | All computation + LOAD8/STORE8, sign-extension semantics |
-| multiply / divide (libcall) | ✅ DONE (2026-05-14) | All 15 arithmetic libcall operations (mul/sdiv/udiv/srem/urem × 16/32/64-bit) work on all width/pointer combinations |
+| multiply / divide libcall | ✅ DONE (2026-05-14) | All 15 arithmetic libcall operations (mul/sdiv/udiv/srem/urem × 16/32/64-bit) work on all width/pointer combinations |
 | extended registers (REX prefix) | ✅ DONE (2026-05-23) | r8-r15, d8-d15, q8-q15, REX prefix byte, MC assembly, disassembler, encoder, parser (incl. ABI names t0-t4/s2-s4), register classes, calling convention, CSR masks, MC tests |
 | jump tables (G_JUMP_TABLE + G_BRJT) | ✅ DONE (2026-05-24) | Legalizer, instruction selector, AsmPrinter, fixup types, and ELF relocations all implemented. See 
 
@@ -269,3 +269,7 @@ ninja -C build-etca && build-etca/bin/llvm-lit llvm/test/*/ETCA/ clang/test/*/ET
 ```
 
 **Compiler note**: Clang 22.1.4 + libc++ has `abi_tag` incompatibility with `libDebugInfoGSYM`. GCC works but is slower.
+
+
+## TODO
+Register class handling seems sus in a lot of places (especially for the BYTE extension)

@@ -260,49 +260,100 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     uint64_t Mask = (Size == 64) ? UINT64_MAX : ((1ULL << Size) - 1);
     uint64_t Val = static_cast<uint64_t>(Imm) & Mask;
 
-    // For 16-bit constants:
-    //   - Negative values that fit in 5-bit signed → single MOVS
-    //   - Non-negative values ≤ 31 → single MOVZ
-    //   - Larger values → MOVZ + SLO chain
-    if (Size == 16 && Imm < 0 && isInt<5>(Imm)) {
+    // Small signed/unsigned values that fit in 5-bit immediate:
+    //   - MOVSI (signed, 5-bit) for small negatives
+    //   - MOVZI (unsigned, 5-bit) for small positives
+    bool SmallNeg = (Size == 16 && Imm < 0 && isInt<5>(Imm));
+    bool SmallPos = (Val <= 31);
+
+    if (SmallNeg) {
       BuildMI(MBB, MI, MIMD, TII.get(ETCA::MOVSI16), Dst).addImm(Imm & 0x1F);
-    } else if (Size == 16 && Val <= 31) {
-      BuildMI(MBB, MI, MIMD, TII.get(ETCA::MOVZI16), Dst).addImm(Val);
-    } else if (Size == 16 && Val > 31) {
-      // Large unsigned constant: split into MOVZ + SLO chain.
-      SmallVector<unsigned, 4> Chunks;
-      uint64_t Tmp = Val;
-      while (Tmp) {
-        Chunks.push_back(Tmp & 0x1F);
-        Tmp >>= 5;
+    } else if (SmallPos) {
+      BuildMI(MBB, MI, MIMD, TII.get(getMovziOpc(Size)), Dst).addImm(Val);
+    } else {
+      // Large constant (> 31): decompose into 5-bit chunks with
+      // shift-and-add chain using size-appropriate opcodes.
+      //
+      // Strategy: split constant into 5-bit chunks (LSB first).
+      //   1. Emit the MSB chunk as a MOVZI (5-bit immediate).
+      //   2. For each remaining chunk (from MSB-1 down to LSB):
+      //      acc = (acc << 5) + chunk_value
+      //
+      //   Shift-left-5:
+      //     - 16-bit (GPR): use SLO16 (single instr: shift-5 + OR)
+      //     - 32/64-bit: use ADD-self repeated 5 times to shift by 5
+      //
+      //   Add chunk_value:
+      //     - 16-bit: SLO16 also ORs the immediate (done in one op)
+      //     - 32/64-bit: MOVZI chunk; ADD
+      SmallVector<uint64_t, 4> Chunks;
+      uint64_t TmpVal = Val;
+      while (TmpVal) {
+        Chunks.push_back(TmpVal & 0x1F);
+        TmpVal >>= 5;
       }
       if (Chunks.empty()) {
-        BuildMI(MBB, MI, MIMD, TII.get(ETCA::MOVZI16), Dst).addImm(0);
+        BuildMI(MBB, MI, MIMD, TII.get(getMovziOpc(Size)), Dst).addImm(0);
       } else {
-        // Build large constant using MOVZ/SLO chain.
-        // SLO16 uses a tied-def format ($dst = $src1), so each SLO16
-        // consumes one vreg and produces the next.  A COPY from the
-        // last chain vreg to Dst satisfies SSA for the G_CONSTANT
-        // result.  The PostInstructionSelect COPY eliminator will merge
-        // same-class COPYs, which is correct since the chain represents
-        // an in-place register transformation.
-        Register Tmp = MRI->createVirtualRegister(&ETCA::GPRRegClass);
-        BuildMI(MBB, MI, MIMD, TII.get(ETCA::MOVZI16), Tmp)
-            .addImm(Chunks.back());
+        const TargetRegisterClass *RC = getRCForType(DstTy);
+        unsigned AddOpc = getETCAAluOpcode(TargetOpcode::G_ADD, Size);
+        unsigned MovziOpc = getMovziOpc(Size);
+
+        // Emit first chunk (MSB of decomposed value).
+        Register Acc = MRI->createVirtualRegister(RC);
+        BuildMI(MBB, MI, MIMD, TII.get(MovziOpc), Acc).addImm(Chunks.back());
+        if (!constrainReg(Acc, DstTy, RBI, *MRI))
+          return false;
         Chunks.pop_back();
+
+        // Process remaining chunks.
         while (!Chunks.empty()) {
-          Register Next = MRI->createVirtualRegister(&ETCA::GPRRegClass);
-          BuildMI(MBB, MI, MIMD, TII.get(ETCA::SLO16), Next)
-              .addReg(Tmp)
-              .addImm(Chunks.back());
-          Tmp = Next;
+          uint64_t ChunkVal = Chunks.back();
           Chunks.pop_back();
+
+          // Shift Acc left by 5 bits.
+          if (Size == 16) {
+            // SLO16: shift-left-5 + OR-immediate in one instruction.
+            Register Next = MRI->createVirtualRegister(RC);
+            BuildMI(MBB, MI, MIMD, TII.get(ETCA::SLO16), Next)
+                .addReg(Acc)
+                .addImm(ChunkVal);
+            if (!constrainReg(Next, DstTy, RBI, *MRI))
+              return false;
+            Acc = Next;
+          } else {
+            // Shift left by 5 using ADD-self: acc = acc + acc (x5).
+            for (unsigned i = 0; i < 5; ++i) {
+              Register Next = MRI->createVirtualRegister(RC);
+              BuildMI(MBB, MI, MIMD, TII.get(AddOpc), Next)
+                  .addReg(Acc)
+                  .addReg(Acc);
+              if (!constrainReg(Next, DstTy, RBI, *MRI))
+                return false;
+              Acc = Next;
+            }
+            // Add ChunkVal using MOVZI + ADD.
+            if (ChunkVal != 0) {
+              Register ChunkReg = MRI->createVirtualRegister(RC);
+              BuildMI(MBB, MI, MIMD, TII.get(MovziOpc), ChunkReg)
+                  .addImm(ChunkVal);
+              if (!constrainReg(ChunkReg, DstTy, RBI, *MRI))
+                return false;
+              Register Next = MRI->createVirtualRegister(RC);
+              BuildMI(MBB, MI, MIMD, TII.get(AddOpc), Next)
+                  .addReg(Acc)
+                  .addReg(ChunkReg);
+              if (!constrainReg(Next, DstTy, RBI, *MRI))
+                return false;
+              Acc = Next;
+            }
+          }
         }
-        BuildMI(MBB, MI, MIMD, TII.get(TargetOpcode::COPY), Dst).addReg(Tmp);
+
+        // Copy chain result to Dst.
+        if (Dst != Acc)
+          BuildMI(MBB, MI, MIMD, TII.get(getMovzOpc(Size)), Dst).addReg(Acc);
       }
-    } else {
-      BuildMI(MBB, MI, MIMD, TII.get(getMovziOpc(Size)), Dst)
-          .addImm(Val & 0x1F);
     }
     if (!constrainReg(Dst, DstTy, RBI, *MRI))
       return false;

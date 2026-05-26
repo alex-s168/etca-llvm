@@ -369,35 +369,44 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   getActionDefinitionsBuilder(G_MERGE_VALUES).alwaysLegal();
   getActionDefinitionsBuilder(G_UNMERGE_VALUES).alwaysLegal();
 
-  // G_UADDE/G_USUBE: carries are s1
+  // G_UADDE/G_USUBE/G_UADDO/G_USUBO — custom expansion
+  //
+  // The instruction selector cannot select these carry-producing ops.
+  // Instead, expand them in the legalizer to simpler ops:
+  //   G_UADDO(a,b) → G_ADD(a,b), G_ICMP(ult, sum, a)
+  //   G_USUBO(a,b) → G_SUB(a,b), G_ICMP(ult, a, b)
+  //   G_UADDE(a,b,ci) → G_ADD(a,b), carry, then add ci, combine carries
+  //   G_USUBE(a,b,bi) → G_SUB(a,b), borrow, then sub bi, combine borrows
+  //
+  // These expanded ops (G_ADD, G_SUB, G_ICMP) are all handled by the
+  // instruction selector (or lowered further).
+  //
+  // Only the narrow (legal) types are marked custom.  Wider types go
+  // through the generic narrowScalar first, which produces narrow
+  // versions that our custom handler expands.
+
+  auto setupCarryOp = [&](auto &B) {
+    if (HasByte)
+      B.customFor({{s8, s1}});
+    B.customFor({{s16, s1}});
+    B.customFor(HasDW, {{s32, s1}});
+    B.customFor(HasQW, {{s64, s1}});
+  };
+
   auto &UaddeActions = getActionDefinitionsBuilder(G_UADDE);
-  if (HasByte)
-    UaddeActions.legalFor({{s8, s1}});
-  UaddeActions.legalFor({{s16, s1}});
-  UaddeActions.legalFor(HasDW, {{s32, s1}});
-  UaddeActions.legalFor(HasQW, {{s64, s1}});
+  setupCarryOp(UaddeActions);
   UaddeActions.clampScalar(0, MinLegal, MaxComp);
 
   auto &UsubeActions = getActionDefinitionsBuilder(G_USUBE);
-  if (HasByte)
-    UsubeActions.legalFor({{s8, s1}});
-  UsubeActions.legalFor({{s16, s1}});
-  UsubeActions.legalFor(HasDW, {{s32, s1}});
-  UsubeActions.legalFor(HasQW, {{s64, s1}});
+  setupCarryOp(UsubeActions);
   UsubeActions.clampScalar(0, MinLegal, MaxComp);
 
-  // G_UADDO/G_USUBO: carry-out is s1
   auto &UaddoActions = getActionDefinitionsBuilder(G_UADDO);
-  if (HasByte)
-    UaddoActions.legalFor({{s8, s1}});
-  UaddoActions.legalFor({{s16, s1}});
-  UaddoActions.legalFor(HasDW, {{s32, s1}});
-  UaddoActions.legalFor(HasQW, {{s64, s1}});
+  setupCarryOp(UaddoActions);
   UaddoActions.clampScalar(0, MinLegal, MaxComp);
 
   auto &UsuboActions = getActionDefinitionsBuilder(G_USUBO);
-  if (HasByte)
-    UsuboActions.legalFor({{s8, s1}});
+  setupCarryOp(UsuboActions);
   UsuboActions.legalFor({{s16, s1}});
   UsuboActions.legalFor(HasDW, {{s32, s1}});
   UsuboActions.legalFor(HasQW, {{s64, s1}});
@@ -428,6 +437,81 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   getActionDefinitionsBuilder({G_SMIN, G_SMAX, G_UMIN, G_UMAX}).lower();
 
   //===----------------------------------------------------------------===//
+  // Absolute value and absolute difference — lowered via generic helper
+  //
+  // G_ABS, G_ABDS, G_ABDU: lowered via the generic LegalizerHelper which
+  // decomposes into G_ADD, G_SUB, G_ICMP, G_SELECT, G_ASHR, G_XOR,
+  // G_CONSTANT — all of which are already handled.
+  //
+  // These use plain .lower() — no computeTypes() call before, because
+  // .legalFor() would conflict with .lower() on the same type set.
+  // The widenScalarToNextPow2 + clampScalar ensure only valid types are
+  // lowered for each subtarget configuration.
+  //===----------------------------------------------------------------===//
+
+  auto &AbsActions = getActionDefinitionsBuilder(G_ABS);
+  AbsActions.lower();
+  AbsActions.widenScalarToNextPow2(0, MinLegal.getSizeInBits());
+  AbsActions.clampScalar(0, MinLegal, MaxComp);
+
+  auto &AbdsActions = getActionDefinitionsBuilder({G_ABDS, G_ABDU});
+  AbdsActions.lower();
+  AbdsActions.widenScalarToNextPow2(0, MinLegal.getSizeInBits());
+  AbdsActions.clampScalar(0, MinLegal, MaxComp);
+
+  //===----------------------------------------------------------------===//
+  // Saturating arithmetic — custom lowering (MinMax-style)
+  //
+  // All four sat ops (G_UADDSAT, G_USUBSAT, G_SADDSAT, G_SSUBSAT) use
+  // custom lowering that directly emits the MinMax expansion.
+  //
+  // The generic LegalizerHelper's .lower() falls through to an
+  // AddoSubo strategy that produces G_UADDO/G_USUBO/G_SADDO/G_SSUBO.
+  // Since ETCA has no hardware carry/overflow detection, the instruction
+  // selector cannot select these overflow ops.  By implementing the
+  // MinMax expansion directly in custom lowering, we avoid producing
+  // unselectable G_UADDO/G_SADDO nodes.
+  //
+  // Expansions:
+  //   uadd.sat(a, b) → a + umin(~a, b)
+  //   usub.sat(a, b) → a - umin(a, b)
+  //   sadd.sat(a, b) → a + smin(smax(lo, b), hi)
+  //                     lo = 0x8000... - smin(a, 0)
+  //                     hi = 0x7fff... - smax(a, 0)
+  //   ssub.sat(a, b) → a - smin(smax(lo, b), hi)
+  //                     lo = smax(a, -1) - 0x7fff...
+  //                     hi = smin(a, -1) - 0x8000...
+  //
+  // G_SMIN, G_SMAX, G_UMIN, G_UMAX are lowered to G_ICMP+G_SELECT by
+  // their own rules, so the expansion is fully decomposed into legal ops.
+  //===----------------------------------------------------------------===//
+
+  auto isLegalType = [=](const LegalityQuery &Q) -> bool {
+    unsigned Size = Q.Types[0].getSizeInBits();
+    return Size >= MinLegal.getSizeInBits() && Size <= MaxComp.getSizeInBits();
+  };
+
+  auto &UAddSatActions = getActionDefinitionsBuilder(G_UADDSAT);
+  UAddSatActions.customIf(isLegalType);
+  UAddSatActions.widenScalarToNextPow2(0, MinLegal.getSizeInBits());
+  UAddSatActions.clampScalar(0, MinLegal, MaxComp);
+
+  auto &USubSatActions = getActionDefinitionsBuilder(G_USUBSAT);
+  USubSatActions.customIf(isLegalType);
+  USubSatActions.widenScalarToNextPow2(0, MinLegal.getSizeInBits());
+  USubSatActions.clampScalar(0, MinLegal, MaxComp);
+
+  auto &SAddSatActions = getActionDefinitionsBuilder(G_SADDSAT);
+  SAddSatActions.customIf(isLegalType);
+  SAddSatActions.widenScalarToNextPow2(0, MinLegal.getSizeInBits());
+  SAddSatActions.clampScalar(0, MinLegal, MaxComp);
+
+  auto &SSubSatActions = getActionDefinitionsBuilder(G_SSUBSAT);
+  SSubSatActions.customIf(isLegalType);
+  SSubSatActions.widenScalarToNextPow2(0, MinLegal.getSizeInBits());
+  SSubSatActions.clampScalar(0, MinLegal, MaxComp);
+
+  //===----------------------------------------------------------------===//
   // Mark unhandled ops as unsupported (will cause GISel abort)
   //===----------------------------------------------------------------===//
 
@@ -450,6 +534,22 @@ bool ETCALegalizerInfo::legalizeCustom(
     return legalizeSubMinLegalLoad(MI, MIRBuilder);
   case TargetOpcode::G_STORE:
     return legalizeSubMinLegalStore(MI, MIRBuilder);
+  case TargetOpcode::G_UADDSAT:
+    return legalizeUAddSat(MI, MIRBuilder);
+  case TargetOpcode::G_USUBSAT:
+    return legalizeUSubSat(MI, MIRBuilder);
+  case TargetOpcode::G_SADDSAT:
+    return legalizeSAddSat(MI, MIRBuilder);
+  case TargetOpcode::G_SSUBSAT:
+    return legalizeSSubSat(MI, MIRBuilder);
+  case TargetOpcode::G_UADDO:
+    return legalizeUAddo(MI, MIRBuilder);
+  case TargetOpcode::G_USUBO:
+    return legalizeUSubo(MI, MIRBuilder);
+  case TargetOpcode::G_UADDE:
+    return legalizeUAdde(MI, MIRBuilder);
+  case TargetOpcode::G_USUBE:
+    return legalizeUSube(MI, MIRBuilder);
   }
 }
 
@@ -569,6 +669,252 @@ bool ETCALegalizerInfo::legalizeBRJT(MachineInstr &MI,
 
   // Indirect branch to the target address.
   MIRBuilder.buildBrIndirect(TargetReg);
+
+  MI.eraseFromParent();
+  return true;
+}
+
+bool ETCALegalizerInfo::legalizeUAddSat(MachineInstr &MI,
+                                        MachineIRBuilder &MIRBuilder) const {
+  // Expand G_UADDSAT(a, b) → a + umin(~a, b)
+  //   ~a = xor a, -1  (bitwise NOT)
+  //   umin(~a, b) → (via lowering) icmp + select
+  //   result = a + umin(...)
+  //
+  // This avoids G_UADDO which the instruction selector cannot select.
+  MachineRegisterInfo &MRI = *MIRBuilder.getMRI();
+  Register Dst = MI.getOperand(0).getReg();
+  Register LHS = MI.getOperand(1).getReg();
+  Register RHS = MI.getOperand(2).getReg();
+  LLT Ty = MRI.getType(Dst);
+
+  auto NegOne = MIRBuilder.buildConstant(Ty, -1);
+  auto NotA = MIRBuilder.buildXor(Ty, LHS, NegOne);
+  auto Min = MIRBuilder.buildUMin(Ty, NotA, RHS);
+  MIRBuilder.buildAdd(Dst, LHS, Min);
+
+  MI.eraseFromParent();
+  return true;
+}
+
+bool ETCALegalizerInfo::legalizeUSubSat(MachineInstr &MI,
+                                        MachineIRBuilder &MIRBuilder) const {
+  // Expand G_USUBSAT(a, b) → a - umin(a, b)
+  //   umin(a, b) → (via lowering) icmp + select
+  //   result = a - umin(...)
+  //
+  // This avoids G_USUBO which the instruction selector cannot select.
+  MachineRegisterInfo &MRI = *MIRBuilder.getMRI();
+  Register Dst = MI.getOperand(0).getReg();
+  Register LHS = MI.getOperand(1).getReg();
+  Register RHS = MI.getOperand(2).getReg();
+  LLT Ty = MRI.getType(Dst);
+
+  auto Min = MIRBuilder.buildUMin(Ty, LHS, RHS);
+  MIRBuilder.buildSub(Dst, LHS, Min);
+
+  MI.eraseFromParent();
+  return true;
+}
+
+bool ETCALegalizerInfo::legalizeSAddSat(MachineInstr &MI,
+                                        MachineIRBuilder &MIRBuilder) const {
+  // Expand G_SADDSAT(a, b) using MinMax strategy:
+  //   hi = 0x7fff... - smax(a, 0)
+  //   lo = 0x8000... - smin(a, 0)
+  //   result = a + smin(smax(lo, b), hi)
+  //
+  // This avoids G_SADDO/G_SSUBO which ETCA doesn't support.
+  // The G_SMIN/G_SMAX nodes produced here will be lowered to
+  // G_ICMP+G_SELECT by the legalizer in a subsequent pass.
+  MachineRegisterInfo &MRI = *MIRBuilder.getMRI();
+  Register Dst = MI.getOperand(0).getReg();
+  Register LHS = MI.getOperand(1).getReg();
+  Register RHS = MI.getOperand(2).getReg();
+  LLT Ty = MRI.getType(Dst);
+  unsigned NumBits = Ty.getScalarSizeInBits();
+
+  auto MaxVal = MIRBuilder.buildConstant(Ty, APInt::getSignedMaxValue(NumBits));
+  auto MinVal = MIRBuilder.buildConstant(Ty, APInt::getSignedMinValue(NumBits));
+  auto Zero = MIRBuilder.buildConstant(Ty, 0);
+
+  // hi = 0x7fff... - smax(a, 0)
+  auto SMaxA0 = MIRBuilder.buildSMax(Ty, LHS, Zero);
+  auto Hi = MIRBuilder.buildSub(Ty, MaxVal, SMaxA0);
+
+  // lo = 0x8000... - smin(a, 0)
+  auto SMinA0 = MIRBuilder.buildSMin(Ty, LHS, Zero);
+  auto Lo = MIRBuilder.buildSub(Ty, MinVal, SMinA0);
+
+  // RHSClamped = smin(smax(lo, b), hi)
+  auto SMaxLoRHS = MIRBuilder.buildSMax(Ty, Lo, RHS);
+  auto RHSClamped = MIRBuilder.buildSMin(Ty, SMaxLoRHS, Hi);
+
+  // result = a + RHSClamped
+  MIRBuilder.buildAdd(Dst, LHS, RHSClamped);
+
+  MI.eraseFromParent();
+  return true;
+}
+
+bool ETCALegalizerInfo::legalizeSSubSat(MachineInstr &MI,
+                                        MachineIRBuilder &MIRBuilder) const {
+  // Expand G_SSUBSAT(a, b) using MinMax strategy:
+  //   lo = smax(a, -1) - 0x7fff...
+  //   hi = smin(a, -1) - 0x8000...
+  //   result = a - smin(smax(lo, b), hi)
+  //
+  // This avoids G_SADDO/G_SSUBO which ETCA doesn't support.
+  MachineRegisterInfo &MRI = *MIRBuilder.getMRI();
+  Register Dst = MI.getOperand(0).getReg();
+  Register LHS = MI.getOperand(1).getReg();
+  Register RHS = MI.getOperand(2).getReg();
+  LLT Ty = MRI.getType(Dst);
+  unsigned NumBits = Ty.getScalarSizeInBits();
+
+  auto MaxVal = MIRBuilder.buildConstant(Ty, APInt::getSignedMaxValue(NumBits));
+  auto MinVal = MIRBuilder.buildConstant(Ty, APInt::getSignedMinValue(NumBits));
+  auto NegOne = MIRBuilder.buildConstant(Ty, -1);
+
+  // lo = smax(a, -1) - 0x7fff...
+  auto SMaxAN1 = MIRBuilder.buildSMax(Ty, LHS, NegOne);
+  auto Lo = MIRBuilder.buildSub(Ty, SMaxAN1, MaxVal);
+
+  // hi = smin(a, -1) - 0x8000...
+  auto SMinAN1 = MIRBuilder.buildSMin(Ty, LHS, NegOne);
+  auto Hi = MIRBuilder.buildSub(Ty, SMinAN1, MinVal);
+
+  // RHSClamped = smin(smax(lo, b), hi)
+  auto SMaxLoRHS = MIRBuilder.buildSMax(Ty, Lo, RHS);
+  auto RHSClamped = MIRBuilder.buildSMin(Ty, SMaxLoRHS, Hi);
+
+  // result = a - RHSClamped
+  MIRBuilder.buildSub(Dst, LHS, RHSClamped);
+
+  MI.eraseFromParent();
+  return true;
+}
+
+bool ETCALegalizerInfo::legalizeUAddo(MachineInstr &MI,
+                                      MachineIRBuilder &MIRBuilder) const {
+  // Expand G_UADDO(a, b) → {sum, carry}:
+  //   sum = ADD a, b
+  //   carry = ICMP_ULT(sum, a)
+  //
+  // G_ICMP result type is s16 on ETCA.  Since G_UADDO's carry is s1,
+  // we emit the ICMP with an s16 temporary and truncate to s1.
+  MachineRegisterInfo &MRI = *MIRBuilder.getMRI();
+  Register DstSum = MI.getOperand(0).getReg();
+  Register DstCarry = MI.getOperand(1).getReg();
+  Register Src1 = MI.getOperand(2).getReg();
+  Register Src2 = MI.getOperand(3).getReg();
+
+  // sum = a + b
+  MIRBuilder.buildAdd(DstSum, Src1, Src2);
+
+  // carry = (sum < a): ICMP produces s16, truncate to s1
+  auto Cmp =
+      MIRBuilder.buildICmp(CmpInst::ICMP_ULT, LLT::scalar(16), DstSum, Src1);
+  MIRBuilder.buildTrunc(DstCarry, Cmp);
+
+  MI.eraseFromParent();
+  return true;
+}
+
+bool ETCALegalizerInfo::legalizeUSubo(MachineInstr &MI,
+                                      MachineIRBuilder &MIRBuilder) const {
+  // Expand G_USUBO(a, b) → {diff, borrow}:
+  //   diff = SUB a, b
+  //   borrow = ICMP_ULT(a, b)
+  MachineRegisterInfo &MRI = *MIRBuilder.getMRI();
+  Register DstDiff = MI.getOperand(0).getReg();
+  Register DstBorrow = MI.getOperand(1).getReg();
+  Register Src1 = MI.getOperand(2).getReg();
+  Register Src2 = MI.getOperand(3).getReg();
+
+  // diff = a - b
+  MIRBuilder.buildSub(DstDiff, Src1, Src2);
+
+  // borrow = (a < b): ICMP produces s16, truncate to s1
+  auto Cmp =
+      MIRBuilder.buildICmp(CmpInst::ICMP_ULT, LLT::scalar(16), Src1, Src2);
+  MIRBuilder.buildTrunc(DstBorrow, Cmp);
+
+  MI.eraseFromParent();
+  return true;
+}
+
+bool ETCALegalizerInfo::legalizeUAdde(MachineInstr &MI,
+                                      MachineIRBuilder &MIRBuilder) const {
+  // Expand G_UADDE(a, b, carry_in) → {sum, carry}:
+  //   sum1 = ADD a, b
+  //   sum = ADD sum1, ZEXT(carry_in)
+  //   carry = ICMP_ULT(sum, sum1) | ICMP_ULT(sum1, a)
+  //
+  // ICMP produces s16 on ETCA; carry is s1.  Truncate after OR.
+  MachineRegisterInfo &MRI = *MIRBuilder.getMRI();
+  Register DstSum = MI.getOperand(0).getReg();
+  Register DstCarry = MI.getOperand(1).getReg();
+  Register Src1 = MI.getOperand(2).getReg();
+  Register Src2 = MI.getOperand(3).getReg();
+  Register CarryIn = MI.getOperand(4).getReg();
+  LLT Ty = MRI.getType(DstSum);
+
+  // sum1 = a + b — use buildAdd which creates a properly-typed vreg
+  auto Sum1MI = MIRBuilder.buildAdd(Ty, Src1, Src2);
+
+  // carry1 = (sum1 < a) — as s16
+  auto Cmp1 =
+      MIRBuilder.buildICmp(CmpInst::ICMP_ULT, LLT::scalar(16), Sum1MI, Src1);
+
+  // sum = sum1 + zext(carry_in)
+  auto CarryInExt = MIRBuilder.buildZExt(Ty, CarryIn);
+  MIRBuilder.buildAdd(DstSum, Sum1MI, CarryInExt);
+
+  // carry2 = (sum < sum1) — as s16
+  auto Cmp2 =
+      MIRBuilder.buildICmp(CmpInst::ICMP_ULT, LLT::scalar(16), DstSum, Sum1MI);
+
+  // carry = (carry1 | carry2), truncated to s1
+  auto Combined = MIRBuilder.buildOr(LLT::scalar(16), Cmp1, Cmp2);
+  MIRBuilder.buildTrunc(DstCarry, Combined);
+
+  MI.eraseFromParent();
+  return true;
+}
+
+bool ETCALegalizerInfo::legalizeUSube(MachineInstr &MI,
+                                      MachineIRBuilder &MIRBuilder) const {
+  // Expand G_USUBE(a, b, borrow_in) → {diff, borrow}:
+  //   diff1 = SUB a, b
+  //   diff = SUB diff1, ZEXT(borrow_in)
+  //   borrow = ICMP_ULT(a, b) | ICMP_ULT(diff1, ZEXT(borrow_in))
+  MachineRegisterInfo &MRI = *MIRBuilder.getMRI();
+  Register DstDiff = MI.getOperand(0).getReg();
+  Register DstBorrow = MI.getOperand(1).getReg();
+  Register Src1 = MI.getOperand(2).getReg();
+  Register Src2 = MI.getOperand(3).getReg();
+  Register BorrowIn = MI.getOperand(4).getReg();
+  LLT Ty = MRI.getType(DstDiff);
+
+  // diff1 = a - b
+  auto Diff1MI = MIRBuilder.buildSub(Ty, Src1, Src2);
+
+  // borrow1 = (a < b)
+  auto Cmp1 =
+      MIRBuilder.buildICmp(CmpInst::ICMP_ULT, LLT::scalar(16), Src1, Src2);
+
+  // diff = diff1 - zext(borrow_in)
+  auto BorrowInExt = MIRBuilder.buildZExt(Ty, BorrowIn);
+  MIRBuilder.buildSub(DstDiff, Diff1MI, BorrowInExt);
+
+  // borrow2 = (diff1 < zext(borrow_in))
+  auto Cmp2 = MIRBuilder.buildICmp(CmpInst::ICMP_ULT, LLT::scalar(16), Diff1MI,
+                                   BorrowInExt);
+
+  // borrow = (borrow1 | borrow2), truncated to s1
+  auto Combined = MIRBuilder.buildOr(LLT::scalar(16), Cmp1, Cmp2);
+  MIRBuilder.buildTrunc(DstBorrow, Combined);
 
   MI.eraseFromParent();
   return true;
