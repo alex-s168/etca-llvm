@@ -422,6 +422,27 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
   }
 
     //===----------------------------------------------------------------===//
+    // G_FREEZE: pass-through — emit MOVZ (copy src to dst)
+    //===----------------------------------------------------------------===//
+    //
+    // G_FREEZE marks a value as non-poison.  At the MIR level it's a
+    // simple register copy.  The operand format is: [dst, src].
+    // MOVZ is non-tied, format: [dst, src]
+    //===----------------------------------------------------------------===//
+
+  case TargetOpcode::G_FREEZE: {
+    Register Dst = MI.getOperand(0).getReg();
+    Register Src = MI.getOperand(1).getReg();
+    LLT DstTy = MRI->getType(Dst);
+    unsigned Size = DstTy.getSizeInBits();
+    BuildMI(MBB, MI, MIMD, TII.get(getMovzOpc(Size)), Dst).addReg(Src);
+    if (!constrainReg(Dst, DstTy, RBI, *MRI))
+      return false;
+    MI.eraseFromParent();
+    return true;
+  }
+
+    //===----------------------------------------------------------------===//
     // G_INTTOPTR / G_PTRTOINT — pointer-integer conversions
     //
     // These are register-class changes at the MIR level.  G_INTTOPTR converts

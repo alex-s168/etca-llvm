@@ -283,6 +283,12 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   // it like G_ZEXT (MOVZ at source width + COPY bridge).
   getActionDefinitionsBuilder(G_ANYEXT).alwaysLegal();
 
+  // G_FREEZE is a pass-through that marks a value as non-poison.
+  // It behaves like a COPY at the MIR level and the instruction
+  // selector emits a MOVZ.  Make it always-legal for all scalar
+  // and pointer types.
+  getActionDefinitionsBuilder(G_FREEZE).alwaysLegal();
+
   //===----------------------------------------------------------------===//
   // PHI — TIER 1 (data-flow)
   //===----------------------------------------------------------------===//
