@@ -15,6 +15,7 @@
 
 #include "ETCASubtarget.h"
 #include "llvm/CodeGen/CodeGenTargetMachineImpl.h"
+#include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include <optional>
 
@@ -44,6 +45,10 @@ public:
   }
 
   TargetPassConfig *createPassConfig(PassManagerBase &PM) override;
+
+  MachineFunctionInfo *
+  createMachineFunctionInfo(BumpPtrAllocator &Allocator, const Function &F,
+                            const TargetSubtargetInfo *STI) const override;
 };
 
 } // namespace llvm

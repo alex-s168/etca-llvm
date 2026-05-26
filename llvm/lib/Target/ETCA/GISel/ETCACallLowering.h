@@ -18,6 +18,8 @@
 namespace llvm {
 
 class CallLoweringInfo;
+class CCState;
+class MachineIRBuilder;
 class TargetLowering;
 
 class ETCACallLowering : public CallLowering {
@@ -34,6 +36,12 @@ public:
 
   bool lowerCall(MachineIRBuilder &MIRBuilder,
                  CallLoweringInfo &Info) const override;
+
+private:
+  /// Save registers that could hold varargs to the stack and record the
+  /// frame index for G_VASTART.
+  void saveVarArgRegisters(MachineIRBuilder &MIRBuilder,
+                           unsigned NumNamedArgRegs) const;
 };
 
 } // namespace llvm

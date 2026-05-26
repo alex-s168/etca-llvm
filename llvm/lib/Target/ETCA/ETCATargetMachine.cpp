@@ -17,6 +17,7 @@
 #include "ETCATargetMachine.h"
 
 #include "ETCA.h"
+#include "ETCAMachineFunctionInfo.h"
 #include "TargetInfo/ETCATargetInfo.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/GlobalISel/IRTranslator.h"
@@ -152,4 +153,11 @@ public:
 
 TargetPassConfig *ETCATargetMachine::createPassConfig(PassManagerBase &PM) {
   return new ETCAPassConfig(*this, PM);
+}
+
+MachineFunctionInfo *ETCATargetMachine::createMachineFunctionInfo(
+    BumpPtrAllocator &Allocator, const Function &F,
+    const TargetSubtargetInfo *STI) const {
+  return ETCAMachineFunctionInfo::create<ETCAMachineFunctionInfo>(
+      Allocator, F, static_cast<const ETCASubtarget *>(STI));
 }

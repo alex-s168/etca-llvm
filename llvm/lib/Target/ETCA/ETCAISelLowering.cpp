@@ -63,6 +63,13 @@ ETCATargetLowering::ETCATargetLowering(const TargetMachine &TM,
   // NOTE: Operation legality (setOperationAction/setLoadExtAction) is NOT set
   // up here — ETCA uses GlobalISel exclusively, where ETCALegalizerInfo in
   // GISel/ETCALegalizerInfo.cpp handles all legalization decisions.
+
+  // The minimum stack argument alignment equals the register width in bytes.
+  // This prevents the legalizer's lowerVAArg from generating G_PTRMASK
+  // instructions (which ETCA cannot select) for types with alignment at or
+  // below the natural stack alignment.
+  unsigned RegBytes = WS / 8;
+  setMinStackArgumentAlignment(Align(RegBytes));
 }
 
 bool ETCATargetLowering::isLegalAddressingMode(const DataLayout &DL,

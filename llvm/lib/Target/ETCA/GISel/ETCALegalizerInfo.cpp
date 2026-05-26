@@ -48,6 +48,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "ETCALegalizerInfo.h"
+#include "ETCAMachineFunctionInfo.h"
 #include "ETCASubtarget.h"
 #include "llvm/CodeGen/GlobalISel/LegalizerHelper.h"
 #include "llvm/CodeGen/GlobalISel/MachineIRBuilder.h"
@@ -358,6 +359,27 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   BrjtActions.customFor(HasQW, {{p0, s64}});
   BrjtActions.clampScalar(1, MinLegal, MaxComp);
 
+  //===----------------------------------------------------------------===//
+  // Variable arguments — G_VAARG and G_VASTART
+  //
+  // ETCA uses CharPtrBuiltinVaList (va_list = char*).  The va_list is
+  // a simple pointer to the next argument slot.
+  //
+  // G_VAARG is lowered to a generic sequence (load ap, load value,
+  // advance ap, store ap back) by the generic LegalizerHelper::lowerVAArg.
+  // The destination type can be any scalar or pointer type that has a
+  // legal type for the target (p0 always legal, s16/s32/s64 depending
+  // on subtarget).
+  //
+  // G_VASTART is custom-legaled: it stores the address of the varargs
+  // save area (a frame index recorded by the call lowering) into the
+  // va_list pointer location.
+  //===----------------------------------------------------------------===//
+
+  getActionDefinitionsBuilder(G_VAARG).lower();
+
+  getActionDefinitionsBuilder(G_VASTART).customFor({p0});
+
   getActionDefinitionsBuilder({G_MEMCPY, G_MEMMOVE, G_MEMSET}).libcall();
   getActionDefinitionsBuilder(G_MEMCPY_INLINE).lower();
 
@@ -556,6 +578,8 @@ bool ETCALegalizerInfo::legalizeCustom(
     return legalizeUAdde(MI, MIRBuilder);
   case TargetOpcode::G_USUBE:
     return legalizeUSube(MI, MIRBuilder);
+  case TargetOpcode::G_VASTART:
+    return legalizeVAStart(MI, MIRBuilder);
   }
 }
 
@@ -921,6 +945,41 @@ bool ETCALegalizerInfo::legalizeUSube(MachineInstr &MI,
   // borrow = (borrow1 | borrow2), truncated to s1
   auto Combined = MIRBuilder.buildOr(LLT::scalar(16), Cmp1, Cmp2);
   MIRBuilder.buildTrunc(DstBorrow, Combined);
+
+  MI.eraseFromParent();
+  return true;
+}
+
+bool ETCALegalizerInfo::legalizeVAStart(MachineInstr &MI,
+                                        MachineIRBuilder &MIRBuilder) const {
+  // G_VASTART stores the address of the varargs save area (a frame index
+  // recorded by the call lowering) into the va_list pointer location.
+  //
+  // Operands:
+  //   %dst(p0) = G_VASTART %list_ptr(p0)
+  //
+  // The va_list is a char* (pointer to the next argument).  va_start
+  // initializes it:  *list_ptr = &varargs_save_area
+  //
+  // The varargs save area was created by saveVarArgRegisters() in the
+  // call lowering.  Its frame index is stored in ETCAMachineFunctionInfo.
+  assert(MI.getOpcode() == TargetOpcode::G_VASTART &&
+         "Expected G_VASTART instruction");
+
+  MachineFunction &MF = *MI.getParent()->getParent();
+  auto *FuncInfo = MF.getInfo<ETCAMachineFunctionInfo>();
+  int FI = FuncInfo->getVarArgsFrameIndex();
+
+  // Build the address of the varargs save area (frame index -> pointer).
+  Register DstReg = MI.getOperand(0).getReg();
+  LLT AddrTy = MIRBuilder.getMRI()->getType(DstReg);
+  auto FINAddr = MIRBuilder.buildFrameIndex(AddrTy, FI);
+
+  // Store the address into the va_list pointer (*list_ptr = &save_area).
+  assert(MI.hasOneMemOperand() &&
+         "G_VASTART must have exactly one memory operand");
+  MIRBuilder.buildStore(FINAddr, MI.getOperand(0).getReg(),
+                        *MI.memoperands()[0]);
 
   MI.eraseFromParent();
   return true;

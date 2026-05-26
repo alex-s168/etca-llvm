@@ -68,6 +68,10 @@ private:
 
   /// Expand G_USUBE to G_SUB chain + G_ICMP + G_OR.
   bool legalizeUSube(MachineInstr &MI, MachineIRBuilder &MIRBuilder) const;
+
+  /// Legalize G_VASTART: store the address of the varargs save area
+  /// into the va_list pointer.
+  bool legalizeVAStart(MachineInstr &MI, MachineIRBuilder &MIRBuilder) const;
 };
 
 } // namespace llvm

@@ -29,6 +29,7 @@ add_llvm_target(ETCACodeGen
   PARTIAL_SOURCES_INTENDED
   ETCATargetMachine.cpp
   ETCASubtarget.cpp
+  ETCAMachineFunctionInfo.h
   ETCAInstrInfo.cpp
   ETCARegisterInfo.cpp
   ETCAISelLowering.cpp

@@ -18,6 +18,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "ETCACallLowering.h"
+#include "ETCAMachineFunctionInfo.h"
 #include "ETCARegisterInfo.h"
 #include "ETCASubtarget.h"
 
@@ -46,12 +47,34 @@ using namespace ETCA;
 ETCACallLowering::ETCACallLowering(const TargetLowering *TLI)
     : CallLowering(TLI) {}
 
-// Argument registers: first 4 in r0-r3
+// Argument registers: base set (r0-r3) and REX-extended set (r0-r4, r7-r12)
+// Note: r5=bp, r6=sp are reserved and not used for argument passing.
 static const MCPhysReg ArgRegs16[] = {ETCA::R0, ETCA::R1, ETCA::R2, ETCA::R3};
 static const MCPhysReg ArgRegs32[] = {ETCA::D0, ETCA::D1, ETCA::D2, ETCA::D3};
 static const MCPhysReg ArgRegs64[] = {ETCA::Q0, ETCA::Q1, ETCA::Q2, ETCA::Q3};
 
-static const MCPhysReg *getArgRegs(unsigned WordSize) {
+// REX-extended argument registers.
+static const MCPhysReg ArgRegs16_REX[] = {
+    ETCA::R0, ETCA::R1, ETCA::R2,  ETCA::R3,  ETCA::R4, ETCA::R7,
+    ETCA::R8, ETCA::R9, ETCA::R10, ETCA::R11, ETCA::R12};
+static const MCPhysReg ArgRegs32_REX[] = {
+    ETCA::D0, ETCA::D1, ETCA::D2,  ETCA::D3,  ETCA::D4, ETCA::D7,
+    ETCA::D8, ETCA::D9, ETCA::D10, ETCA::D11, ETCA::D12};
+static const MCPhysReg ArgRegs64_REX[] = {
+    ETCA::Q0, ETCA::Q1, ETCA::Q2,  ETCA::Q3,  ETCA::Q4, ETCA::Q7,
+    ETCA::Q8, ETCA::Q9, ETCA::Q10, ETCA::Q11, ETCA::Q12};
+
+static ArrayRef<MCPhysReg> getArgRegs(unsigned WordSize, bool HasREX) {
+  if (HasREX) {
+    switch (WordSize) {
+    case 64:
+      return ArgRegs64_REX;
+    case 32:
+      return ArgRegs32_REX;
+    default:
+      return ArgRegs16_REX;
+    }
+  }
   switch (WordSize) {
   case 64:
     return ArgRegs64;
@@ -62,6 +85,7 @@ static const MCPhysReg *getArgRegs(unsigned WordSize) {
   }
 }
 
+/// Number of argument registers in the base (4) and REX (11) sets.
 static MCRegister getRetReg(unsigned WordSize) {
   switch (WordSize) {
   case 64:
@@ -125,7 +149,8 @@ bool ETCACallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
   const auto &ST = MF.getSubtarget<ETCASubtarget>();
   unsigned RegWidth = ST.getRegWidth();
   unsigned RegBytes = RegWidth / 8;
-  const MCPhysReg *ArgRegs = getArgRegs(RegWidth);
+  auto ArgRegs = getArgRegs(RegWidth, ST.hasREX());
+  unsigned NumArgRegs = ArgRegs.size();
 
   // R7 is the link register (return address).  Mark it live-in on the
   // entry block so the register allocator knows it's defined there.
@@ -148,9 +173,9 @@ bool ETCACallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
 
   unsigned Idx = 0;
   // Track the current stack offset for incoming stack arguments.
-  // The first stack argument (Arg 5) begins at offset 0 from the
-  // initial SP (before the prologue).  Each subsequent argument
-  // is placed at the next naturally-aligned offset.
+  // The first stack argument (Arg N+1 where N = NumArgRegs) begins at
+  // offset 0 from the initial SP (before the prologue).  Each subsequent
+  // argument is placed at the next naturally-aligned offset.
   unsigned StackOffset = 0;
   for (auto &Arg : F.args()) {
     if (Idx >= VRegs.size())
@@ -161,7 +186,7 @@ bool ETCACallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
     }
     Register VReg = VRegs[Idx][0];
 
-    if (Idx < 4) {
+    if (Idx < NumArgRegs) {
       // Register argument: add live-in and copy to vreg.
       // If the vreg type is narrower than the physical register (e.g., s16
       // argument in D0, which is 32-bit), copy to a temp of the full width
@@ -204,6 +229,11 @@ bool ETCACallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
 
     ++Idx;
   }
+
+  // Save vararg registers if this is a variadic function.
+  if (F.isVarArg())
+    saveVarArgRegisters(MIRBuilder, Idx);
+
   return true;
 }
 
@@ -214,11 +244,12 @@ bool ETCACallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
   const auto &ST = MF.getSubtarget<ETCASubtarget>();
   unsigned RegWidth = ST.getRegWidth();
   unsigned RegBytes = RegWidth / 8;
-  const MCPhysReg *ArgRegs = getArgRegs(RegWidth);
+  auto ArgRegs = getArgRegs(RegWidth, ST.hasREX());
+  unsigned NumArgRegs = ArgRegs.size();
 
-  // --- Handle stack arguments (args 5+) ---
+  // --- Handle stack arguments (args beyond register count) ---
   size_t NumArgs = Info.OrigArgs.size();
-  size_t NumStackArgs = (NumArgs > 4) ? (NumArgs - 4) : 0;
+  size_t NumStackArgs = (NumArgs > NumArgRegs) ? (NumArgs - NumArgRegs) : 0;
   unsigned StackArgSize = NumStackArgs * RegBytes;
 
   // Ensure $r6 is live-in to this block so that ADJCALLSTACKDOWN's
@@ -232,7 +263,7 @@ bool ETCACallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
   auto CallSeqStart = MIRBuilder.buildInstr(ETCA::ADJCALLSTACKDOWN);
 
   // Store each excess argument at the correct stack offset.
-  for (size_t i = 4; i < NumArgs; ++i) {
+  for (size_t i = NumArgRegs; i < NumArgs; ++i) {
     Register ArgReg = Info.OrigArgs[i].Regs[0];
     if (!ArgReg)
       continue;
@@ -248,7 +279,7 @@ bool ETCACallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
     else
       StoreOpc = ETCA::STORE16;
 
-    unsigned Offset = (i - 4) * RegBytes;
+    unsigned Offset = (i - NumArgRegs) * RegBytes;
 
     if (Offset == 0) {
       auto Store = MIRBuilder.buildInstr(StoreOpc);
@@ -303,7 +334,7 @@ bool ETCACallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
   const auto &TRI = *MF.getSubtarget().getRegisterInfo();
   CallInst.addRegMask(TRI.getCallPreservedMask(MF, Info.CallConv));
 
-  for (unsigned i = 0, e = std::min(NumArgs, size_t(4)); i < e; ++i) {
+  for (unsigned i = 0, e = std::min(NumArgs, size_t(NumArgRegs)); i < e; ++i) {
     Register ArgReg = Info.OrigArgs[i].Regs[0];
     if (ArgReg) {
       // If the argument is narrower than the register width, sign-extend
@@ -354,4 +385,72 @@ bool ETCACallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
   }
 
   return true;
+}
+
+void ETCACallLowering::saveVarArgRegisters(MachineIRBuilder &MIRBuilder,
+                                           unsigned NumNamedArgRegs) const {
+  MachineFunction &MF = MIRBuilder.getMF();
+  MachineRegisterInfo &MRI = MF.getRegInfo();
+  const auto &ST = MF.getSubtarget<ETCASubtarget>();
+  unsigned RegWidth = ST.getRegWidth();
+  unsigned RegBytes = RegWidth / 8;
+  auto ArgRegs = getArgRegs(RegWidth, ST.hasREX());
+  unsigned NumRegs = ArgRegs.size();
+
+  // Number of unallocated argument registers that could hold varargs.
+  unsigned NumFreeRegs =
+      (NumNamedArgRegs < NumRegs) ? (NumRegs - NumNamedArgRegs) : 0;
+  unsigned VarArgsSaveSize = NumFreeRegs * RegBytes;
+
+  // Create a stack object for the varargs save area.
+  // Use a regular (non-fixed) stack object so that PEI can handle it
+  // without issues.  Fixed stack objects at negative offsets can cause
+  // hangs in the prologue/epilogue insertion pass.
+  int FI;
+  if (NumFreeRegs == 0) {
+    // All varargs on the stack — use a small stack object as placeholder.
+    // G_VASTART will initialize the va_list pointer to the address of
+    // this object; the actual stack arguments start at the next slot.
+    FI = MF.getFrameInfo().CreateStackObject(RegBytes, Align(RegBytes), false);
+  } else {
+    // Create a stack object to hold the saved vararg registers.
+    FI = MF.getFrameInfo().CreateStackObject(VarArgsSaveSize, Align(RegBytes),
+                                             false);
+
+    const LLT sXLen = LLT::scalar(RegWidth);
+
+    // Copy each unallocated argument register to the save area on the stack.
+    for (unsigned I = NumNamedArgRegs; I < NumRegs; ++I) {
+      MIRBuilder.getMBB().addLiveIn(ArgRegs[I]);
+
+      // Copy the physreg to a virtual register of the full register width.
+      Register VReg = MRI.createGenericVirtualRegister(sXLen);
+      MIRBuilder.buildCopy(VReg, Register(ArgRegs[I]));
+
+      // Compute the address of this register's slot in the save area.
+      unsigned Offset = (I - NumNamedArgRegs) * RegBytes;
+      LLT AddrTy = LLT::pointer(0, ST.getPtrSize());
+      Register FIAddr = MRI.createGenericVirtualRegister(AddrTy);
+      MIRBuilder.buildFrameIndex(FIAddr, FI);
+
+      if (Offset > 0) {
+        // Add the offset to the frame index base.
+        Register OffsetReg = MRI.createGenericVirtualRegister(sXLen);
+        MIRBuilder.buildConstant(OffsetReg, Offset);
+        Register Addr = MRI.createGenericVirtualRegister(AddrTy);
+        MIRBuilder.buildPtrAdd(Addr, FIAddr, OffsetReg);
+        FIAddr = Addr;
+      }
+
+      auto MPO = MachinePointerInfo::getStack(MF, Offset);
+      auto MMO = MF.getMachineMemOperand(MPO, MachineMemOperand::MOStore, sXLen,
+                                         Align(RegBytes));
+      MIRBuilder.buildStore(VReg, FIAddr, *MMO);
+    }
+  }
+
+  // Record the frame index for G_VASTART legalization.  G_VASTART needs
+  // to store the address of this stack object into the va_list pointer
+  // so that va_arg can find the first vararg.
+  MF.getInfo<ETCAMachineFunctionInfo>()->setVarArgsFrameIndex(FI);
 }
