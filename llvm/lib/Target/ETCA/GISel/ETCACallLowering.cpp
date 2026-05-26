@@ -318,7 +318,32 @@ bool ETCACallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
     }
   }
 
-  // --- Build the call instruction ---
+  // --- Build the call instruction (short form, relaxed by MC layer) ---
+  //
+  // Emit the compact short CALL instruction (2 bytes, 12-bit signed
+  // displacement, ±4KB).  If the target is out of range, the MC
+  // assembler's branch relaxation automatically expands it to
+  // MOV_* chain + CALLR.  This matches what other LLVM targets do:
+  // emit the shortest form, relax in MC/linker when needed.
+  const auto &TRI = *MF.getSubtarget().getRegisterInfo();
+
+  // Copy arguments to physical registers.
+  for (unsigned i = 0, e = std::min(NumArgs, size_t(NumArgRegs)); i < e; ++i) {
+    Register ArgReg = Info.OrigArgs[i].Regs[0];
+    if (!ArgReg)
+      continue;
+    unsigned ArgSize = MRI.getType(ArgReg).getSizeInBits();
+    if (ArgSize < RegWidth && MRI.getType(ArgReg).isScalar()) {
+      Register WideArg =
+          MRI.createGenericVirtualRegister(LLT::scalar(RegWidth));
+      MIRBuilder.buildSExt(WideArg, ArgReg);
+      MIRBuilder.buildCopy(Register(ArgRegs[i]), WideArg);
+    } else {
+      MIRBuilder.buildCopy(Register(ArgRegs[i]), ArgReg);
+    }
+  }
+
+  // Build CALL_Pseudo with callee, regmask, implicit args/defs.
   MachineInstrBuilder CallInst =
       MIRBuilder.buildInstrNoInsert(ETCA::CALL_Pseudo);
 
@@ -329,28 +354,10 @@ bool ETCACallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
   else if (Info.Callee.isSymbol())
     CallInst.addExternalSymbol(Info.Callee.getSymbolName());
 
-  // Add the call-preserved register mask so the register allocator
-  // knows which registers are preserved by this call.
-  const auto &TRI = *MF.getSubtarget().getRegisterInfo();
   CallInst.addRegMask(TRI.getCallPreservedMask(MF, Info.CallConv));
 
   for (unsigned i = 0, e = std::min(NumArgs, size_t(NumArgRegs)); i < e; ++i) {
-    Register ArgReg = Info.OrigArgs[i].Regs[0];
-    if (ArgReg) {
-      // If the argument is narrower than the register width, sign-extend
-      // it to the full register width before copying to the physreg.
-      // Only scalar types are sign-extended; pointer types are copied directly.
-      unsigned ArgSize = MRI.getType(ArgReg).getSizeInBits();
-      if (ArgSize < RegWidth && MRI.getType(ArgReg).isScalar()) {
-        Register WideArg =
-            MRI.createGenericVirtualRegister(LLT::scalar(RegWidth));
-        MIRBuilder.buildSExt(WideArg, ArgReg);
-        MIRBuilder.buildCopy(Register(ArgRegs[i]), WideArg);
-      } else {
-        MIRBuilder.buildCopy(Register(ArgRegs[i]), ArgReg);
-      }
-      CallInst.addReg(ArgRegs[i], RegState::Implicit);
-    }
+    CallInst.addReg(ArgRegs[i], RegState::Implicit);
   }
 
   MCRegister RetReg = getRetReg(RegWidth);

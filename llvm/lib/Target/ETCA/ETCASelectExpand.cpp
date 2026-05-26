@@ -22,6 +22,7 @@
 
 #include "ETCA.h"
 #include "ETCAInstrInfo.h"
+#include "ETCARegisterInfo.h"
 #include "ETCASubtarget.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -88,16 +89,7 @@ bool ETCASelectExpand::runOnMachineFunction(MachineFunction &MF) {
   const auto &ST = MF.getSubtarget<ETCASubtarget>();
   bool Changed = false;
 
-  // Ensure $r6 (SP) is a live-in to every basic block.  $r6 is a reserved
-  // register (set up by the prologue) and is used implicitly by call
-  // instructions (via ADJCALLSTACKDOWN/UP).  LLVM's LiveIntervals requires
-  // that any physical register used in a block is either defined there or
-  // listed as live-in.  Without this, empty intermediate blocks in the CFG
-  // (e.g. a block that just branches to another block) would lack $r6 as
-  // live-in, causing:
-  //   "The register $r6 needs to be live in to %bb.N, but is missing from
-  //    the live-in list"
-  // This is safe because $r6 is reserved and never allocated to a vreg.
+  // Ensure $r6 (SP) is a live-in to every basic block.
   if (ST.hasSAF()) {
     for (MachineBasicBlock &MBB : MF) {
       if (!MBB.isLiveIn(ETCA::R6)) {
@@ -107,22 +99,7 @@ bool ETCASelectExpand::runOnMachineFunction(MachineFunction &MF) {
     }
   }
 
-  // Expand any remaining ICMP_Pseudo markers.  These are created during
-  // instruction selection (by the G_ICMP handler) and normally consumed
-  // by the G_BRCOND / G_SELECT handlers.  If no such consumer exists
-  // (e.g. the ICMP result is returned directly as i1), the ICMP_Pseudo's
-  // result register still has uses (from G_ZEXT/G_ANYEXT/G_TRUNC).  We
-  // must materialize the condition value (0 or 1) using a branch + PHI
-  // sequence similar to SELECT_Pseudo expansion.
-  //
-  // Expansion:
-  //   ICMP_Pseudo %dst, %pred
-  //   → TrueBB: MOVZ %tmptrue, 1; fall-through to MBBCont
-  //   → FalseBB: MOVZ %tmpfalse, 0; BR MBBCont
-  //   → MBBCont: %dst = PHI %tmpfalse (FalseBB), %tmptrue (TrueBB)
-  //
-  // The CMP instruction before the ICMP_Pseudo has already set the
-  // condition flags.
+  // Expand any remaining ICMP_Pseudo markers.
   MachineRegisterInfo &MRI = MF.getRegInfo();
   SmallVector<MachineInstr *, 8> ICMPToExpand;
   for (MachineBasicBlock &MBB : MF) {
@@ -139,11 +116,6 @@ bool ETCASelectExpand::runOnMachineFunction(MachineFunction &MF) {
     int64_t Pred = MI->getOperand(1).getImm();
     DebugLoc DL = MI->getDebugLoc();
 
-    // Check if the ICMP_Pseudo result has any non-dead uses.
-    // Uses from SELECT_Pseudo (cond operand) are dead — SELECT_Pseudo
-    // only checks if its cond def is ICMP_Pseudo to know CMP was emitted.
-    // Uses from anything else (G_ZEXT, G_TRUNC, etc.) are real and
-    // require the condition value to be materialized.
     bool HasRealUse = false;
     for (MachineOperand &MO : MRI.use_operands(Dst)) {
       MachineInstr &User = *MO.getParent();
@@ -153,94 +125,76 @@ bool ETCASelectExpand::runOnMachineFunction(MachineFunction &MF) {
       }
     }
 
-    // If no real uses, just erase the ICMP_Pseudo (it was consumed by
-    // a G_BRCOND or G_SELECT that read its predicate).
     if (!HasRealUse) {
       MI->eraseFromParent();
       Changed = true;
       continue;
     }
 
-    // Determine branch instruction for the inverse predicate.
-    // The branch is "branch-if-condition-false" so we jump to FalseBB
-    // when the condition does NOT hold.  TrueBB is fall-through if the
-    // condition holds (CMP has already set the flags).
     unsigned BrOpc;
     switch (Pred) {
     case 1:
       BrOpc = ETCA::BNE;
-      break; // EQ → branch if NOT equal (Z=0)
+      break;
     case 2:
       BrOpc = ETCA::BEQ;
-      break; // NE → branch if equal (Z=1)
+      break;
     case 3:
       BrOpc = ETCA::BLEU;
-      break; // UGT → branch if ULE
+      break;
     case 4:
       BrOpc = ETCA::BLTU;
-      break; // UGE → branch if ULT
+      break;
     case 5:
       BrOpc = ETCA::BGEU;
-      break; // ULT → branch if UGE
+      break;
     case 6:
       BrOpc = ETCA::BGTU;
-      break; // ULE → branch if UGT
+      break;
     case 7:
       BrOpc = ETCA::BLE;
-      break; // SGT → branch if SLE
+      break;
     case 8:
       BrOpc = ETCA::BLT;
-      break; // SGE → branch if SLT
+      break;
     case 9:
       BrOpc = ETCA::BGE;
-      break; // SLT → branch if SGE
+      break;
     case 10:
       BrOpc = ETCA::BGT;
-      break; // SLE → branch if SGT
+      break;
     default:
       BrOpc = ETCA::BEQ;
       break;
     }
 
-    // Split MBB after ICMP_Pseudo.
     MachineBasicBlock *MBBCont = MF.CreateMachineBasicBlock();
     MF.insert(std::next(MBB.getIterator()), MBBCont);
-
-    // Move instructions after ICMP_Pseudo to MBBCont.
     MBBCont->splice(MBBCont->end(), &MBB, std::next(MI->getIterator()),
                     MBB.end());
     MBBCont->transferSuccessorsAndUpdatePHIs(&MBB);
 
-    // Create TrueBB (condition holds → result=1) and FalseBB (condition
-    // does not hold → result=0) between MBB and MBBCont.
     MachineBasicBlock *TrueBB = MF.CreateMachineBasicBlock();
     MachineBasicBlock *FalseBB = MF.CreateMachineBasicBlock();
-    // Insert: MBB → FalseBB → TrueBB → MBBCont
     MF.insert(std::next(MBB.getIterator()), FalseBB);
     MF.insert(std::next(FalseBB->getIterator()), TrueBB);
 
-    // Propagate $r6 (SP) as live-in to new blocks.
     MBBCont->addLiveIn(ETCA::R6);
     FalseBB->addLiveIn(ETCA::R6);
     TrueBB->addLiveIn(ETCA::R6);
 
-    // Set up successors.
     MBB.addSuccessor(TrueBB);
     MBB.addSuccessor(FalseBB);
     FalseBB->addSuccessor(MBBCont);
     TrueBB->addSuccessor(MBBCont);
 
-    // Emit branch: if condition does NOT hold, jump to FalseBB.
-    // Otherwise fall through to TrueBB.
     BuildMI(MBB, *MI, DL, TII.get(BrOpc)).addMBB(FalseBB);
     BuildMI(MBB, *MI, DL, TII.get(ETCA::BR)).addMBB(TrueBB);
 
-    // Create temporary virtual registers for SSA form.
     const TargetRegisterClass *DstRC = MRI.getRegClass(Dst);
     Register TmpFalse = MRI.createVirtualRegister(DstRC);
     Register TmpTrue = MRI.createVirtualRegister(DstRC);
 
-    // FalseBB: MOVZ %tmpfalse, 0; BR MBBCont
     BuildMI(FalseBB, DL,
             TII.get(getMovzOpcForRegWidth(
                 MF.getSubtarget<ETCASubtarget>().getRegWidth())),
@@ -248,27 +202,23 @@ bool ETCASelectExpand::runOnMachineFunction(MachineFunction &MF) {
         .addImm(0);
     BuildMI(FalseBB, DL, TII.get(ETCA::BR)).addMBB(MBBCont);
 
-    // TrueBB: MOVZ %tmptrue, 1 (fall-through to MBBCont)
     BuildMI(TrueBB, DL,
             TII.get(getMovzOpcForRegWidth(
                 MF.getSubtarget<ETCASubtarget>().getRegWidth())),
             TmpTrue)
         .addImm(1);
 
-    // MBBCont: %dst = PHI %tmpfalse (FalseBB), %tmptrue (TrueBB)
     BuildMI(*MBBCont, MBBCont->begin(), DL, TII.get(TargetOpcode::PHI), Dst)
         .addReg(TmpFalse)
         .addMBB(FalseBB)
         .addReg(TmpTrue)
         .addMBB(TrueBB);
 
-    // Erase ICMP_Pseudo.
     MI->eraseFromParent();
     Changed = true;
   }
 
   // Collect all SELECT_Pseudo instructions first, then expand them.
-  // We collect iterators to avoid iterator invalidation during expansion.
   SmallVector<MachineInstr *, 8> ToExpand;
 
   for (MachineBasicBlock &MBB : MF) {
@@ -287,7 +237,6 @@ bool ETCASelectExpand::runOnMachineFunction(MachineFunction &MF) {
     int64_t Pred = MI->getOperand(4).getImm();
     DebugLoc DL = MI->getDebugLoc();
 
-    // Determine branch instruction.
     unsigned BrOpc;
     switch (Pred) {
     case 0:
@@ -328,56 +277,33 @@ bool ETCASelectExpand::runOnMachineFunction(MachineFunction &MF) {
       break;
     }
 
-    // Split MBB after SELECT_Pseudo.
     MachineBasicBlock *MBBCont = MF.CreateMachineBasicBlock();
     MF.insert(std::next(MBB.getIterator()), MBBCont);
-
-    // Move instructions after SELECT_Pseudo to MBBCont.
     MBBCont->splice(MBBCont->end(), &MBB, std::next(MI->getIterator()),
                     MBB.end());
     MBBCont->transferSuccessorsAndUpdatePHIs(&MBB);
 
-    // Create TrueBB and FalseBB between MBB and MBBCont.
     MachineBasicBlock *TrueBB = MF.CreateMachineBasicBlock();
     MachineBasicBlock *FalseBB = MF.CreateMachineBasicBlock();
-    // Insert in order: MBB → FalseBB → TrueBB → MBBCont
-    // Use sequential insert after the previous element.
     MF.insert(std::next(MBB.getIterator()), FalseBB);
     MF.insert(std::next(FalseBB->getIterator()), TrueBB);
 
-    // Propagate $r6 (SP) as live-in to all new blocks.  The original MBB
-    // always has $r6 live (it is set up in the prologue), and the blocks
-    // created here may contain instructions that reference SP (e.g.
-    // ADJCALLSTACKDOWN/UP from function calls after the SELECT_Pseudo).
-    // Without this, LiveIntervals fails with "The register $r6 needs to
-    // be live in to %bb.N, but is missing from the live-in list".
     MBBCont->addLiveIn(ETCA::R6);
     FalseBB->addLiveIn(ETCA::R6);
     TrueBB->addLiveIn(ETCA::R6);
-    // MBB is already in MF.  MBBCont is also in MF (after MBB).
-    // After inserting FalseBB after MBB and TrueBB after FalseBB:
-    // MBB → FalseBB → TrueBB → ...
 
-    // Set up successors.
     MBB.addSuccessor(TrueBB);
     MBB.addSuccessor(FalseBB);
     FalseBB->addSuccessor(MBBCont);
     TrueBB->addSuccessor(MBBCont);
 
-    // Emit branch in MBB: if condition true, jump to TrueBB.
-    // Otherwise, explicitly branch to FalseBB (to handle any block reordering).
     BuildMI(MBB, *MI, DL, TII.get(BrOpc)).addMBB(TrueBB);
     BuildMI(MBB, *MI, DL, TII.get(ETCA::BR)).addMBB(FalseBB);
 
-    // Create temporary virtual registers to maintain SSA form.
-    // Using Dst directly in both MOVZ instructions would create
-    // two definitions of Dst, violating SSA (causes "getVRegDef
-    // assumes at most one definition" assertion in later passes).
     const TargetRegisterClass *DstRC = MRI.getRegClass(Dst);
     Register TmpFalse = MRI.createVirtualRegister(DstRC);
     Register TmpTrue = MRI.createVirtualRegister(DstRC);
 
-    // FalseBB: MOVZ tmpfalse, falseval; BR MBBCont
     BuildMI(FalseBB, DL,
             TII.get(getMovzOpcForRegWidth(
                 MF.getSubtarget<ETCASubtarget>().getRegWidth())),
@@ -385,23 +311,18 @@ bool ETCASelectExpand::runOnMachineFunction(MachineFunction &MF) {
         .addReg(FalseVal);
     BuildMI(FalseBB, DL, TII.get(ETCA::BR)).addMBB(MBBCont);
 
-    // TrueBB: MOVZ tmptrue, trueval (fall-through to MBBCont)
     BuildMI(TrueBB, DL,
             TII.get(getMovzOpcForRegWidth(
                 MF.getSubtarget<ETCASubtarget>().getRegWidth())),
             TmpTrue)
         .addReg(TrueVal);
 
-    // MBBCont: Dst = PHI TmpFalse (FalseBB), TmpTrue (TrueBB)
-    // This PHI joins the two SSA definitions and is later eliminated
-    // by the standard phi elimination pass.
     BuildMI(*MBBCont, MBBCont->begin(), DL, TII.get(TargetOpcode::PHI), Dst)
         .addReg(TmpFalse)
         .addMBB(FalseBB)
         .addReg(TmpTrue)
         .addMBB(TrueBB);
 
-    // Erase SELECT_Pseudo.
     MI->eraseFromParent();
     Changed = true;
   }

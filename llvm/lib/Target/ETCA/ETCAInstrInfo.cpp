@@ -216,16 +216,15 @@ bool ETCAInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   }
 
     //===----------------------------------------------------------------===//
-    // CALL_Pseudo -> CALL (SAF 12-bit PC-relative call)
+    // CALL_Pseudo -> CALL (short form, relaxed by MC layer when out of
+    // range).  The MC assembler's relaxInstruction expands to MOV_*+CALLR
+    // if the 12-bit displacement doesn't reach the target.
     //===----------------------------------------------------------------===//
 
   case ETCA::CALL_Pseudo: {
     assert(ST.hasSAF() && "CALL_Pseudo requires SAF extension");
-    // CALL_Pseudo has operands: <callee> [reg, reg...] [def reg]
-    // The first operand after the opcode is the callee (global/external sym).
+    // CALL_Pseudo has operands: <callee> [implicit ops...]
     MachineInstr *NewCall = BuildMI(MBB, MI, DL, TII.get(ETCA::CALL));
-
-    // Copy operands from the pseudo
     for (unsigned i = 0, e = MI.getNumOperands(); i < e; ++i) {
       const MachineOperand &MO = MI.getOperand(i);
       if (MO.isGlobal() || MO.isSymbol() || MO.isMBB() || MO.isReg() ||
@@ -236,6 +235,11 @@ bool ETCAInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     MI.eraseFromParent();
     return true;
   }
+
+    //===----------------------------------------------------------------===//
+    // LONG_BR_Pseudo -> MOVZI + JMPR (long unconditional branch)
+    // Uses R7 (the dedicated scratch register) to hold the target address.
+    //===----------------------------------------------------------------===//
 
   // SELECT_Pseudo is expanded by the ETCASelectExpand pass.
   case ETCA::SELECT_Pseudo: {

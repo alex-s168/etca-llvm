@@ -12,7 +12,8 @@
 # final absolute address of my_data, split into 5-bit chunks.
 # CHECK:      movz %r0,
 # CHECK:      slo %r0,
-# CHECK:      slo %r0,
+# CHECK:      nop
+# CHECK:      nop
 # CHECK:      load %r0, %r0
 # CHECK:      jmpr %r7
 

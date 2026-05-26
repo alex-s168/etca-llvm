@@ -43,6 +43,8 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeETCATarget() {
 }
 
 static Reloc::Model getEffectiveRelocModel(std::optional<Reloc::Model> RM) {
+  // Support all relocation models: Static, PIC_, DynamicNoPIC.
+  // Default to Static (small embedded system).
   return RM.value_or(Reloc::Static);
 }
 

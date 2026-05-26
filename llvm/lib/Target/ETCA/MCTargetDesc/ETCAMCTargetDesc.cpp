@@ -274,6 +274,16 @@ private:
   /// Compute REX prefix byte (0xC0 | flags) from register operands.
   /// Returns 0 if no REX prefix is needed.
   unsigned computeRexPrefix(const MCInst &MI) const;
+
+  /// Emit a relaxed branch sequence for an out-of-range branch target.
+  /// Used by encodeInstruction for BR_RELAXED, BEQ_RELAXED, etc.
+  void emitRelaxedBranch(const MCInst &MI, unsigned Opcode,
+                         SmallVectorImpl<char> &CB,
+                         SmallVectorImpl<MCFixup> &Fixups,
+                         const MCSubtargetInfo &STI) const;
+
+  /// Invert a branch condition opcode (e.g. BEQ → BNE).
+  static unsigned invertBranchCond(unsigned Opcode);
 };
 
 } // namespace
@@ -412,6 +422,199 @@ unsigned ETCAMCCodeEmitter::computeRexPrefix(const MCInst &MI) const {
   return Rex;
 }
 
+unsigned ETCAMCCodeEmitter::invertBranchCond(unsigned Opcode) {
+  switch (Opcode) {
+  case ETCA::BEQ:
+    return ETCA::BNE;
+  case ETCA::BNE:
+    return ETCA::BEQ;
+  case ETCA::BLTU:
+    return ETCA::BGEU;
+  case ETCA::BGEU:
+    return ETCA::BLTU;
+  case ETCA::BLEU:
+    return ETCA::BGTU;
+  case ETCA::BGTU:
+    return ETCA::BLEU;
+  case ETCA::BLT:
+    return ETCA::BGE;
+  case ETCA::BGE:
+    return ETCA::BLT;
+  case ETCA::BLE:
+    return ETCA::BGT;
+  case ETCA::BGT:
+    return ETCA::BLE;
+  case ETCA::BN:
+    return ETCA::BNN;
+  case ETCA::BNN:
+    return ETCA::BN;
+  case ETCA::BOV:
+    return ETCA::BNOV;
+  case ETCA::BNOV:
+    return ETCA::BOV;
+  default:
+    return 0;
+  }
+}
+
+void ETCAMCCodeEmitter::emitRelaxedBranch(const MCInst &MI, unsigned Opcode,
+                                          SmallVectorImpl<char> &CB,
+                                          SmallVectorImpl<MCFixup> &Fixups,
+                                          const MCSubtargetInfo &STI) const {
+  // Determine the pointer size (and thus MOV_* chain size) from features.
+  unsigned PtrBits = 16;
+  if (STI.hasFeature(ETCA::FeaturePtr64))
+    PtrBits = 64;
+  else if (STI.hasFeature(ETCA::FeaturePtr32))
+    PtrBits = 32;
+
+  // Get the target operand (brtarget).  For relaxed branches it's the
+  // first (and only) operand, same as for the original short branch.
+  assert(MI.getNumOperands() >= 1 && "Relaxed branch needs a target operand");
+  const MCOperand &TargetOp = MI.getOperand(0);
+  assert((TargetOp.isExpr() || TargetOp.isImm()) &&
+         "Relaxed branch target must be an expression or immediate");
+
+  // Determine the condition opcodes.  For unconditional (BR), we use
+  // a dummy inverted cond that always falls through.
+  unsigned OrigCond = 0;
+  switch (Opcode) {
+  case ETCA::BR_RELAXED:
+    OrigCond = 0;
+    break;
+  case ETCA::BEQ_RELAXED:
+    OrigCond = ETCA::BEQ;
+    break;
+  case ETCA::BNE_RELAXED:
+    OrigCond = ETCA::BNE;
+    break;
+  case ETCA::BLTU_RELAXED:
+    OrigCond = ETCA::BLTU;
+    break;
+  case ETCA::BGEU_RELAXED:
+    OrigCond = ETCA::BGEU;
+    break;
+  case ETCA::BLEU_RELAXED:
+    OrigCond = ETCA::BLEU;
+    break;
+  case ETCA::BGTU_RELAXED:
+    OrigCond = ETCA::BGTU;
+    break;
+  case ETCA::BLT_RELAXED:
+    OrigCond = ETCA::BLT;
+    break;
+  case ETCA::BGE_RELAXED:
+    OrigCond = ETCA::BGE;
+    break;
+  case ETCA::BLE_RELAXED:
+    OrigCond = ETCA::BLE;
+    break;
+  case ETCA::BGT_RELAXED:
+    OrigCond = ETCA::BGT;
+    break;
+  case ETCA::BN_RELAXED:
+    OrigCond = ETCA::BN;
+    break;
+  case ETCA::BNN_RELAXED:
+    OrigCond = ETCA::BNN;
+    break;
+  case ETCA::BOV_RELAXED:
+    OrigCond = ETCA::BOV;
+    break;
+  case ETCA::BNOV_RELAXED:
+    OrigCond = ETCA::BNOV;
+    break;
+  default:
+    OrigCond = 0;
+    break;
+  }
+
+  // Determine MOVZI opcode from pointer width.
+  unsigned MovOpc;
+  if (PtrBits >= 64)
+    MovOpc = ETCA::MOVZI64;
+  else if (PtrBits >= 32)
+    MovOpc = ETCA::MOVZI32;
+  else
+    MovOpc = ETCA::MOVZI16;
+
+  // Compute the MOV_* chain size.
+  unsigned ChainBytes;
+  switch (PtrBits) {
+  case 8:
+    ChainBytes = 4;
+    break;
+  case 16:
+    ChainBytes = 8;
+    break;
+  case 32:
+    ChainBytes = 14;
+    break;
+  default:
+    ChainBytes = 26;
+    break;
+  }
+
+  unsigned JmprBytes = 2; // JMPR is always 2 bytes
+  unsigned TotalBytes = ChainBytes + JmprBytes;
+
+  if (OrigCond != 0) {
+    // For conditional branches, emit the inverted condition first.
+    // The inverted branch jumps over the MOV_* chain + JMPR.
+    unsigned InvertedCond = invertBranchCond(OrigCond);
+    assert(InvertedCond != 0 && "Unknown branch condition");
+
+    // Emit the inverted conditional branch: 2 bytes
+    // Encoding: byte0 = 0x80 | D8<<4 | CCCC, byte1 = D[7:0]
+    // For the inverted branch, the target is TotalBytes (in bytes),
+    // encoded as a 9-bit signed displacement.
+    // Initially write 0 for the displacement; the fixup will fill it in.
+    uint16_t InvBr = 0x80 | (InvertedCond & 0xF);
+    CB.push_back(static_cast<char>(InvBr & 0xFF));
+    CB.push_back(static_cast<char>((InvBr >> 8) & 0xFF));
+
+    // Create a fixup for the inverted branch's target (skip past MOV_*
+    // chain + JMPR).  The fixup value is: (address of next instruction)
+    // - (address of fixup + 2).  Since the fixup offset is 0 (start of
+    // instruction), and the instruction is 2 bytes, the displacement
+    // should be TotalBytes to skip past the chain + jmpr.
+    // However, fixup_ETCA_BASE_JMP uses halfwords, so the displacement
+    // in the fixup's value field is in bytes but converted by applyFixup.
+    // We need the fixup to represent: target = here + TotalBytes + 2.
+    // For a PC-relative fixup, Value = Target - (Source + Size).
+    // Since the inverted branch points to past-the-jmpr = here + 2 +
+    // TotalBytes, and Source = here, Size = 2: Value = (here + 2 + TotalBytes)
+    // - (here + 2) = TotalBytes.
+    const MCExpr *SkipExpr = MCConstantExpr::create(TotalBytes, Ctx);
+    Fixups.push_back(MCFixup::create(0, SkipExpr,
+                                     MCFixupKind(ETCA::fixup_ETCA_BASE_JMP),
+                                     /*isPCRel=*/true));
+  }
+
+  // Emit the MOV_* chain using the existing emitMovChain method.
+  // We need a scratch register.  Use R7 (scratch register) for 16-bit,
+  // D7 for 32-bit, Q7 for 64-bit.
+  unsigned ScratchReg;
+  if (PtrBits >= 64)
+    ScratchReg = ETCA::Q7;
+  else if (PtrBits >= 32)
+    ScratchReg = ETCA::D7;
+  else
+    ScratchReg = ETCA::R7;
+  emitMovChain(MovOpc, ScratchReg, TargetOp, CB, Fixups, STI);
+
+  // Emit JMPR with the scratch register.
+  // JMPR encoding (from EInstSAFJmp):
+  //   Inst{15-13} = rs (scratch register encoding)
+  //   Inst{12}    = 0  (jump, not call)
+  //   Inst{11-8}  = 0b1110 (unconditional)
+  //   Inst{7-0}   = 0xAF
+  unsigned RegEnc = Ctx.getRegisterInfo()->getEncodingValue(ScratchReg) & 0x7;
+  uint16_t JmprBits = (RegEnc << 13) | (0xE << 8) | 0xAF;
+  CB.push_back(static_cast<char>(JmprBits & 0xFF));
+  CB.push_back(static_cast<char>((JmprBits >> 8) & 0xFF));
+}
+
 bool ETCAMCCodeEmitter::isMovImmOpcode(unsigned Opcode) {
   switch (Opcode) {
   case ETCA::MOVZI8:
@@ -547,6 +750,19 @@ void ETCAMCCodeEmitter::encodeInstruction(const MCInst &MI,
     return;
   }
 
+  // Handle relaxed branch pseudo-instructions (for MC-level relaxation).
+  if (Opcode == ETCA::BR_RELAXED || Opcode == ETCA::BEQ_RELAXED ||
+      Opcode == ETCA::BNE_RELAXED || Opcode == ETCA::BLTU_RELAXED ||
+      Opcode == ETCA::BGEU_RELAXED || Opcode == ETCA::BLEU_RELAXED ||
+      Opcode == ETCA::BGTU_RELAXED || Opcode == ETCA::BLT_RELAXED ||
+      Opcode == ETCA::BGE_RELAXED || Opcode == ETCA::BLE_RELAXED ||
+      Opcode == ETCA::BGT_RELAXED || Opcode == ETCA::BN_RELAXED ||
+      Opcode == ETCA::BNN_RELAXED || Opcode == ETCA::BOV_RELAXED ||
+      Opcode == ETCA::BNOV_RELAXED) {
+    emitRelaxedBranch(MI, Opcode, CB, Fixups, STI);
+    return;
+  }
+
   // When MOVZI/MOVS has a label expression as its immediate operand,
   // emit a MOV_* spanning chain so the linker can expand it.
   // This handles assembly like "movz r0, label" from user-written asm.
@@ -606,6 +822,114 @@ public:
   }
 
   ~ETCAAsmBackend() override = default;
+
+  bool mayNeedRelaxation(unsigned Opcode, ArrayRef<MCOperand> Operands,
+                         const MCSubtargetInfo &STI) const override {
+    // All branch instructions (BR, BEQ, BNE, etc.) may need relaxation
+    // if their target is beyond 9-bit signed displacement (±256 bytes).
+    // Also relax CALL (12-bit, ±4KB) for the same reason.
+    switch (Opcode) {
+    case ETCA::BR:
+    case ETCA::BEQ:
+    case ETCA::BNE:
+    case ETCA::BLTU:
+    case ETCA::BGEU:
+    case ETCA::BLEU:
+    case ETCA::BGTU:
+    case ETCA::BLT:
+    case ETCA::BGE:
+    case ETCA::BLE:
+    case ETCA::BGT:
+    case ETCA::BN:
+    case ETCA::BNN:
+    case ETCA::BOV:
+    case ETCA::BNOV:
+    case ETCA::CALL:
+      return true;
+    default:
+      return false;
+    }
+  }
+
+  bool fixupNeedsRelaxationAdvanced(const MCFragment &F, const MCFixup &Fixup,
+                                    const MCValue &Target, uint64_t Value,
+                                    bool Resolved) const override {
+    // We only need relaxation if the fixup is for a branch/call and the
+    // target is resolved but out of range.
+    MCFixupKind Kind = Fixup.getKind();
+    if (Kind == ETCA::fixup_ETCA_BASE_JMP) {
+      // 9-bit signed: range is ±256 bytes (±128 halfwords)
+      // Value is the resolved PC-relative difference in bytes.
+      int64_t Disp = static_cast<int64_t>(Value) / 2;
+      return !isInt<9>(Disp);
+    }
+    if (Kind == ETCA::fixup_ETCA_SAF_CALL) {
+      // 12-bit signed: range is ±4096 bytes (±2048 halfwords)
+      int64_t Disp = static_cast<int64_t>(Value) / 2;
+      return !isInt<12>(Disp);
+    }
+    return false;
+  }
+
+  void relaxInstruction(MCInst &Inst,
+                        const MCSubtargetInfo &STI) const override {
+    // Replace the short branch/call with the relaxed pseudo-instruction.
+    // The relaxed pseudo has the same operands (brtarget/calltarget).
+    unsigned NewOp = 0;
+    switch (Inst.getOpcode()) {
+    case ETCA::BR:
+      NewOp = ETCA::BR_RELAXED;
+      break;
+    case ETCA::BEQ:
+      NewOp = ETCA::BEQ_RELAXED;
+      break;
+    case ETCA::BNE:
+      NewOp = ETCA::BNE_RELAXED;
+      break;
+    case ETCA::BLTU:
+      NewOp = ETCA::BLTU_RELAXED;
+      break;
+    case ETCA::BGEU:
+      NewOp = ETCA::BGEU_RELAXED;
+      break;
+    case ETCA::BLEU:
+      NewOp = ETCA::BLEU_RELAXED;
+      break;
+    case ETCA::BGTU:
+      NewOp = ETCA::BGTU_RELAXED;
+      break;
+    case ETCA::BLT:
+      NewOp = ETCA::BLT_RELAXED;
+      break;
+    case ETCA::BGE:
+      NewOp = ETCA::BGE_RELAXED;
+      break;
+    case ETCA::BLE:
+      NewOp = ETCA::BLE_RELAXED;
+      break;
+    case ETCA::BGT:
+      NewOp = ETCA::BGT_RELAXED;
+      break;
+    case ETCA::BN:
+      NewOp = ETCA::BN_RELAXED;
+      break;
+    case ETCA::BNN:
+      NewOp = ETCA::BNN_RELAXED;
+      break;
+    case ETCA::BOV:
+      NewOp = ETCA::BOV_RELAXED;
+      break;
+    case ETCA::BNOV:
+      NewOp = ETCA::BNOV_RELAXED;
+      break;
+    case ETCA::CALL:
+      NewOp = ETCA::BR_RELAXED;
+      break;
+    default:
+      llvm_unreachable("Unknown opcode in relaxInstruction");
+    }
+    Inst.setOpcode(NewOp);
+  }
 
   void applyFixup(const MCFragment &Frag, const MCFixup &Fixup,
                   const MCValue &Target, uint8_t *Data, uint64_t Value,

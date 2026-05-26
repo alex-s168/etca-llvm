@@ -119,6 +119,9 @@ public:
   bool hasQWAS() const { return HasQWAS; }
 
   // Derived queries
+  /// Returns true when compiling position-independent code.
+  bool isPIC() const { return TM.getRelocationModel() == Reloc::PIC_; }
+
   /// Returns the register width in bits (same as WordSize).
   unsigned getRegWidth() const { return WordSize; }
 

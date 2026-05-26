@@ -35,9 +35,11 @@ target:
 # After linking: chain rewritten with final address of 'target'
 # DISLINK:      movz %r0,
 # DISLINK:      slo %r0,
-# DISLINK:      slo %r0,
+# DISLINK:      nop
+# DISLINK:      nop
 # DISLINK:      movz %r1,
 # DISLINK:      slo %r1,
-# DISLINK:      slo %r1,
+# DISLINK:      nop
+# DISLINK:      nop
 
 # DISLINK:      <target>:

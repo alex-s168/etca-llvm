@@ -390,6 +390,15 @@ let hasSideEffects = 1, isPseudo = 1, isCodeGenOnly = 1,
     // to avoid duplicate implicit operands.
     let Defs = [R7];
   }
+
+  // CALLR_Pseudo: register-indirect call via MOV_* chain (long call).
+  // Takes the target register first, then variable_ops for regmask,
+  // implicit argument registers, and implicit return value defs.
+  // The AsmPrinter expands this to a real CALLR instruction.
+  def CALLR_Pseudo : EInst<(outs), (ins GPR:$rs, variable_ops),
+                            "callr $rs", []> {
+    let Defs = [R7];
+  }
 }
 
 // Conditional select (pseudo, lowered to cmp + conditional move)
@@ -414,6 +423,10 @@ let isPseudo = 1, isCodeGenOnly = 1, hasSideEffects = 0 in {
   def ICMP_Pseudo : EInst<(outs GPR:$dst), (ins i16imm:$pred),
                            "movz $dst, $pred", []>;
 }
+
+// LONG_BR_Pseudo is no longer needed. G_BR is handled directly in the
+// instruction selector by emitting MOVZI + JMPR (real instructions),
+// which avoids any conversion by LLVM's optimization passes.
 
 // Frame setup/destroy pseudo instructions (for SAF prologue/epilogue)
 // Mark R6 (SP) as both def and use so the register allocator tracks
@@ -462,6 +475,67 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1, hasSideEffects = 0,
   def BGE  : EInstBranch<0b1011, "bge $target", []>;
   def BLE  : EInstBranch<0b1100, "ble $target", []>;
   def BGT  : EInstBranch<0b1101, "bgt $target", []>;
+}
+
+//===----------------------------------------------------------------------===//
+// Relaxed branch pseudo-instructions (for MC-level branch relaxation)
+//
+// These are used by the assembler when a short branch (9-bit displacement)
+// cannot reach its target.  The encoder expands them to a MOV_* chain +
+// JMPR (for unconditional) or inverted-cond + BR over + MOV_* + JMPR (for
+// conditional).  The Size must be large enough to hold the maximum possible
+// expansion (64-bit address: 26 bytes MOV_* + 2 bytes JMPR = 28 bytes).
+// We use 32 to be safe.
+//===----------------------------------------------------------------------===//
+
+let isCodeGenOnly = 1, isPseudo = 1, hasSideEffects = 0,
+    isBranch = 1, isTerminator = 1, isBarrier = 1 in {
+  def BR_RELAXED   : EInst<(outs), (ins brtarget:$target),
+                            "", []> {
+    let Size = 32;
+  }
+  def BEQ_RELAXED  : EInst<(outs), (ins brtarget:$target), "", []> {
+    let Size = 34;
+  }
+  def BNE_RELAXED  : EInst<(outs), (ins brtarget:$target), "", []> {
+    let Size = 34;
+  }
+  def BLTU_RELAXED : EInst<(outs), (ins brtarget:$target), "", []> {
+    let Size = 34;
+  }
+  def BGEU_RELAXED : EInst<(outs), (ins brtarget:$target), "", []> {
+    let Size = 34;
+  }
+  def BLEU_RELAXED : EInst<(outs), (ins brtarget:$target), "", []> {
+    let Size = 34;
+  }
+  def BGTU_RELAXED : EInst<(outs), (ins brtarget:$target), "", []> {
+    let Size = 34;
+  }
+  def BLT_RELAXED  : EInst<(outs), (ins brtarget:$target), "", []> {
+    let Size = 34;
+  }
+  def BGE_RELAXED  : EInst<(outs), (ins brtarget:$target), "", []> {
+    let Size = 34;
+  }
+  def BLE_RELAXED  : EInst<(outs), (ins brtarget:$target), "", []> {
+    let Size = 34;
+  }
+  def BGT_RELAXED  : EInst<(outs), (ins brtarget:$target), "", []> {
+    let Size = 34;
+  }
+  def BN_RELAXED   : EInst<(outs), (ins brtarget:$target), "", []> {
+    let Size = 34;
+  }
+  def BNN_RELAXED  : EInst<(outs), (ins brtarget:$target), "", []> {
+    let Size = 34;
+  }
+  def BOV_RELAXED  : EInst<(outs), (ins brtarget:$target), "", []> {
+    let Size = 34;
+  }
+  def BNOV_RELAXED : EInst<(outs), (ins brtarget:$target), "", []> {
+    let Size = 34;
+  }
 }
 
 //===----------------------------------------------------------------------===//

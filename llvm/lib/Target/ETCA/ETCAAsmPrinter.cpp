@@ -63,6 +63,17 @@ public:
       return;
     }
 
+    // CALLR_Pseudo: expand to a real CALLR with just the register
+    // operand.  The first operand is the target register; all variable_ops
+    // after it (regmask, implicit args/defs) are dropped for MC emission.
+    if (MI->getOpcode() == ETCA::CALLR_Pseudo) {
+      expandCALLR_Pseudo(MI);
+      return;
+    }
+
+    // No LONG_BR_Pseudo to check for — G_BR now emits MOVZI + JMPR
+    // directly in the instruction selector.
+
     MCInst LoweredMI;
     lowerToMCInst(MI, LoweredMI);
     EmitToStreamer(*OutStreamer, LoweredMI);
@@ -72,6 +83,9 @@ private:
   /// Expand JT_Pseudo into a MOVZI instruction referencing the jump table
   /// label.  The encoder's emitMovChain produces the full chain.
   void expandJT_Pseudo(const MachineInstr *MI);
+
+  /// Expand CALLR_Pseudo into a CALLR instruction for MC emission.
+  void expandCALLR_Pseudo(const MachineInstr *MI);
 
   /// Lower a standard MachineInstr into an MCInst.
   void lowerToMCInst(const MachineInstr *MI, MCInst &OutMI) const;
@@ -113,6 +127,16 @@ void ETCAAsmPrinter::expandJT_Pseudo(const MachineInstr *MI) {
   EmitToStreamer(*OutStreamer, MCI);
 }
 
+void ETCAAsmPrinter::expandCALLR_Pseudo(const MachineInstr *MI) {
+  // CALLR_Pseudo operands: [reg (target), variable_ops (regmask,
+  // implicit args, implicit-def retval)].
+  // Emit a real CALLR with only the register operand.
+  MCInst MCI;
+  MCI.setOpcode(ETCA::CALLR);
+  MCI.addOperand(MCOperand::createReg(MI->getOperand(0).getReg()));
+  EmitToStreamer(*OutStreamer, MCI);
+}
+
 void ETCAAsmPrinter::lowerToMCInst(const MachineInstr *MI,
                                    MCInst &OutMI) const {
   unsigned Opcode = MI->getOpcode();
@@ -151,6 +175,10 @@ void ETCAAsmPrinter::lowerToMCInst(const MachineInstr *MI,
       MCOp = MCOperand::createExpr(MCSymbolRefExpr::create(
           GetJTISymbol(MO.getIndex(), /*isLinkerPrivate=*/true), OutContext));
       break;
+    case MachineOperand::MO_RegisterMask:
+      // Register masks are only consumed by the register allocator and
+      // should not be emitted as MC operands.
+      continue;
     }
     OutMI.addOperand(MCOp);
   }

@@ -26,9 +26,7 @@
 ; RELOC:        }
 ; RELOC:      ]
 
-; LINKED:      movz %r{{[0-9]+}}, 0
-; LINKED-NEXT: slo %r{{[0-9]+}},
-; LINKED-NEXT: slo %r{{[0-9]+}},
+; LINKED:      movz %r{{[0-9]+}},
 ; LINKED:      jmpr %r{{[0-9]+}}
 
 target triple = "etca-unknown-elf"

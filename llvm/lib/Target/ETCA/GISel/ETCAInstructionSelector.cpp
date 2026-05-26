@@ -986,8 +986,13 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
   }
 
     //===----------------------------------------------------------------===//
-    // G_BR: unconditional branch
-    //===----------------------------------------------------------------===//
+    // G_BR: unconditional branch (short form — relaxed by MC layer)
+    //
+    // Emit the compact short BR instruction (2 bytes, 9-bit signed
+    // displacement).  If the target is out of range, the MC assembler's
+    // branch relaxation automatically expands it to MOV_* + JMPR.
+    // This gives compact code by default with automatic fallback.
+    //===-------------------------------------------------------------------===//
 
   case TargetOpcode::G_BR: {
     MachineBasicBlock *Target = MI.getOperand(0).getMBB();
