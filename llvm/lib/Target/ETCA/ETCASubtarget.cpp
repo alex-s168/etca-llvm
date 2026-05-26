@@ -154,6 +154,83 @@ void ETCASubtarget::initLibcallLoweringInfo(LibcallLoweringInfo &Info) const {
   };
   for (const auto &LC : MemLibcalls)
     Info.setLibcallImpl(LC.Op, LC.Impl);
+
+  //===----------------------------------------------------------------===//
+  // Floating-point soft-float libcalls (compiler-rt)
+  //
+  // ETCa has no FP hardware.  All FP operations go through compiler-rt
+  // library calls (__addsf3, __adddf3, __subsf3, __mulsf3, __divsf3,
+  // __extendsfdf2, __truncdfsf2, __eqsf2, __ltsf2, etc.).
+  //
+  // The generic LegalizerHelper::legalizeLibcall() uses these mappings
+  // to emit CALL_Pseudo instructions to the libcall functions.
+  //
+  // FP types: f32=s32 (32-bit), f64=s64 (64-bit), f16=s16 (16-bit).
+  // The s32/s64/s16 types are already legal for data-flow ops.
+  //===----------------------------------------------------------------===//
+
+  // FP arithmetic — binary and unary
+  const struct {
+    const RTLIB::Libcall Op;
+    const RTLIB::LibcallImpl Impl;
+  } FPLibcalls[] = {
+      {RTLIB::ADD_F32, RTLIB::impl___addsf3},
+      {RTLIB::ADD_F64, RTLIB::impl___adddf3},
+      {RTLIB::SUB_F32, RTLIB::impl___subsf3},
+      {RTLIB::SUB_F64, RTLIB::impl___subdf3},
+      {RTLIB::MUL_F32, RTLIB::impl___mulsf3},
+      {RTLIB::MUL_F64, RTLIB::impl___muldf3},
+      {RTLIB::DIV_F32, RTLIB::impl___divsf3},
+      {RTLIB::DIV_F64, RTLIB::impl___divdf3},
+      // FPOWI (__powisf2/__powidf2)
+      {RTLIB::POWI_F32, RTLIB::impl___powisf2},
+      {RTLIB::POWI_F64, RTLIB::impl___powidf2},
+
+      // FP comparison — return int result
+      {RTLIB::OEQ_F32, RTLIB::impl___eqsf2},
+      {RTLIB::OEQ_F64, RTLIB::impl___eqdf2},
+      {RTLIB::UNE_F32, RTLIB::impl___nesf2},
+      {RTLIB::UNE_F64, RTLIB::impl___nedf2},
+      {RTLIB::OLT_F32, RTLIB::impl___ltsf2},
+      {RTLIB::OLT_F64, RTLIB::impl___ltdf2},
+      {RTLIB::OLE_F32, RTLIB::impl___lesf2},
+      {RTLIB::OLE_F64, RTLIB::impl___ledf2},
+      {RTLIB::OGT_F32, RTLIB::impl___gtsf2},
+      {RTLIB::OGT_F64, RTLIB::impl___gtdf2},
+      {RTLIB::OGE_F32, RTLIB::impl___gesf2},
+      {RTLIB::OGE_F64, RTLIB::impl___gedf2},
+      {RTLIB::UO_F32, RTLIB::impl___unordsf2},
+      {RTLIB::UO_F64, RTLIB::impl___unorddf2},
+
+      // FP↔FP conversions
+      {RTLIB::FPEXT_F16_F32, RTLIB::impl___extendhfsf2},
+      {RTLIB::FPEXT_F16_F64, RTLIB::impl___extendhfdf2},
+      {RTLIB::FPEXT_F32_F64, RTLIB::impl___extendsfdf2},
+      {RTLIB::FPROUND_F32_F16, RTLIB::impl___truncsfhf2},
+      {RTLIB::FPROUND_F64_F32, RTLIB::impl___truncdfsf2},
+
+      // FP→int conversions
+      {RTLIB::FPTOSINT_F32_I32, RTLIB::impl___fixsfsi},
+      {RTLIB::FPTOSINT_F32_I64, RTLIB::impl___fixsfdi},
+      {RTLIB::FPTOSINT_F64_I32, RTLIB::impl___fixdfsi},
+      {RTLIB::FPTOSINT_F64_I64, RTLIB::impl___fixdfdi},
+      {RTLIB::FPTOUINT_F32_I32, RTLIB::impl___fixunssfsi},
+      {RTLIB::FPTOUINT_F32_I64, RTLIB::impl___fixunssfdi},
+      {RTLIB::FPTOUINT_F64_I32, RTLIB::impl___fixunsdfsi},
+      {RTLIB::FPTOUINT_F64_I64, RTLIB::impl___fixunsdfdi},
+
+      // int→FP conversions
+      {RTLIB::SINTTOFP_I32_F32, RTLIB::impl___floatsisf},
+      {RTLIB::SINTTOFP_I32_F64, RTLIB::impl___floatsidf},
+      {RTLIB::SINTTOFP_I64_F32, RTLIB::impl___floatdisf},
+      {RTLIB::SINTTOFP_I64_F64, RTLIB::impl___floatdidf},
+      {RTLIB::UINTTOFP_I32_F32, RTLIB::impl___floatunsisf},
+      {RTLIB::UINTTOFP_I32_F64, RTLIB::impl___floatunsidf},
+      {RTLIB::UINTTOFP_I64_F32, RTLIB::impl___floatundisf},
+      {RTLIB::UINTTOFP_I64_F64, RTLIB::impl___floatundidf},
+  };
+  for (const auto &LC : FPLibcalls)
+    Info.setLibcallImpl(LC.Op, LC.Impl);
 }
 
 ETCASubtarget::ETCASubtarget(const Triple &TargetTriple, StringRef Cpu,
@@ -197,6 +274,7 @@ const CallLowering *ETCASubtarget::getCallLowering() const {
 }
 
 const LegalizerInfo *ETCASubtarget::getLegalizerInfo() const {
+
   if (!Legalizer)
     Legalizer = std::make_unique<ETCALegalizerInfo>(*this);
   return Legalizer.get();

@@ -72,6 +72,26 @@ private:
   /// Legalize G_VASTART: store the address of the varargs save area
   /// into the va_list pointer.
   bool legalizeVAStart(MachineInstr &MI, MachineIRBuilder &MIRBuilder) const;
+
+  //===---------------------------------------------------------------===//
+  // Soft-float custom legalization helpers
+  //===---------------------------------------------------------------===//
+
+  /// Lower G_FNEG to XOR with sign bit mask.
+  bool legalizeFNEG(MachineInstr &MI, MachineIRBuilder &MIRBuilder) const;
+
+  /// Lower G_FABS to AND with sign bit cleared.
+  bool legalizeFABS(MachineInstr &MI, MachineIRBuilder &MIRBuilder) const;
+
+  /// Bitcast G_FCONSTANT to G_CONSTANT (FP constant materialized as
+  /// integer bit pattern).
+  bool legalizeFCONSTANT(MachineInstr &MI, MachineIRBuilder &MIRBuilder) const;
+
+  /// Emit a call to a named soft-float library function.
+  /// Picks Name32 (e.g. "__sqrtf") for 32-bit FP or Name64 (e.g. "__sqrt")
+  /// for 64-bit FP.  Handles unary, binary, and ternary FP ops.
+  bool legalizeFPLibcall(MachineInstr &MI, MachineIRBuilder &MIRBuilder,
+                         const char *Name32, const char *Name64) const;
 };
 
 } // namespace llvm

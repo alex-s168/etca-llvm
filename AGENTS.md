@@ -181,71 +181,20 @@ generated code to call.
 
 ## TODO — Extension Improvements
 
-### Jump Tables (Completed 2026-05-25)
-Jump tables are now fully implemented and enabled.  The threshold is set to
-4 entries in `ETCAISelLowering.cpp`.
-
-Implementation summary:
-- **GISel pipeline**: G_JUMP_TABLE → JT_Pseudo (InstructionSelector), G_BRJT →
-  load + G_BRINDIRECT (Legalizer).  G_BRINDIRECT marked legal for p0.
-- **AsmPrinter**: JT_Pseudo expanded into a single MOVZI instruction with the
-  jump table label as an expression operand.  The encoder's `emitMovChain`
-  produces the full MOVZI+SLO placeholder chain with a single R_ETCA_MOV_*
-  spanning fixup (matching binutils numbering).
-- **Fixup kinds**: R_ETCA_MOV_5 through R_ETCA_MOV_32 (binutils relocs 17-32)
-  with byte counts matching `etca_build_mov_ri`.
-- **Linker**: lld applies the spanning fixup by writing the absolute address
-  as raw bytes into the placeholder chain.  The binutils linker's
-  `etca_build_mov_ri` correctly rewrites the chain.
-- **Label emission**: `emitFunctionBodyStart` in the AsmPrinter marks all
-  jump-table-targeted MBBs with `setLabelMustBeEmitted()`, ensuring labels
-  are emitted even for fallthrough successors.
-- **ELF fixup mapping**: Fixed the `RelocMap[]` array to match the actual enum
-  order in `ETCAFixupKinds.h` (SAF_CALL was at wrong index, breaking
-  relocation emission for CALL instructions).
-- **Tests**: `switch.ll` updated for jump-table-enabled output (changed i32
-  switch to i16 to avoid pre-existing G_USUBO issue).  All 71 MC/CodeGen
-  tests pass.
-
 ### Tests
 - [ ] ELF object verification (EM_ETCA, section headers, relocations)
 - [ ] Integration tests (Fibonacci, memcpy, recursive factorial)
 - [ ] LLVM test suite integration
 
 ### Clang & Tools
-- [x] clang driver support (`etca-unknown-elf` target triple, `-mcpu=generic` with word/ptr sizes via `-mattr` flags, proper DataLayout, preprocessor defines `__etca__`/`__ETCA__`, C++ name mangling, all word/address width combos supported)
 - [ ] clang intrinsics for ETCa-specific operations (READCR, WRITECR, etc.)
 - [ ] compiler-rt builtins (soft-float, div/mod, etc.)
-- [x] lld linker support (ETCA ELF linking) — full LLD backend in `lld/ELF/Arch/ETCA.cpp` with:
-  - All 57 ELF relocation types matching binutils
-  - 32-bit and 64-bit ELF output (auto-detected via CPU features)
-  - RELA format (binutils-compatible)
-  - `elf32etca` / `elf64etca` emulation flags
-  - `--oformat binary` support for flat ROM images
-  - Works with `clang -fuse-ld=lld`
-- [x] Binutils ld support via clang (default: searches for `etca-elf-ld`, passes correct `-melf{16,32,64}_etca` flags)
-- [x] clang `-fuse-ld=lld` / `-fuse-ld=bfd` support in driver
-- [x] Both `llvm-objcopy -O binary` and `--oformat binary` for ROM production
-- [x] Binutils cross-compatibility verified (binutils ld can link LLVM-produced .o files)
-- [x] Assembly syntax tests cross-checked vs etca binutils output
 
 ### Extra
 - [ ] determine if we need llvm-libc, and libc++?
 - [ ] `writeNopData` odd-count fallback: when an extension adds 1-byte NOPs, update `writeNopData` to handle odd byte counts without falling back to trap instructions
 
-### Driver Implementation Details
-- `clang/lib/Basic/Targets/ETCA.{h,cpp}` — TargetInfo: dynamic type sizes via `-mattr` features (parsed by `handleTargetFeatures()`), single CPU model `generic`, LP-like C type model, GCC register names and aliases for inline asm, preprocessor defines (`__etca__`, `__ETCA__`, `__ETCA_GENERIC__`, `__ETCA32__`, etc., `__ETCA_WORD_SIZE__`, `__ETCA_PTR_SIZE__`, extension detection macros)
-- `clang/lib/Driver/ToolChains/ETCA.{h,cpp}` — ToolChain: `Generic_ELF`-based, GCC installation discovery, ELF linker (cta-elf-ld), bare-metal defaults
-- Registered in `Driver.cpp`, `Targets.cpp`, `Clang.cpp` (isSignedCharDefault), `CommonArgs.cpp` (getCPUName with `-mcpu=` mapping)
-
-### Spec Conformance Audit
-- [ ] Re-check instruction encodings against `etca-spec/base-isa.md` (SS bits, CCCC opcodes, condition codes)
-- [ ] Re-check flag semantics (Z, N, C, V) against spec
-- [ ] Re-check memory semantics (unaligned access, pointer width, memory-mapped IO)
-- [ ] Re-check register file (Dwarf numbering, ABI names)
-- [ ] Verify relocation types match `etca-binutils-gdb/` exactly
-
-## Build Notes
+## Build
 
 ```sh
 cmake -S llvm -B build-etca -G Ninja \
@@ -254,22 +203,11 @@ cmake -S llvm -B build-etca -G Ninja \
   -DCMAKE_BUILD_TYPE=Debug \
   -DLLVM_ENABLE_ASSERTIONS=ON \
   -DLLVM_ENABLE_PROJECTS="clang;lld"
-
-# Build everything. NEVER build only individual targets!
 ninja -C build-etca
 
-# Quick smoke test
-echo 'define i16 @add(i16 %a, i16 %b) {
-  %r = add i16 %a, %b
-  ret i16 %r
-}' | build-etca/bin/llc -march=etca -mcpu=generic -filetype=asm
-
 # Run all ETCA tests
-ninja -C build-etca && build-etca/bin/llvm-lit llvm/test/*/ETCA/ clang/test/*/ETCA/ clang/test/*/etca-* lld/test/ELF/etca-*
+build-etca/bin/llvm-lit llvm/test/*/ETCA/ clang/test/*/ETCA/ clang/test/*/etca-* lld/test/ELF/etca-*
 ```
-
-**Compiler note**: Clang 22.1.4 + libc++ has `abi_tag` incompatibility with `libDebugInfoGSYM`. GCC works but is slower.
-
 
 ## TODO
 Register class handling seems sus in a lot of places (especially for the BYTE extension)

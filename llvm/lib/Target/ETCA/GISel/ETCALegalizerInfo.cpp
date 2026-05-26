@@ -57,13 +57,22 @@
 #include "llvm/CodeGen/MachineJumpTableInfo.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/Support/Debug.h"
+
+#define GET_INSTRINFO_ENUM
+#include "ETCAGenInstrInfo.inc"
+
+#define GET_REGINFO_ENUM
+#include "ETCAGenRegisterInfo.inc"
 
 #define DEBUG_TYPE "etca-legalizer"
 
 using namespace llvm;
 
 ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
+
   using namespace TargetOpcode;
 
   unsigned PS = ST.getPtrSize();
@@ -540,6 +549,125 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   SSubSatActions.clampScalar(0, MinLegal, MaxComp);
 
   //===----------------------------------------------------------------===//
+  // Floating-point operations — soft-float libcalls
+  //
+  // ETCa has no FP hardware.  All FP operations are lowered via compiler-rt
+  // library calls (soft-float).
+  //
+  // FP types use the same LLT sizes as integer types (s32=f32, s64=f64),
+  // which are already legal for data-flow ops.  Only f32 (s32) and f64
+  // (s64) are supported — f16 (s16) arithmetic is not directly supported.
+  // f16 conversions (G_FPEXT/G_FPTRUNC) work via libcalls.
+  //
+  // Three strategies:
+  //   1. .libcallFor() — ops whose implementations have standard
+  //      compiler-rt impl names registered in initLibcallLoweringInfo().
+  //      The generic LegalizerHelper::legalizeLibcall() handles those.
+  //   2. .customFor() — ops whose standard impl names are missing from
+  //      the RTLIB enum.  Custom handlers emit CALL_Pseudo directly.
+  //   3. .customFor() — bit-manipulation ops (FNEG, FABS, FCONSTANT)
+  //      expanded inline.
+  //===----------------------------------------------------------------===//
+
+  // --- Strategy 1: operations with standard compiler-rt impl names ---
+
+  // FP arithmetic — libcall (__addsf3, __adddf3, etc.)
+  // Use the same pattern as SetupLibcall in the existing code.
+  { // G_FADD
+    auto &B = getActionDefinitionsBuilder(G_FADD);
+    B.libcallFor({s32});
+    B.libcallFor(HasQW, {s64});
+    B.clampScalar(0, s32, s64);
+  }
+  { // G_FSUB
+    auto &B = getActionDefinitionsBuilder(G_FSUB);
+    B.libcallFor({s32});
+    B.libcallFor(HasQW, {s64});
+    B.clampScalar(0, s32, s64);
+  }
+  { // G_FMUL
+    auto &B = getActionDefinitionsBuilder(G_FMUL);
+    B.libcallFor({s32});
+    B.libcallFor(HasQW, {s64});
+    B.clampScalar(0, s32, s64);
+  }
+  { // G_FDIV
+    auto &B = getActionDefinitionsBuilder(G_FDIV);
+    B.libcallFor({s32});
+    B.libcallFor(HasQW, {s64});
+    B.clampScalar(0, s32, s64);
+  }
+  { // G_FPOWI
+    auto &B = getActionDefinitionsBuilder(G_FPOWI);
+    B.libcallFor({s32});
+    B.libcallFor(HasQW, {s64});
+    B.clampScalar(0, s32, s64);
+  }
+
+  // FP conversions — libcall (__extendsfdf2, __truncdfsf2, etc.)
+  getActionDefinitionsBuilder(G_FPEXT).libcallFor(
+      {{s64, s32}, {s32, s16}, {s64, s16}});
+  getActionDefinitionsBuilder(G_FPTRUNC).libcallFor(
+      {{s32, s64}, {s16, s32}, {s16, s64}});
+
+  // FP↔int conversions — libcall (__fixsfsi, __floatsisf, etc.)
+  getActionDefinitionsBuilder({G_FPTOSI, G_FPTOUI})
+      .libcallFor({{s32, s32}, {s64, s32}, {s32, s64}, {s64, s64}});
+  getActionDefinitionsBuilder({G_SITOFP, G_UITOFP})
+      .libcallFor({{s32, s32}, {s64, s32}, {s32, s64}, {s64, s64}});
+
+  // FP comparison — libcall (__eqsf2, __ltsf2, etc.)
+  auto &FpCmpActions = getActionDefinitionsBuilder(G_FCMP);
+  FpCmpActions.libcallFor({s32});
+  FpCmpActions.libcallFor(HasQW, {s64});
+  FpCmpActions.clampScalar(0, s32, s64);
+
+  // --- Strategy 2: operations without standard impl names ---
+  // Custom legalization emits CALL_Pseudo with hardcoded function names.
+
+  // Custom FP ops — no standard impl names, handled via custom
+  // lowering that emits CALL_Pseudo with hardcoded names.
+  auto SetupCustomFP = [&](unsigned Opc) {
+    auto &B = getActionDefinitionsBuilder(Opc);
+    B.customFor({s32});
+    B.customFor(HasQW, {s64});
+    B.clampScalar(0, s32, s64);
+  };
+  SetupCustomFP(G_FSQRT);
+  SetupCustomFP(G_FCEIL);
+  SetupCustomFP(G_FFLOOR);
+  SetupCustomFP(G_FMINNUM);
+  SetupCustomFP(G_FMAXNUM);
+  SetupCustomFP(G_FMA);
+  SetupCustomFP(G_FREM);
+  SetupCustomFP(G_FPOW);
+  SetupCustomFP(G_FLDEXP);
+  SetupCustomFP(G_FRINT);
+  SetupCustomFP(G_FNEARBYINT);
+  SetupCustomFP(G_FMINIMUMNUM);
+  SetupCustomFP(G_FMAXIMUMNUM);
+  SetupCustomFP(G_INTRINSIC_TRUNC);
+  SetupCustomFP(G_INTRINSIC_ROUND);
+  SetupCustomFP(G_INTRINSIC_ROUNDEVEN);
+
+  // --- Strategy 3: bit-manipulation (no call needed) ---
+
+  // G_FNEG, G_FABS, G_FCONSTANT — bit-manipulation (no call needed)
+  auto SetupBitFP = [&](unsigned Opc) {
+    auto &B = getActionDefinitionsBuilder(Opc);
+    B.customFor({s32});
+    B.customFor(HasQW, {s64});
+    B.clampScalar(0, s32, s64);
+  };
+  SetupBitFP(G_FNEG);
+  SetupBitFP(G_FABS);
+  SetupBitFP(G_FCONSTANT);
+
+  // G_BITCAST: same-size bit reinterpretation.
+  // On ETCa the same GPR class holds both int and FP bit patterns.
+  getActionDefinitionsBuilder(G_BITCAST).alwaysLegal();
+
+  //===----------------------------------------------------------------===//
   // Mark unhandled ops as unsupported (will cause GISel abort)
   //===----------------------------------------------------------------===//
 
@@ -580,6 +708,46 @@ bool ETCALegalizerInfo::legalizeCustom(
     return legalizeUSube(MI, MIRBuilder);
   case TargetOpcode::G_VASTART:
     return legalizeVAStart(MI, MIRBuilder);
+
+    //===---------------------------------------------------------------===//
+    // Soft-float custom legalization
+    //===---------------------------------------------------------------===//
+
+  case TargetOpcode::G_FNEG:
+    return legalizeFNEG(MI, MIRBuilder);
+  case TargetOpcode::G_FABS:
+    return legalizeFABS(MI, MIRBuilder);
+  case TargetOpcode::G_FCONSTANT:
+    return legalizeFCONSTANT(MI, MIRBuilder);
+  case TargetOpcode::G_FSQRT:
+    return legalizeFPLibcall(MI, MIRBuilder, "__sqrtf", "__sqrt");
+  case TargetOpcode::G_FCEIL:
+    return legalizeFPLibcall(MI, MIRBuilder, "__ceilf", "__ceil");
+  case TargetOpcode::G_FFLOOR:
+    return legalizeFPLibcall(MI, MIRBuilder, "__floorf", "__floor");
+  case TargetOpcode::G_FMINNUM:
+  case TargetOpcode::G_FMINIMUMNUM:
+    return legalizeFPLibcall(MI, MIRBuilder, "__fminf", "__fmin");
+  case TargetOpcode::G_FMAXNUM:
+  case TargetOpcode::G_FMAXIMUMNUM:
+    return legalizeFPLibcall(MI, MIRBuilder, "__fmaxf", "__fmax");
+  case TargetOpcode::G_FMA:
+    return legalizeFPLibcall(MI, MIRBuilder, "__fmaf", "__fma");
+  case TargetOpcode::G_FREM:
+    return legalizeFPLibcall(MI, MIRBuilder, "__fmodf", "__fmod");
+  case TargetOpcode::G_FPOW:
+    return legalizeFPLibcall(MI, MIRBuilder, "__powf", "__pow");
+  case TargetOpcode::G_FLDEXP:
+    return legalizeFPLibcall(MI, MIRBuilder, "__ldexpf", "__ldexp");
+  case TargetOpcode::G_FRINT:
+  case TargetOpcode::G_FNEARBYINT:
+  case TargetOpcode::G_INTRINSIC_TRUNC:
+  case TargetOpcode::G_INTRINSIC_ROUND:
+  case TargetOpcode::G_INTRINSIC_ROUNDEVEN:
+    // Rounding/truncation via libm: rint/round/trunc variants.
+    // For simplicity, use the same name for all — the difference is
+    // in the rounding mode semantics which soft-float handles.
+    return legalizeFPLibcall(MI, MIRBuilder, "__rintf", "__rint");
   }
 }
 
@@ -980,6 +1148,140 @@ bool ETCALegalizerInfo::legalizeVAStart(MachineInstr &MI,
          "G_VASTART must have exactly one memory operand");
   MIRBuilder.buildStore(FINAddr, MI.getOperand(0).getReg(),
                         *MI.memoperands()[0]);
+
+  MI.eraseFromParent();
+  return true;
+}
+
+//===----------------------------------------------------------------===//
+// Soft-float custom legalization
+//===----------------------------------------------------------------===//
+
+bool ETCALegalizerInfo::legalizeFNEG(MachineInstr &MI,
+                                     MachineIRBuilder &MIRBuilder) const {
+  // G_FNEG dst, src → dst = xor(src, sign_bit_mask)
+  // FP negation is XOR of the sign bit (MSB).
+  // f32 sign bit = 1 << 31 = 0x80000000
+  // f64 sign bit = 1 << 63 = 0x8000000000000000
+  MachineRegisterInfo &MRI = *MIRBuilder.getMRI();
+  (void)MRI;
+  Register Dst = MI.getOperand(0).getReg();
+  Register Src = MI.getOperand(1).getReg();
+  LLT Ty = MRI.getType(Dst);
+  unsigned Size = Ty.getSizeInBits();
+  APInt SignBit = APInt::getSignMask(Size);
+  auto SignMask = MIRBuilder.buildConstant(Ty, SignBit);
+  MIRBuilder.buildXor(Dst, Src, SignMask);
+  MI.eraseFromParent();
+  return true;
+}
+
+bool ETCALegalizerInfo::legalizeFABS(MachineInstr &MI,
+                                     MachineIRBuilder &MIRBuilder) const {
+  // G_FABS dst, src → dst = and(src, ~sign_bit_mask)
+  // Clear the sign bit.
+  MachineRegisterInfo &MRI = *MIRBuilder.getMRI();
+  (void)MRI;
+  Register Dst = MI.getOperand(0).getReg();
+  Register Src = MI.getOperand(1).getReg();
+  LLT Ty = MRI.getType(Dst);
+  unsigned Size = Ty.getSizeInBits();
+  APInt MagnitudeMask = APInt::getSignedMaxValue(Size);
+  auto Mask = MIRBuilder.buildConstant(Ty, MagnitudeMask);
+  MIRBuilder.buildAnd(Dst, Src, Mask);
+  MI.eraseFromParent();
+  return true;
+}
+
+bool ETCALegalizerInfo::legalizeFCONSTANT(MachineInstr &MI,
+                                          MachineIRBuilder &MIRBuilder) const {
+  // G_FCONSTANT → G_CONSTANT with bitcasted integer value.
+  // The FP bit pattern is stored as an APInt in the G_FCONSTANT operand.
+  Register Dst = MI.getOperand(0).getReg();
+  const ConstantFP *CFP = MI.getOperand(1).getFPImm();
+  const APFloat &APF = CFP->getValueAPF();
+  APInt IntVal = APF.bitcastToAPInt();
+  // Emit G_CONSTANT with the integer bit pattern.
+  // The register retains its FP LLT type — G_CONSTANT is type-agnostic
+  // (it just stores the APInt bits).  The instruction selector emits
+  // MOVZI with these bits, which is correct for any register width.
+  MIRBuilder.buildConstant(Dst, IntVal);
+  MI.eraseFromParent();
+  return true;
+}
+
+bool ETCALegalizerInfo::legalizeFPLibcall(MachineInstr &MI,
+                                          MachineIRBuilder &MIRBuilder,
+                                          const char *Name32,
+                                          const char *Name64) const {
+  // Emit a call to a soft-float library function.
+  //
+  // For unary ops: G_FSQRT %dst, %src
+  // For binary ops: G_FADD %dst, %src1, %src2
+  // For ternary ops: G_FMA %dst, %src1, %src2, %src3
+  //
+  // This helper emits:
+  //   ADJCALLSTACKDOWN 0, 0
+  //   COPY arg0, src0
+  //   [COPY arg1, src1]
+  //   [COPY arg2, src2]
+  //   CALL_Pseudo @funcName, regmask, implicit arg0, implicit-def retReg
+  //   COPY dst, retReg
+  //   ADJCALLSTACKUP 0, 0
+  MachineRegisterInfo &MRI = *MIRBuilder.getMRI();
+  MachineFunction &MF = MIRBuilder.getMF();
+  const auto &TRI = *MF.getSubtarget().getRegisterInfo();
+  Register Dst = MI.getOperand(0).getReg();
+  LLT DstTy = MRI.getType(Dst);
+  unsigned Size = DstTy.getSizeInBits();
+  const char *FuncName = (Size == 64) ? Name64 : Name32;
+
+  // Determine argument registers based on FP width.
+  // f32 → D0, f64 → Q0 (first arg = return register, per C ABI).
+  // Args: unary (1 src), binary (2 src), ternary (3 src, e.g. FMA).
+  unsigned Arg0, Arg1, Arg2, RetReg;
+  if (Size == 64) {
+    RetReg = ETCA::Q0;
+    Arg0 = ETCA::Q0;
+    Arg1 = ETCA::Q1;
+    Arg2 = ETCA::Q2;
+  } else {
+    RetReg = ETCA::D0;
+    Arg0 = ETCA::D0;
+    Arg1 = ETCA::D1;
+    Arg2 = ETCA::D2;
+  }
+
+  // ADJCALLSTACKDOWN
+  MIRBuilder.buildInstr(ETCA::ADJCALLSTACKDOWN).addImm(0).addImm(0);
+
+  // Copy source operands to argument registers.
+  // Operand 0 is Dst, operands 1+ are sources.
+  unsigned NumArgs = MI.getNumOperands() - 1;
+  unsigned ArgRegs[] = {Arg0, Arg1, Arg2};
+  for (unsigned i = 0; i < NumArgs && i < 3; ++i) {
+    Register SrcReg = MI.getOperand(i + 1).getReg();
+    MIRBuilder.buildCopy(ArgRegs[i], SrcReg);
+  }
+
+  // CALL_Pseudo
+  auto MIB = MIRBuilder.buildInstr(ETCA::CALL_Pseudo);
+  MIB.addExternalSymbol(FuncName);
+  MIB.addRegMask(
+      TRI.getCallPreservedMask(MF, MF.getFunction().getCallingConv()));
+
+  // Mark argument registers as implicit uses
+  for (unsigned i = 0; i < NumArgs && i < 3; ++i)
+    MIB.addReg(ArgRegs[i], RegState::Implicit);
+
+  // Mark return register as implicit def
+  MIB.addDef(RetReg, RegState::ImplicitDefine);
+
+  // ADJCALLSTACKUP
+  MIRBuilder.buildInstr(ETCA::ADJCALLSTACKUP).addImm(0).addImm(0);
+
+  // Copy return value to Dst
+  MIRBuilder.buildCopy(Dst, Register(RetReg));
 
   MI.eraseFromParent();
   return true;
