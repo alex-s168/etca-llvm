@@ -215,7 +215,6 @@ bool ETCACallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
   unsigned RegWidth = ST.getRegWidth();
   unsigned RegBytes = RegWidth / 8;
   const MCPhysReg *ArgRegs = getArgRegs(RegWidth);
-  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
 
   // --- Handle stack arguments (args 5+) ---
   size_t NumArgs = Info.OrigArgs.size();

@@ -106,19 +106,15 @@ void ETCAFrameLowering::emitPrologue(MachineFunction &MF,
 
   // 1. push r5 (save old base pointer / frame link)
   unsigned PushOpc;
-  unsigned PopOpc;
   switch (RegWidth) {
   case 64:
     PushOpc = PUSH64;
-    PopOpc = POP64;
     break;
   case 32:
     PushOpc = PUSH32;
-    PopOpc = POP32;
     break;
   default:
     PushOpc = PUSH;
-    PopOpc = POP;
     break;
   }
   BuildMI(MBB, MBBI, DL, TII.get(PushOpc)).addReg(R5);
@@ -199,19 +195,15 @@ void ETCAFrameLowering::emitEpilogue(MachineFunction &MF,
   unsigned RegWidth = ST.getRegWidth();
   unsigned SlotSize = RegWidth / 8;
 
-  unsigned PushOpc;
   unsigned PopOpc;
   switch (RegWidth) {
   case 64:
-    PushOpc = PUSH64;
     PopOpc = POP64;
     break;
   case 32:
-    PushOpc = PUSH32;
     PopOpc = POP32;
     break;
   default:
-    PushOpc = PUSH;
     PopOpc = POP;
     break;
   }
@@ -347,7 +339,6 @@ bool ETCAFrameLowering::assignCalleeSavedSpillSlots(
   unsigned SlotSize = RegWidth / 8;
 
   for (auto &CS : CSI) {
-    unsigned Reg = CS.getReg();
     int FI = MFI.CreateStackObject(SlotSize, Align(SlotSize), true);
     CS.setFrameIdx(FI);
   }

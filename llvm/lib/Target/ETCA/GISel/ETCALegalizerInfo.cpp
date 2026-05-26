@@ -517,7 +517,6 @@ bool ETCALegalizerInfo::legalizeBRJT(MachineInstr &MI,
     return false;
 
   Register PtrReg = MI.getOperand(0).getReg();
-  unsigned JTI = MI.getOperand(1).getIndex();
   Register IndexReg = MI.getOperand(2).getReg();
 
   LLT PtrTy = MRI.getType(PtrReg);

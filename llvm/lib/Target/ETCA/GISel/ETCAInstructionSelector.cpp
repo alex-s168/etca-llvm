@@ -211,11 +211,9 @@ static unsigned getBranchOpcForPred(int64_t Pred) {
   }
 }
 
-ETCAInstructionSelector::ETCAInstructionSelector(const TargetMachine &TM,
-                                                 const ETCASubtarget &ST,
+ETCAInstructionSelector::ETCAInstructionSelector(const ETCASubtarget &ST,
                                                  const RegisterBankInfo &RBI)
-    : InstructionSelector(), TM(TM), ST(ST), RBI(RBI),
-      TRI(*ST.getRegisterInfo()) {}
+    : InstructionSelector(), ST(ST), RBI(RBI), TRI(*ST.getRegisterInfo()) {}
 
 void ETCAInstructionSelector::setupGeneratedPerFunctionState(
     MachineFunction &MF) {}
@@ -795,8 +793,6 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     Register TrueVal = MI.getOperand(2).getReg();
     Register FalseVal = MI.getOperand(3).getReg();
     LLT DstTy = MRI->getType(Dst);
-    unsigned Size = DstTy.getSizeInBits();
-    const TargetRegisterClass *DstRC = getRCForType(DstTy);
 
     int64_t PredVal = 0;
     bool CMPEmitted = false;

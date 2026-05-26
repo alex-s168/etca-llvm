@@ -18,15 +18,13 @@ class ETCASubtarget;
 
 class ETCAInstructionSelector : public InstructionSelector {
 public:
-  ETCAInstructionSelector(const TargetMachine &TM, const ETCASubtarget &ST,
-                          const RegisterBankInfo &RBI);
+  ETCAInstructionSelector(const ETCASubtarget &ST, const RegisterBankInfo &RBI);
 
   bool select(MachineInstr &MI) override;
   void setupGeneratedPerFunctionState(MachineFunction &MF) override;
   static const char *getName() { return "ETCAInstructionSelector"; }
 
 private:
-  const TargetMachine &TM;
   const ETCASubtarget &ST;
   const RegisterBankInfo &RBI;
   const TargetRegisterInfo &TRI;

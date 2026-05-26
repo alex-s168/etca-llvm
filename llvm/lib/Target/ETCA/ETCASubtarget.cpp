@@ -166,16 +166,16 @@ ETCASubtarget::ETCASubtarget(const Triple &TargetTriple, StringRef Cpu,
   // Now WordSize is known; construct FrameLowering with correct alignment.
   FrameLowering = std::make_unique<ETCAFrameLowering>(Align(WordSize / 8));
   buildDLString();
-  initSubtargetDeps(TM);
+  initSubtargetDeps();
 }
 
 ETCASubtarget::~ETCASubtarget() = default;
 
-void ETCASubtarget::initSubtargetDeps(const TargetMachine &TM) const {
+void ETCASubtarget::initSubtargetDeps() const {
   auto *ST = const_cast<ETCASubtarget *>(this);
   ST->RegInfo = std::make_unique<ETCARegisterInfo>(*this);
   ST->InstrInfo = std::make_unique<ETCAInstrInfo>(*ST, *ST->RegInfo);
-  ST->TLInfo = std::make_unique<ETCATargetLowering>(TM, *this);
+  ST->TLInfo = std::make_unique<ETCATargetLowering>(this->TM, *this);
 }
 
 const TargetInstrInfo *ETCASubtarget::getInstrInfo() const {
@@ -211,7 +211,7 @@ const RegisterBankInfo *ETCASubtarget::getRegBankInfo() const {
 InstructionSelector *ETCASubtarget::getInstructionSelector() const {
   if (!InstSelector)
     InstSelector =
-        std::make_unique<ETCAInstructionSelector>(TM, *this, *getRegBankInfo());
+        std::make_unique<ETCAInstructionSelector>(*this, *getRegBankInfo());
   return InstSelector.get();
 }
 

@@ -111,9 +111,8 @@ void ETCAToolChain::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
     addSystemInclude(DriverArgs, CC1Args, Dir);
 }
 
-std::string
-ETCAToolChain::ComputeEffectiveClangTriple(const ArgList &Args,
-                                           types::ID InputType) const {
+std::string ETCAToolChain::ComputeEffectiveClangTriple(
+    const ArgList &Args, StringRef BoundArch, types::ID InputType) const {
   // Start with the base triple (e.g., "etca-unknown-elf").
   std::string TripleStr = getTripleString().str();
 

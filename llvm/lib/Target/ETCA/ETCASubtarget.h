@@ -77,7 +77,7 @@ class ETCASubtarget : public ETCAGenSubtargetInfo {
   // Dynamic data layout string
   std::string DLString;
 
-  void initSubtargetDeps(const TargetMachine &TM) const;
+  void initSubtargetDeps() const;
 
 public:
   ETCASubtarget(const Triple &TargetTriple, StringRef Cpu,

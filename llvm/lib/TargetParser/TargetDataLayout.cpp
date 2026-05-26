@@ -642,6 +642,11 @@ std::string Triple::computeDataLayout(StringRef ABIName) const {
   case Triple::spirv32:
   case Triple::spirv64:
     return computeSPIRVDataLayout(*this);
+  case Triple::etca:
+    // ETCA has a dynamic DataLayout computed by the subtarget based on
+    // word/pointer size features (-mattr=+32bit,+ptr64 etc.). The
+    // ETCATargetMachine overrides the DataLayout in its constructor.
+    return "";
   case Triple::lanai:
     return computeLanaiDataLayout();
   case Triple::wasm32:

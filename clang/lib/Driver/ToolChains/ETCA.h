@@ -56,7 +56,7 @@ public:
   const char *getDefaultLinker() const override { return "ld.lld"; }
 
   std::string ComputeEffectiveClangTriple(
-      const llvm::opt::ArgList &Args,
+      const llvm::opt::ArgList &Args, StringRef BoundArch = {},
       types::ID InputType = types::TY_INVALID) const override;
 
 protected:
