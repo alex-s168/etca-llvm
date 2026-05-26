@@ -110,8 +110,8 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   // Arithmetic and logical operations — TIER 2 (subtarget-gated)
   //===----------------------------------------------------------------===//
 
-  auto &ArithActions =
-      getActionDefinitionsBuilder({G_ADD, G_SUB, G_AND, G_OR, G_XOR});
+  auto &ArithActions = getActionDefinitionsBuilder(
+      {G_ADD, G_SUB, G_AND, G_OR, G_XOR, G_SHL, G_ASHR, G_LSHR});
   computeTypes(ArithActions);
   ArithActions.widenScalarToNextPow2(0, MinLegal.getSizeInBits());
   ArithActions.clampScalar(0, MinLegal, MaxComp);
@@ -301,10 +301,10 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   // and the actual Libcall→LibcallImpl name mapping is established in
   // ETCASubtarget::initLibcallLoweringInfo().
   //
-  // G_ASHR, G_LSHR, and G_SHL are lowered to libcalls (__ashrhi3, __lshrhi3,
-  // __ashlhi3, etc.) because the base ETCa ISA has no general shift
-  // instructions.  G_SHL is only available as SLO16 + ADD for constant
-  // shift amounts — a future GISel combiner can restore that optimization.
+  // G_ASHR and G_LSHR are also lowered to libcalls (__ashrhi3, __lshrhi3,
+  // etc.) because the base ETCa ISA has no shift-right instruction.
+  // G_SHL is handled inline by the instruction selector (using SLO/ADD for
+  // constant shifts, or libcalls for variable shifts).
   //===----------------------------------------------------------------===//
 
   auto SetupLibcall = [&](unsigned Opc) {
@@ -320,9 +320,9 @@ ETCALegalizerInfo::ETCALegalizerInfo(const ETCASubtarget &ST) {
   SetupLibcall(G_SDIV);
   SetupLibcall(G_UREM);
   SetupLibcall(G_SREM);
-  SetupLibcall(G_ASHR);
-  SetupLibcall(G_LSHR);
-  SetupLibcall(G_SHL);
+  // G_ASHR and G_LSHR are now handled inline (moved to ArithActions above)
+  // for constant shifts.  Non-constant shifts are handled by the instruction
+  // selector which emits libcalls directly.
 
   //===----------------------------------------------------------------===//
   // Memory intrinsics — lowered to libcalls (memcpy, memmove, memset)

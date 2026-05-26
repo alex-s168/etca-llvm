@@ -138,7 +138,8 @@ define i16 @and_ri_small(i16 %a) {
 
 define i16 @shift_left(i16 %a) {
 ; CHECK-LABEL: shift_left:
-; CHECK:       call __ashlhi3
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = shl i16 %a, 2
   ret i16 %r
@@ -146,7 +147,6 @@ define i16 @shift_left(i16 %a) {
 
 define i16 @shift_left_by_zero(i16 %a) {
 ; CHECK-LABEL: shift_left_by_zero:
-; CHECK:       call __ashlhi3
 ; CHECK:       jmpr %r7
   %r = shl i16 %a, 0
   ret i16 %r
@@ -154,7 +154,7 @@ define i16 @shift_left_by_zero(i16 %a) {
 
 define i16 @shift_left_by_one(i16 %a) {
 ; CHECK-LABEL: shift_left_by_one:
-; CHECK:       call __ashlhi3
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = shl i16 %a, 1
   ret i16 %r
@@ -165,7 +165,9 @@ define i16 @shift_left_by_one(i16 %a) {
 
 define i16 @shift_left_by_3(i16 %a) {
 ; CHECK-LABEL: shift_left_by_3:
-; CHECK:       call __ashlhi3
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = shl i16 %a, 3
   ret i16 %r
@@ -173,7 +175,7 @@ define i16 @shift_left_by_3(i16 %a) {
 
 define i16 @shift_left_by_5(i16 %a) {
 ; CHECK-LABEL: shift_left_by_5:
-; CHECK:       call __ashlhi3
+; CHECK:       {{slo %r[0-9]+[dqh]?, 0}}
 ; CHECK:       jmpr %r7
   %r = shl i16 %a, 5
   ret i16 %r
@@ -181,7 +183,8 @@ define i16 @shift_left_by_5(i16 %a) {
 
 define i16 @shift_left_by_6(i16 %a) {
 ; CHECK-LABEL: shift_left_by_6:
-; CHECK:       call __ashlhi3
+; CHECK:       {{slo %r[0-9]+[dqh]?, 0}}
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = shl i16 %a, 6
   ret i16 %r
@@ -189,7 +192,9 @@ define i16 @shift_left_by_6(i16 %a) {
 
 define i16 @shift_left_by_7(i16 %a) {
 ; CHECK-LABEL: shift_left_by_7:
-; CHECK:       call __ashlhi3
+; CHECK:       {{slo %r[0-9]+[dqh]?, 0}}
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; CHECK:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
 ; CHECK:       jmpr %r7
   %r = shl i16 %a, 7
   ret i16 %r
@@ -197,7 +202,8 @@ define i16 @shift_left_by_7(i16 %a) {
 
 define i16 @shift_left_by_10(i16 %a) {
 ; CHECK-LABEL: shift_left_by_10:
-; CHECK:       call __ashlhi3
+; CHECK:       {{slo %r[0-9]+[dqh]?, 0}}
+; CHECK:       {{slo %r[0-9]+[dqh]?, 0}}
 ; CHECK:       jmpr %r7
   %r = shl i16 %a, 10
   ret i16 %r
@@ -205,7 +211,9 @@ define i16 @shift_left_by_10(i16 %a) {
 
 define i16 @shift_left_by_15(i16 %a) {
 ; CHECK-LABEL: shift_left_by_15:
-; CHECK:       call __ashlhi3
+; CHECK:       {{slo %r[0-9]+[dqh]?, 0}}
+; CHECK:       {{slo %r[0-9]+[dqh]?, 0}}
+; CHECK:       {{slo %r[0-9]+[dqh]?, 0}}
 ; CHECK:       jmpr %r7
   %r = shl i16 %a, 15
   ret i16 %r
@@ -213,7 +221,7 @@ define i16 @shift_left_by_15(i16 %a) {
 
 define i16 @shift_left_overflow(i16 %a) {
 ; CHECK-LABEL: shift_left_overflow:
-; CHECK:       call __ashlhi3
+; CHECK:       {{movz %r[0-9]+[dqh]?, 0}}
 ; CHECK:       jmpr %r7
   %r = shl i16 %a, 16
   ret i16 %r
@@ -221,7 +229,7 @@ define i16 @shift_left_overflow(i16 %a) {
 
 define i16 @shift_left_negative(i16 %a) {
 ; CHECK-LABEL: shift_left_negative:
-; CHECK:       call __ashlhi3
+; CHECK:       {{movz %r[0-9]+[dqh]?, 0}}
 ; CHECK:       jmpr %r7
   %r = shl i16 %a, -1
   ret i16 %r

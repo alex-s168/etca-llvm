@@ -509,8 +509,76 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
         HasConst = true;
       }
     }
-    if (!HasConst)
-      return false;
+    // Variable shift amount: emit a libcall (__ashlhi3/__ashlsi3/__ashldi3).
+    if (!HasConst) {
+      // Map Size to libcall name and argument registers.
+      const char *LibcallName;
+      unsigned ArgReg0, ArgReg1, RetReg;
+      switch (Size) {
+      case 8:
+        LibcallName = "__ashlhi3";
+        ArgReg0 = ETCA::R0;
+        ArgReg1 = ETCA::R1;
+        RetReg = ETCA::R0;
+        break;
+      case 16:
+        LibcallName = "__ashlhi3";
+        ArgReg0 = ETCA::R0;
+        ArgReg1 = ETCA::R1;
+        RetReg = ETCA::R0;
+        break;
+      case 32:
+        LibcallName = "__ashlsi3";
+        ArgReg0 = ETCA::D0;
+        ArgReg1 = ETCA::D1;
+        RetReg = ETCA::D0;
+        break;
+      case 64:
+        LibcallName = "__ashldi3";
+        ArgReg0 = ETCA::Q0;
+        ArgReg1 = ETCA::Q1;
+        RetReg = ETCA::Q0;
+        break;
+      default:
+        return false;
+      }
+
+      // Emit ADJCALLSTACKDOWN marker (no stack args for libcalls).
+      BuildMI(MBB, MI, MIMD, TII.get(ETCA::ADJCALLSTACKDOWN))
+          .addImm(0)
+          .addImm(0);
+
+      // Copy Src1 to first argument register.
+      BuildMI(MBB, MI, MIMD, TII.get(TargetOpcode::COPY), ArgReg0).addReg(Src1);
+      // Copy Src2 to second argument register.
+      BuildMI(MBB, MI, MIMD, TII.get(TargetOpcode::COPY), ArgReg1).addReg(Src2);
+
+      // Build CALL_Pseudo to the libcall function.
+      auto MIB = BuildMI(MBB, MI, MIMD, TII.get(ETCA::CALL_Pseudo));
+      MIB.addExternalSymbol(LibcallName);
+
+      // Add call-preserved register mask.
+      const auto &TRI = *MF.getSubtarget().getRegisterInfo();
+      MIB.addRegMask(
+          TRI.getCallPreservedMask(MF, MF.getFunction().getCallingConv()));
+
+      // Mark argument registers as implicit uses and return register as
+      // implicit def so the register allocator preserves them.
+      MIB.addReg(ArgReg0, RegState::Implicit);
+      MIB.addReg(ArgReg1, RegState::Implicit);
+      MIB.addDef(RetReg, RegState::ImplicitDefine);
+
+      // Emit ADJCALLSTACKUP marker.
+      BuildMI(MBB, MI, MIMD, TII.get(ETCA::ADJCALLSTACKUP)).addImm(0).addImm(0);
+
+      // Copy return value to Dst.
+      BuildMI(MBB, MI, MIMD, TII.get(TargetOpcode::COPY), Dst).addReg(RetReg);
+
+      if (!constrainReg(Dst, DstTy, RBI, *MRI))
+        return false;
+      MI.eraseFromParent();
+      return true;
+    }
 
     // Shift by 0 is a no-op.
     if (ShiftAmt == 0) {
@@ -591,8 +659,162 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
   }
 
     //===----------------------------------------------------------------===//
-    // G_LOAD — select width-specific RR-format load
+    // G_ASHR / G_LSHR — right shifts via libcall (no hardware right-shift)
+    //
+    // ETCa has no shift-right instruction, so all right shifts go through
+    // libcalls (__ashrhi3/__lshrhi3 etc.).  However, we still handle the
+    // trivial cases inline:
+    //   - shift by 0      → MOVZ (copy)
+    //   - shift >= bitwidth → MOVZI(0)  (poison → 0 for safety)
+    //   - Src1 = 0        → MOVZI(0)
     //===----------------------------------------------------------------===//
+
+  case TargetOpcode::G_ASHR:
+  case TargetOpcode::G_LSHR: {
+    Register Dst = MI.getOperand(0).getReg();
+    Register Src1 = MI.getOperand(1).getReg();
+    Register Src2 = MI.getOperand(2).getReg();
+    LLT DstTy = MRI->getType(Dst);
+    unsigned Size = DstTy.getSizeInBits();
+
+    // Src1 = 0 → result is always 0 regardless of shift amount.
+    if (auto *DefMI = MRI->getVRegDef(Src1)) {
+      if (DefMI->getOpcode() == TargetOpcode::G_CONSTANT) {
+        if (DefMI->getOperand(1).getCImm()->isZero()) {
+          BuildMI(MBB, MI, MIMD, TII.get(getMovziOpc(Size)), Dst).addImm(0);
+          if (!constrainReg(Dst, DstTy, RBI, *MRI))
+            return false;
+          MI.eraseFromParent();
+          return true;
+        }
+      }
+    }
+
+    // Check for constant shift amount.
+    int64_t ShiftAmt = 0;
+    bool HasConst = false;
+    if (auto *DefMI = MRI->getVRegDef(Src2)) {
+      if (DefMI->getOpcode() == TargetOpcode::G_CONSTANT) {
+        ShiftAmt = DefMI->getOperand(1).getCImm()->getSExtValue();
+        HasConst = true;
+      }
+    }
+
+    if (HasConst) {
+      // Shift by 0 is a no-op.
+      if (ShiftAmt == 0) {
+        BuildMI(MBB, MI, MIMD, TII.get(getMovzOpc(Size)), Dst).addReg(Src1);
+        if (!constrainReg(Dst, DstTy, RBI, *MRI))
+          return false;
+        MI.eraseFromParent();
+        return true;
+      }
+
+      // Poison for shift >= bit width or negative → produce 0 for safety.
+      // (For arithmetic right shift, poison produces 0 which is safe.)
+      if (ShiftAmt < 0 || ShiftAmt >= (int64_t)Size) {
+        BuildMI(MBB, MI, MIMD, TII.get(getMovziOpc(Size)), Dst).addImm(0);
+        if (!constrainReg(Dst, DstTy, RBI, *MRI))
+          return false;
+        MI.eraseFromParent();
+        return true;
+      }
+
+      // Non-trivial constant shift: fall through to libcall.
+    }
+
+    // --- Libcall path (variable or non-trivial constant shift) ---
+    const char *LibcallName;
+    unsigned ArgReg0, ArgReg1, RetReg;
+    if (MI.getOpcode() == TargetOpcode::G_ASHR) {
+      switch (Size) {
+      case 8:
+      case 16:
+        LibcallName = "__ashrhi3";
+        ArgReg0 = ETCA::R0;
+        ArgReg1 = ETCA::R1;
+        RetReg = ETCA::R0;
+        break;
+      case 32:
+        LibcallName = "__ashrsi3";
+        ArgReg0 = ETCA::D0;
+        ArgReg1 = ETCA::D1;
+        RetReg = ETCA::D0;
+        break;
+      case 64:
+        LibcallName = "__ashrdi3";
+        ArgReg0 = ETCA::Q0;
+        ArgReg1 = ETCA::Q1;
+        RetReg = ETCA::Q0;
+        break;
+      default:
+        return false;
+      }
+    } else {
+      // G_LSHR
+      switch (Size) {
+      case 8:
+      case 16:
+        LibcallName = "__lshrhi3";
+        ArgReg0 = ETCA::R0;
+        ArgReg1 = ETCA::R1;
+        RetReg = ETCA::R0;
+        break;
+      case 32:
+        LibcallName = "__lshrsi3";
+        ArgReg0 = ETCA::D0;
+        ArgReg1 = ETCA::D1;
+        RetReg = ETCA::D0;
+        break;
+      case 64:
+        LibcallName = "__lshrdi3";
+        ArgReg0 = ETCA::Q0;
+        ArgReg1 = ETCA::Q1;
+        RetReg = ETCA::Q0;
+        break;
+      default:
+        return false;
+      }
+    }
+
+    // Emit ADJCALLSTACKDOWN marker (no stack args for libcalls).
+    BuildMI(MBB, MI, MIMD, TII.get(ETCA::ADJCALLSTACKDOWN)).addImm(0).addImm(0);
+
+    // Copy Src1 to first argument register.
+    BuildMI(MBB, MI, MIMD, TII.get(TargetOpcode::COPY), ArgReg0).addReg(Src1);
+    // Copy Src2 to second argument register.
+    BuildMI(MBB, MI, MIMD, TII.get(TargetOpcode::COPY), ArgReg1).addReg(Src2);
+
+    // Build CALL_Pseudo to the libcall function.
+    auto MIB = BuildMI(MBB, MI, MIMD, TII.get(ETCA::CALL_Pseudo));
+    MIB.addExternalSymbol(LibcallName);
+
+    // Add call-preserved register mask.
+    const auto &TRI = *MF.getSubtarget().getRegisterInfo();
+    MIB.addRegMask(
+        TRI.getCallPreservedMask(MF, MF.getFunction().getCallingConv()));
+
+    // Mark argument registers as implicit uses and return register as
+    // implicit def so the register allocator preserves them.
+    MIB.addReg(ArgReg0, RegState::Implicit);
+    MIB.addReg(ArgReg1, RegState::Implicit);
+    MIB.addDef(RetReg, RegState::ImplicitDefine);
+
+    // Emit ADJCALLSTACKUP marker.
+    BuildMI(MBB, MI, MIMD, TII.get(ETCA::ADJCALLSTACKUP)).addImm(0).addImm(0);
+
+    // Copy return value to Dst.
+    BuildMI(MBB, MI, MIMD, TII.get(TargetOpcode::COPY), Dst).addReg(RetReg);
+
+    if (!constrainReg(Dst, DstTy, RBI, *MRI))
+      return false;
+    MI.eraseFromParent();
+    return true;
+  }
+
+    //===-------------------------------------------------------------------===//
+    // G_LOAD — select width-specific RR-format load
+    //===-------------------------------------------------------------------===//
 
   case TargetOpcode::G_LOAD: {
     Register Dst = MI.getOperand(0).getReg();
