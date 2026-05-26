@@ -485,6 +485,21 @@ bool ETCAInstructionSelector::select(MachineInstr &MI) {
     unsigned Size = DstTy.getSizeInBits();
     unsigned AddOpc = getETCAAluOpcode(TargetOpcode::G_ADD, Size);
 
+    // Check if the value being shifted is constant 0.
+    // shl(0, X) = 0 for any X (also ashr/lshr of 0 is 0).
+    if (auto *DefMI = MRI->getVRegDef(Src1)) {
+      if (DefMI->getOpcode() == TargetOpcode::G_CONSTANT) {
+        if (DefMI->getOperand(1).getCImm()->isZero()) {
+          // Result is always zero regardless of shift amount.
+          BuildMI(MBB, MI, MIMD, TII.get(getMovziOpc(Size)), Dst).addImm(0);
+          if (!constrainReg(Dst, DstTy, RBI, *MRI))
+            return false;
+          MI.eraseFromParent();
+          return true;
+        }
+      }
+    }
+
     // SLO requires an immediate shift amount.
     int64_t ShiftAmt = 0;
     bool HasConst = false;

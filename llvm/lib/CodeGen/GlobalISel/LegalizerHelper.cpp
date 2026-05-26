@@ -448,6 +448,8 @@ static RTLIB::Libcall getRTLibDesc(unsigned Opcode, unsigned Size) {
     RTLIBCASE_INT16(SRA_I);
   case TargetOpcode::G_LSHR:
     RTLIBCASE_INT16(SRL_I);
+  case TargetOpcode::G_SHL:
+    RTLIBCASE_INT16(SHL_I);
   case TargetOpcode::G_CTLZ_ZERO_POISON:
     RTLIBCASE_INT(CTLZ_I);
   case TargetOpcode::G_FADD:
@@ -1341,7 +1343,8 @@ LegalizerHelper::libcall(MachineInstr &MI, LostDebugLocObserver &LocObserver) {
   case TargetOpcode::G_UREM:
   case TargetOpcode::G_CTLZ_ZERO_POISON:
   case TargetOpcode::G_ASHR:
-  case TargetOpcode::G_LSHR: {
+  case TargetOpcode::G_LSHR:
+  case TargetOpcode::G_SHL: {
     LLT LLTy = MRI.getType(MI.getOperand(0).getReg());
     unsigned Size = LLTy.getSizeInBits();
     Type *HLTy = IntegerType::get(Ctx, Size);

@@ -135,6 +135,10 @@ void ETCASubtarget::initLibcallLoweringInfo(LibcallLoweringInfo &Info) const {
       {RTLIB::SRL_I16, RTLIB::impl___lshrhi3},
       {RTLIB::SRL_I32, RTLIB::impl___lshrsi3},
       {RTLIB::SRL_I64, RTLIB::impl___lshrdi3},
+      // Integer shift-left libcalls
+      {RTLIB::SHL_I16, RTLIB::impl___ashlhi3},
+      {RTLIB::SHL_I32, RTLIB::impl___ashlsi3},
+      {RTLIB::SHL_I64, RTLIB::impl___ashldi3},
   };
   for (const auto &LC : IntLibcalls)
     Info.setLibcallImpl(LC.Op, LC.Impl);

@@ -1,6 +1,7 @@
 ; RUN: llc -march=etca -mcpu=generic -filetype=obj < %s -o %t.o
 ; RUN: llvm-readobj -r %t.o | FileCheck %s --check-prefix=RELOC
-; RUN: ld.lld -m elf32etca %t.o -o %t.exe
+; RUN: llc -march=etca -mcpu=generic -filetype=obj < %S/ashlhi3_stub.inc -o %t.stub.o
+; RUN: ld.lld -m elf32etca %t.o %t.stub.o -o %t.exe
 ; RUN: llvm-objdump -d %t.exe | FileCheck %s --check-prefix=LINKED
 
 ; Test that switch statements with many cases produce a jump table:

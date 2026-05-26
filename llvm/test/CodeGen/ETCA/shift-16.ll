@@ -30,11 +30,11 @@ define i16 @lshr16(i16 %a, i16 %b) {
 
 define i16 @shl16(i16 %a, i16 %b) {
 ; GEN16-LABEL: name: shl16
-; GEN16-NOT: CALL_Pseudo
+; GEN16: CALL_Pseudo &__ashlhi3
 ; GEN32-LABEL: name: shl16
-; GEN32-NOT: CALL_Pseudo
+; GEN32: CALL_Pseudo &__ashlhi3
 ; GEN64-LABEL: name: shl16
-; GEN64-NOT: CALL_Pseudo
+; GEN64: CALL_Pseudo &__ashlhi3
   %r = shl i16 %a, %b
   ret i16 %r
 }
