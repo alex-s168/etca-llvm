@@ -98,7 +98,9 @@ static unsigned getETCAAluOpcode(unsigned GOpcode, unsigned Size) {
       return ETCA::XOR8;
     return ETCA::XOR16;
   case TargetOpcode::G_SHL:
-    return ETCA::SLO16; // SLO is always 16-bit in base ISA
+    if (Size == 8)
+      return ETCA::SLO8;
+    return ETCA::SLO16;
   default:
     return 0;
   }
@@ -133,7 +135,9 @@ static const TargetRegisterClass *getRCForType(LLT Ty) {
     return &ETCA::GPR64RegClass;
   if (Size == 32)
     return &ETCA::GPR32RegClass;
-  return &ETCA::GPRRegClass; // s8, s16, or pointer types with size < 32
+  if (Size == 8)
+    return &ETCA::GPR8RegClass;
+  return &ETCA::GPRRegClass; // s16, or pointer types with size = 16
 }
 
 /// Constrain a virtual register to the appropriate register class.

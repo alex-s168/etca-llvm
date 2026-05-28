@@ -11,17 +11,17 @@ define signext i8 @shl_var_8(i8 signext %y, i8 signext %x) {
   ; GEN32-NEXT: {{  $}}
   ; GEN32-NEXT:   [[COPY:%[0-9]+]]:gpr32 = COPY $d0
   ; GEN32-NEXT:   [[MOVZ32_:%[0-9]+]]:gpr32 = MOVZ32 [[COPY]]
-  ; GEN32-NEXT:   [[COPY1:%[0-9]+]]:gpr = COPY [[MOVZ32_]]
+  ; GEN32-NEXT:   [[COPY1:%[0-9]+]]:gpr8 = COPY [[MOVZ32_]]
   ; GEN32-NEXT:   [[COPY2:%[0-9]+]]:gpr32 = COPY $d1
   ; GEN32-NEXT:   [[MOVZ32_1:%[0-9]+]]:gpr32 = MOVZ32 [[COPY2]]
-  ; GEN32-NEXT:   [[COPY3:%[0-9]+]]:gpr = COPY [[MOVZ32_1]]
+  ; GEN32-NEXT:   [[COPY3:%[0-9]+]]:gpr8 = COPY [[MOVZ32_1]]
   ; GEN32-NEXT:   ADJCALLSTACKDOWN 0, 0, implicit-def $r6, implicit $r6
   ; GEN32-NEXT:   $r0 = COPY [[COPY1]]
   ; GEN32-NEXT:   $r1 = COPY [[COPY3]]
   ; GEN32-NEXT:   CALL_Pseudo &__ashlhi3, csr_etca_gpr64_regmask, implicit-def $r7, implicit $r0, implicit $r1, implicit-def $r0
   ; GEN32-NEXT:   ADJCALLSTACKUP 0, 0, implicit-def $r6, implicit $r6
-  ; GEN32-NEXT:   [[COPY4:%[0-9]+]]:gpr = COPY $r0
-  ; GEN32-NEXT:   [[MOVS8_:%[0-9]+]]:gpr = MOVS8 [[COPY4]]
+  ; GEN32-NEXT:   [[COPY4:%[0-9]+]]:gpr8 = COPY $r0
+  ; GEN32-NEXT:   [[MOVS8_:%[0-9]+]]:gpr8 = MOVS8 [[COPY4]]
   ; GEN32-NEXT:   [[COPY5:%[0-9]+]]:gpr32 = COPY [[MOVS8_]]
   ; GEN32-NEXT:   $d0 = COPY [[COPY5]]
   ; GEN32-NEXT:   RET_Pseudo implicit $d0
@@ -32,17 +32,17 @@ define signext i8 @shl_var_8(i8 signext %y, i8 signext %x) {
   ; GEN64-NEXT: {{  $}}
   ; GEN64-NEXT:   [[COPY:%[0-9]+]]:gpr64 = COPY $q0
   ; GEN64-NEXT:   [[MOVZ64_:%[0-9]+]]:gpr64 = MOVZ64 [[COPY]]
-  ; GEN64-NEXT:   [[COPY1:%[0-9]+]]:gpr = COPY [[MOVZ64_]]
+  ; GEN64-NEXT:   [[COPY1:%[0-9]+]]:gpr8 = COPY [[MOVZ64_]]
   ; GEN64-NEXT:   [[COPY2:%[0-9]+]]:gpr64 = COPY $q1
   ; GEN64-NEXT:   [[MOVZ64_1:%[0-9]+]]:gpr64 = MOVZ64 [[COPY2]]
-  ; GEN64-NEXT:   [[COPY3:%[0-9]+]]:gpr = COPY [[MOVZ64_1]]
+  ; GEN64-NEXT:   [[COPY3:%[0-9]+]]:gpr8 = COPY [[MOVZ64_1]]
   ; GEN64-NEXT:   ADJCALLSTACKDOWN 0, 0, implicit-def $r6, implicit $r6
   ; GEN64-NEXT:   $r0 = COPY [[COPY1]]
   ; GEN64-NEXT:   $r1 = COPY [[COPY3]]
   ; GEN64-NEXT:   CALL_Pseudo &__ashlhi3, csr_etca_preserveall_gpr32_regmask, implicit-def $r7, implicit $r0, implicit $r1, implicit-def $r0
   ; GEN64-NEXT:   ADJCALLSTACKUP 0, 0, implicit-def $r6, implicit $r6
-  ; GEN64-NEXT:   [[COPY4:%[0-9]+]]:gpr = COPY $r0
-  ; GEN64-NEXT:   [[MOVS8_:%[0-9]+]]:gpr = MOVS8 [[COPY4]]
+  ; GEN64-NEXT:   [[COPY4:%[0-9]+]]:gpr8 = COPY $r0
+  ; GEN64-NEXT:   [[MOVS8_:%[0-9]+]]:gpr8 = MOVS8 [[COPY4]]
   ; GEN64-NEXT:   [[COPY5:%[0-9]+]]:gpr64 = COPY [[MOVS8_]]
   ; GEN64-NEXT:   $q0 = COPY [[COPY5]]
   ; GEN64-NEXT:   RET_Pseudo implicit $q0
@@ -55,8 +55,8 @@ define signext i8 @shl_zero_var_8(i8 signext %mask) {
   ; GEN32: bb.1 (%ir-block.0):
   ; GEN32-NEXT:   liveins: $d0, $r6, $r7
   ; GEN32-NEXT: {{  $}}
-  ; GEN32-NEXT:   [[MOVZI8_:%[0-9]+]]:gpr = MOVZI8 0
-  ; GEN32-NEXT:   [[MOVS8_:%[0-9]+]]:gpr = MOVS8 [[MOVZI8_]]
+  ; GEN32-NEXT:   [[MOVZI8_:%[0-9]+]]:gpr8 = MOVZI8 0
+  ; GEN32-NEXT:   [[MOVS8_:%[0-9]+]]:gpr8 = MOVS8 [[MOVZI8_]]
   ; GEN32-NEXT:   [[COPY:%[0-9]+]]:gpr32 = COPY [[MOVS8_]]
   ; GEN32-NEXT:   $d0 = COPY [[COPY]]
   ; GEN32-NEXT:   RET_Pseudo implicit $d0
@@ -65,8 +65,8 @@ define signext i8 @shl_zero_var_8(i8 signext %mask) {
   ; GEN64: bb.1 (%ir-block.0):
   ; GEN64-NEXT:   liveins: $q0, $r6, $r7
   ; GEN64-NEXT: {{  $}}
-  ; GEN64-NEXT:   [[MOVZI8_:%[0-9]+]]:gpr = MOVZI8 0
-  ; GEN64-NEXT:   [[MOVS8_:%[0-9]+]]:gpr = MOVS8 [[MOVZI8_]]
+  ; GEN64-NEXT:   [[MOVZI8_:%[0-9]+]]:gpr8 = MOVZI8 0
+  ; GEN64-NEXT:   [[MOVS8_:%[0-9]+]]:gpr8 = MOVS8 [[MOVZI8_]]
   ; GEN64-NEXT:   [[COPY:%[0-9]+]]:gpr64 = COPY [[MOVS8_]]
   ; GEN64-NEXT:   $q0 = COPY [[COPY]]
   ; GEN64-NEXT:   RET_Pseudo implicit $q0
@@ -79,8 +79,8 @@ define signext i8 @shl_overflow_8(i8 signext %a) {
   ; GEN32: bb.1 (%ir-block.0):
   ; GEN32-NEXT:   liveins: $d0, $r6, $r7
   ; GEN32-NEXT: {{  $}}
-  ; GEN32-NEXT:   [[MOVZI8_:%[0-9]+]]:gpr = MOVZI8 0
-  ; GEN32-NEXT:   [[MOVS8_:%[0-9]+]]:gpr = MOVS8 [[MOVZI8_]]
+  ; GEN32-NEXT:   [[MOVZI8_:%[0-9]+]]:gpr8 = MOVZI8 0
+  ; GEN32-NEXT:   [[MOVS8_:%[0-9]+]]:gpr8 = MOVS8 [[MOVZI8_]]
   ; GEN32-NEXT:   [[COPY:%[0-9]+]]:gpr32 = COPY [[MOVS8_]]
   ; GEN32-NEXT:   $d0 = COPY [[COPY]]
   ; GEN32-NEXT:   RET_Pseudo implicit $d0
@@ -89,8 +89,8 @@ define signext i8 @shl_overflow_8(i8 signext %a) {
   ; GEN64: bb.1 (%ir-block.0):
   ; GEN64-NEXT:   liveins: $q0, $r6, $r7
   ; GEN64-NEXT: {{  $}}
-  ; GEN64-NEXT:   [[MOVZI8_:%[0-9]+]]:gpr = MOVZI8 0
-  ; GEN64-NEXT:   [[MOVS8_:%[0-9]+]]:gpr = MOVS8 [[MOVZI8_]]
+  ; GEN64-NEXT:   [[MOVZI8_:%[0-9]+]]:gpr8 = MOVZI8 0
+  ; GEN64-NEXT:   [[MOVS8_:%[0-9]+]]:gpr8 = MOVS8 [[MOVZI8_]]
   ; GEN64-NEXT:   [[COPY:%[0-9]+]]:gpr64 = COPY [[MOVS8_]]
   ; GEN64-NEXT:   $q0 = COPY [[COPY]]
   ; GEN64-NEXT:   RET_Pseudo implicit $q0

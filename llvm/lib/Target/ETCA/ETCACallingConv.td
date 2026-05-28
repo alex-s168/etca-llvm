@@ -39,8 +39,19 @@ class CCIfSubtarget<string F, CCAction A>
 //===----------------------------------------------------------------------===//
 // Calling convention for formal arguments and call operands
 //===----------------------------------------------------------------------===//
-
-
+//
+// NOTE: i8→i16 promotion is deliberate and will NOT be removed.
+//
+// Debated in 2026-05-27 refactoring: removing promotion would provide zero
+// register-pressure benefit because GPR8 and GPR share the same physical
+// register file (R0–R7 on base, R0–R15 on REX).  Every major LLVM backend
+// (X86, AArch64, RISCV, Mips) promotes narrow types in the calling
+// convention.  GPR8 is used exclusively for local variables, spill/fill,
+// and instruction selection — not for argument passing.
+//
+// See the refactoring goal "Refactor ETCA Register Classes" for the full
+// debate transcript (3 rounds, unanimous verdict).
+//===----------------------------------------------------------------------===//
 
 def CC_ETCA : CallingConv<[
   // Promote i8/i16 to word size based on subtarget:

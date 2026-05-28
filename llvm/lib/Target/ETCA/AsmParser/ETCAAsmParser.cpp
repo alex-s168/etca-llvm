@@ -368,7 +368,7 @@ const ETCAAsmParser::RrRiEntry ETCAAsmParser::ALUOps[] = {
      ETCA::CMPI16, ETCA::CMPI32, ETCA::CMPI64},
     {"test", ETCA::TEST8, ETCA::TEST, ETCA::TEST32, ETCA::TEST64, ETCA::TESTI8,
      ETCA::TESTI16, ETCA::TESTI32, ETCA::TESTI64},
-    {"slo", 0, 0, 0, 0, 0, ETCA::SLO16, 0, 0}, // RI only, 16-bit only
+    {"slo", 0, 0, 0, 0, ETCA::SLO8, ETCA::SLO16, 0, 0}, // RI only
     {"readcr", 0, 0, 0, 0, 0, ETCA::READCR, 0, 0},
     {"writecr", 0, 0, 0, 0, 0, ETCA::WRITECR, 0, 0},
 };
@@ -1334,7 +1334,7 @@ bool ETCAAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
         (Opc == ETCA::MOVZI8 || Opc == ETCA::MOVSI8 || Opc == ETCA::MOVZI16 ||
          Opc == ETCA::MOVSI16 || Opc == ETCA::MOVZI32 || Opc == ETCA::MOVSI32 ||
          Opc == ETCA::MOVZI64 || Opc == ETCA::MOVSI64);
-    bool IsSloRI = (Opc == ETCA::SLO16);
+    bool IsSloRI = (Opc == ETCA::SLO8 || Opc == ETCA::SLO16);
     bool IsCmpRR =
         (Opc == ETCA::CMP8 || Opc == ETCA::CMP || Opc == ETCA::CMP32 ||
          Opc == ETCA::CMP64 || Opc == ETCA::TEST8 || Opc == ETCA::TEST ||

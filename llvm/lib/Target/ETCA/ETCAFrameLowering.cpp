@@ -25,6 +25,8 @@
 
 #include "ETCAFrameLowering.h"
 #include "ETCA.h"
+#include "ETCAInstrInfo.h"
+#include "ETCARegisterInfo.h"
 #include "ETCASubtarget.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -44,6 +46,57 @@
 
 using namespace llvm;
 using namespace ETCA;
+
+/// Get the PUSH opcode for a given register class size in bytes.
+static unsigned getPushOpcodeForSize(unsigned Size) {
+  switch (Size) {
+  case 1:
+    return PUSH8;
+  case 2:
+    return PUSH;
+  case 4:
+    return PUSH32;
+  case 8:
+    return PUSH64;
+  default:
+    llvm_unreachable("Unsupported register class size for PUSH");
+  }
+}
+
+/// Get the POP opcode for a given register class size in bytes.
+static unsigned getPopOpcodeForSize(unsigned Size) {
+  switch (Size) {
+  case 1:
+    return POP8;
+  case 2:
+    return POP;
+  case 4:
+    return POP32;
+  case 8:
+    return POP64;
+  default:
+    llvm_unreachable("Unsupported register class size for POP");
+  }
+}
+
+/// Get the register class size for a given physical register.
+/// Check wider register classes first (GPR64, GPR32) so Q-prefix
+/// (64-bit, Q0-Q7) and D-prefix (32-bit, D0-D7) registers are sized
+/// correctly.  R-prefix registers (R0-R15) are the default — they
+/// fall through to the 2-byte return since they are NOT in GPR64
+/// or GPR32.  The GPR8 and GPR8_REX 1-byte classes are intentionally
+/// NOT checked here because CSR spill slots for R-prefix registers
+/// use the native register width (2 bytes), even when the BYTE
+/// extension provides 8-bit operations.
+static unsigned getCSRRegClassSize(Register Reg,
+                                   const TargetRegisterInfo &TRI) {
+  if (ETCA::GPR64RegClass.contains(Reg))
+    return 8;
+  if (ETCA::GPR32RegClass.contains(Reg))
+    return 4;
+  // Default: all R-prefix registers (R0-R15) are 16-bit (2 bytes)
+  return 2;
+}
 
 bool ETCAFrameLowering::hasFPImpl(const MachineFunction &MF) const {
   const auto &ST = MF.getSubtarget<ETCASubtarget>();
@@ -102,9 +155,10 @@ void ETCAFrameLowering::emitPrologue(MachineFunction &MF,
   // what will become the bottom of the allocated frame.
 
   unsigned RegWidth = ST.getRegWidth();
-  unsigned SlotSize = RegWidth / 8;
+  const TargetRegisterInfo &TRI = *ST.getRegisterInfo();
 
-  // 1. push r5 (save old base pointer / frame link)
+  // 1. push r5 (save old base pointer / frame link) — r5 is always
+  //    a GPR/GPR32/GPR64 register (never GPR8), sized by RegWidth.
   unsigned PushOpc;
   switch (RegWidth) {
   case 64:
@@ -148,14 +202,19 @@ void ETCAFrameLowering::emitPrologue(MachineFunction &MF,
   // 2. mov r5, r6 (copy sp to bp) — RR format (non-tied): [dst, src]
   BuildMI(MBB, MBBI, DL, TII.get(MovOpc), R5).addReg(R6);
 
-  // 3. Push callee-saved registers using PUSH (avoids verbose MOVZ+ADDI+STORE)
+  // 3. Push callee-saved registers using per-register PUSH opcodes.
+  //    GPR8 registers use PUSH8 (1-byte stack adjustment), GPR uses
+  //    PUSH (2-byte), GPR32 uses PUSH32 (4-byte), GPR64 uses PUSH64
+  //    (8-byte).  The varied sizes avoid wasted stack space.
   unsigned CSRPushSize = 0;
   for (auto &CS : MFI.getCalleeSavedInfo()) {
     // R5 (bp) was already pushed in step 1; R6 (sp) is never saved.
     if (CS.getReg() == ETCA::R5 || CS.getReg() == ETCA::R6)
       continue;
-    BuildMI(MBB, MBBI, DL, TII.get(PushOpc)).addReg(CS.getReg());
-    CSRPushSize += SlotSize;
+    unsigned RegSize = getCSRRegClassSize(CS.getReg(), TRI);
+    BuildMI(MBB, MBBI, DL, TII.get(getPushOpcodeForSize(RegSize)))
+        .addReg(CS.getReg());
+    CSRPushSize += RegSize;
   }
 
   // 4. Allocate remaining stack (locals, other spills).  The CSR slots
@@ -184,6 +243,7 @@ void ETCAFrameLowering::emitEpilogue(MachineFunction &MF,
   MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
   MachineFrameInfo &MFI = MF.getFrameInfo();
   const TargetInstrInfo &TII = *ST.getInstrInfo();
+  const TargetRegisterInfo &TRI = *ST.getRegisterInfo();
   DebugLoc DL = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
 
   // SAF epilogue (insert before the return instruction):
@@ -193,20 +253,6 @@ void ETCAFrameLowering::emitEpilogue(MachineFunction &MF,
   //   pop r5           ; restore old base pointer
 
   unsigned RegWidth = ST.getRegWidth();
-  unsigned SlotSize = RegWidth / 8;
-
-  unsigned PopOpc;
-  switch (RegWidth) {
-  case 64:
-    PopOpc = POP64;
-    break;
-  case 32:
-    PopOpc = POP32;
-    break;
-  default:
-    PopOpc = POP;
-    break;
-  }
 
   unsigned MovOpc;
   switch (RegWidth) {
@@ -238,11 +284,12 @@ void ETCAFrameLowering::emitEpilogue(MachineFunction &MF,
   BuildMI(MBB, MBBI, DL, TII.get(MovOpc), R6).addReg(R5);
 
   // 2. Adjust sp down to reach the pushed CSRs.
+  //    Use per-register sizes so GPR8 contributes 1 byte, GPR 2, etc.
   unsigned CSRPushSize = 0;
   for (auto &CS : MFI.getCalleeSavedInfo()) {
     if (CS.getReg() == ETCA::R5 || CS.getReg() == ETCA::R6)
       continue;
-    CSRPushSize += SlotSize;
+    CSRPushSize += getCSRRegClassSize(CS.getReg(), TRI);
   }
   if (CSRPushSize > 0) {
     int64_t Remaining = CSRPushSize;
@@ -253,16 +300,30 @@ void ETCAFrameLowering::emitEpilogue(MachineFunction &MF,
     }
   }
 
-  // 3. Pop callee-saved registers (reverse of push order)
+  // 3. Pop callee-saved registers (reverse of push order).
+  //    Use per-register POP opcodes matching each CSR's class size.
   const auto &CSI = MFI.getCalleeSavedInfo();
   for (auto It = CSI.rbegin(); It != CSI.rend(); ++It) {
     if (It->getReg() == ETCA::R5 || It->getReg() == ETCA::R6)
       continue;
-    BuildMI(MBB, MBBI, DL, TII.get(PopOpc), It->getReg());
+    unsigned RegSize = getCSRRegClassSize(It->getReg(), TRI);
+    BuildMI(MBB, MBBI, DL, TII.get(getPopOpcodeForSize(RegSize)), It->getReg());
   }
 
-  // 4. pop r5 (restore old base pointer)
-  BuildMI(MBB, MBBI, DL, TII.get(PopOpc), R5);
+  // 4. pop r5 (restore old base pointer) — r5 is always GPR/GPR32/GPR64
+  unsigned PopOpcBP;
+  switch (RegWidth) {
+  case 64:
+    PopOpcBP = POP64;
+    break;
+  case 32:
+    PopOpcBP = POP32;
+    break;
+  default:
+    PopOpcBP = POP;
+    break;
+  }
+  BuildMI(MBB, MBBI, DL, TII.get(PopOpcBP), R5);
 }
 
 StackOffset
@@ -335,10 +396,10 @@ bool ETCAFrameLowering::assignCalleeSavedSpillSlots(
     return true; // No callee-saved registers without SAF
 
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  unsigned RegWidth = ST.getRegWidth();
-  unsigned SlotSize = RegWidth / 8;
 
   for (auto &CS : CSI) {
+    // Use per-register sizing so GPR8 gets a 1-byte slot, GPR gets 2, etc.
+    unsigned SlotSize = getCSRRegClassSize(CS.getReg(), *TRI);
     int FI = MFI.CreateStackObject(SlotSize, Align(SlotSize), true);
     CS.setFrameIdx(FI);
   }

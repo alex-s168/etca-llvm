@@ -40,13 +40,15 @@ const TargetRegisterInfo &ETCAInstrInfo::getRegisterInfo() const {
 }
 
 unsigned ETCAInstrInfo::getRegClassSize(const TargetRegisterClass &RC) const {
+  if (&RC == &GPR8RegClass)
+    return 1; // 8-bit
   if (&RC == &GPRRegClass)
     return 2; // 16-bit
   if (&RC == &GPR32RegClass)
     return 4; // 32-bit
   if (&RC == &GPR64RegClass)
     return 8; // 64-bit
-  return 2;   // default
+  llvm_unreachable("Unknown register class in getRegClassSize");
 }
 
 bool ETCAInstrInfo::isMoveInstr(const TargetRegisterInfo &TRI,
@@ -139,9 +141,13 @@ void ETCAInstrInfo::storeRegToStackSlot(
     StoreOpc = STORE32;
     break;
   case 2:
-  default:
     StoreOpc = STORE16;
     break;
+  case 1:
+    StoreOpc = STORE8;
+    break;
+  default:
+    llvm_unreachable("Unhandled register class size in storeRegToStackSlot");
   }
   DebugLoc DL = (I != MBB.end()) ? I->getDebugLoc() : DebugLoc();
   auto MIB = BuildMI(MBB, I, DL, get(StoreOpc))
@@ -173,9 +179,13 @@ void ETCAInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
     LoadOpc = LOAD32;
     break;
   case 2:
-  default:
     LoadOpc = LOAD16;
     break;
+  case 1:
+    LoadOpc = LOAD8;
+    break;
+  default:
+    llvm_unreachable("Unhandled register class size in loadRegFromStackSlot");
   }
   DebugLoc DL = (I != MBB.end()) ? I->getDebugLoc() : DebugLoc();
   auto MIB = BuildMI(MBB, I, DL, get(LoadOpc), DestReg)

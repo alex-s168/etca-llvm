@@ -255,13 +255,13 @@ class EInstRI64_NT<bits<4> opcod, string asmstr, list<dag> pattern>
 // Convenience: 8-bit RI instruction (SS=00) — tied (BYTE extension)
 class EInstRI8<bits<4> opcod, string asmstr, list<dag> pattern>
     : EInstRI<0b00, opcod,
-              (outs GPR:$dst), (ins GPR:$src1, i16imm:$imm),
+              (outs GPR:$dst), (ins GPR:$src1, i8imm:$imm),
               asmstr, pattern>;
 
 // Convenience: 8-bit RI instruction (SS=00) — non-tied (BYTE extension)
 class EInstRI8_NT<bits<4> opcod, string asmstr, list<dag> pattern>
     : EInstRI_NT<0b00, opcod,
-                 (outs GPR:$dst), (ins i16imm:$imm),
+                 (outs GPR:$dst), (ins i8imm:$imm),
                  asmstr, pattern>;
 
 //===----------------------------------------------------------------------===//

@@ -47,6 +47,8 @@ ETCATargetLowering::ETCATargetLowering(const TargetMachine &TM,
     addRegisterClass(MVT::i32, &GPR32RegClass);
   }
   addRegisterClass(MVT::i16, &GPRRegClass);
+  if (STI.hasByte())
+    addRegisterClass(MVT::i8, &GPR8RegClass);
   computeRegisterProperties(STI.getRegisterInfo());
 
   // Shared target properties used by LLVM infrastructure (not SDAG-specific):

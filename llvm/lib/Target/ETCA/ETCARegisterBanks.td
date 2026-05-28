@@ -14,5 +14,5 @@
 //===----------------------------------------------------------------------===//
 
 /// General Purpose Registers bank.
-/// Covers GPR (16-bit), GPR32 (32-bit), and GPR64 (64-bit) register classes.
-def GPRBank : RegisterBank<"GPRB", [GPR, GPR32, GPR64]>;
+/// Covers GPR8 (8-bit), GPR (16-bit), GPR32 (32-bit), and GPR64 (64-bit) register classes.
+def GPRBank : RegisterBank<"GPRB", [GPR8, GPR8_REX, GPR, GPR32, GPR64]>;

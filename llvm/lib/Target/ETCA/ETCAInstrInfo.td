@@ -250,6 +250,13 @@ let isCommutable = 1, hasSideEffects = 0, mayLoad = 0, mayStore = 0,
   def MOVSI8  : EInstRI8_NT<9, "movs $dst, $imm", []>;
 }
 
+// SLO8 — shift left by imm5, OR with low bits (BYTE extension)
+// Uses tied-def format (same reasoning as SLO16).
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0,
+    SchedRW = [WriteALU], Predicates = [HasByte] in {
+  def SLO8    : EInstRI8<12, "slo $dst, $imm", []>;
+}
+
 //===----------------------------------------------------------------------===//
 // 8-bit (BYTE extension) LOAD/STORE — RR format with SS=00
 //===----------------------------------------------------------------------===//

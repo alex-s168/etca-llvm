@@ -70,7 +70,7 @@ define i16 @spill_cs(i16 %v1, i16 %v2, i16 %v3, i16 %v4) {
 ; EW-NEXT:  push %r4
 ; EW:       call callee
 ; EW:       movz %r6, %r5
-; EW:       sub %r6, 8
+; EW:       sub %r6, 4
 ; EW:       pop %r4
 ; EW:       pop %r3
 ; EW:       pop %r5
@@ -83,8 +83,7 @@ define i16 @spill_cs(i16 %v1, i16 %v2, i16 %v3, i16 %v4) {
 ; QW-NEXT:  push %r4
 ; QW:       call callee
 ; QW:       movz %r6, %r5
-; QW:       sub %r6, 15
-; QW:       sub %r6, 1
+; QW:       sub %r6, 4
 ; QW:       pop %r4
 ; QW:       pop %r3
 ; QW:       pop %r5
@@ -97,8 +96,7 @@ define i16 @spill_cs(i16 %v1, i16 %v2, i16 %v3, i16 %v4) {
 ; P64-NEXT:  push %r4
 ; P64:       call callee
 ; P64:       movz %r6, %r5
-; P64:       sub %r6, 15
-; P64:       sub %r6, 1
+; P64:       sub %r6, 4
 ; P64:       pop %r4
 ; P64:       pop %r3
 ; P64:       pop %r5
@@ -111,8 +109,7 @@ define i16 @spill_cs(i16 %v1, i16 %v2, i16 %v3, i16 %v4) {
 ; W64-NEXT:  push %r4
 ; W64:       call callee
 ; W64:       movz %r6, %r5
-; W64:       sub %r6, 15
-; W64:       sub %r6, 1
+; W64:       sub %r6, 4
 ; W64:       pop %r4
 ; W64:       pop %r3
 ; W64:       pop %r5

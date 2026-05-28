@@ -35,13 +35,14 @@ define i1 @load_bool() {
 ; LOAD16:       ; %bb.0:
 ; LOAD16-NEXT:    movz %r0, global_bool{{$}}
 ; LOAD16-NEXT:    load %r0h, %r0h
+; LOAD16-NEXT:    movz %r0h, %r0h
 ; LOAD16-NEXT:    jmpr %r7
 ;
 ; LOAD32-LABEL: load_bool:
 ; LOAD32:       ; %bb.0:
 ; LOAD32-NEXT:    movz %r0d, global_bool
 ; LOAD32-NEXT:    load %r0, %r0d
-; LOAD32-NEXT:    movz %r0, %r0
+; LOAD32-NEXT:    movz %r0h, %r0h
 ; LOAD32-NEXT:    movs %r0, %r0
 ; LOAD32-NEXT:    jmpr %r7
 ;
@@ -49,7 +50,7 @@ define i1 @load_bool() {
 ; LOAD64:       ; %bb.0:
 ; LOAD64-NEXT:    movz %r0q, global_bool
 ; LOAD64-NEXT:    load %r0, %r0q
-; LOAD64-NEXT:    movz %r0, %r0
+; LOAD64-NEXT:    movz %r0h, %r0h
 ; LOAD64-NEXT:    movs %r0, %r0
 ; LOAD64-NEXT:    jmpr %r7
 ;
@@ -57,7 +58,7 @@ define i1 @load_bool() {
 ; LOAD32P64:       ; %bb.0:
 ; LOAD32P64-NEXT:    movz %r0q, global_bool
 ; LOAD32P64-NEXT:    load %r0, %r0q
-; LOAD32P64-NEXT:    movz %r0, %r0
+; LOAD32P64-NEXT:    movz %r0h, %r0h
 ; LOAD32P64-NEXT:    movs %r0, %r0
 ; LOAD32P64-NEXT:    jmpr %r7
 ;
@@ -65,7 +66,7 @@ define i1 @load_bool() {
 ; LOAD64P32:       ; %bb.0:
 ; LOAD64P32-NEXT:    movz %r0d, global_bool
 ; LOAD64P32-NEXT:    load %r0, %r0d
-; LOAD64P32-NEXT:    movz %r0, %r0
+; LOAD64P32-NEXT:    movz %r0h, %r0h
 ; LOAD64P32-NEXT:    movs %r0, %r0
 ; LOAD64P32-NEXT:    jmpr %r7
 ;

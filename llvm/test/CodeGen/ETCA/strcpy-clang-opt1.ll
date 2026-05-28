@@ -61,7 +61,7 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; QW:       movz %r5, %r6
 ; QW:       push %r3
 ; QW:       push %r4
-; QW:       sub %r6, 8
+; QW:       sub %r6, 12
 ; QW:       movz %r7q, %r5
 ; QW:       add %r7q, -8
 ; QW:       store %r0q, %r7q
@@ -83,7 +83,7 @@ define ptr @mystrcpy(ptr %dest, ptr %src) {
 ; P64:       movz %r5, %r6
 ; P64:       push %r3
 ; P64:       push %r4
-; P64:       sub %r6, 8
+; P64:       sub %r6, 4
 ; P64:       movz %r7d, %r5
 ; P64:       add %r7d, -4
 ; P64:       store %r0d, %r7d

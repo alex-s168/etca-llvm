@@ -28,6 +28,9 @@ def sub_32 : SubRegIndex<32>;
 // sub_16_hi gives bits [31:16] for 64-bit registers
 def sub_16_hi : SubRegIndex<16, 16>;
 
+// For 8-bit values (BYTE extension): sub_8 gives low 8 bits of a 16-bit register
+def sub_8 : SubRegIndex<8>;
+
 // 64-bit register has:
 //   sub_32 → low 32 bits (d0-d7)
 //   sub_16 → low 16 bits (r0-r7) mapped through sub_32
@@ -86,19 +89,11 @@ foreach i = 0-15 in {
 //===----------------------------------------------------------------------===//
 // Register classes for each width.
 // Only the classes matching the target word size are allocatable.
-// When REX is enabled, the _REX classes (16 registers) are used.
 //===----------------------------------------------------------------------===//
 
 // 16-bit GPR class (base 8 regs for codegen)
 def GPR : RegisterClass<"ETCA", [i16], 16,
     (add R0, R1, R2, R3, R4, R5, R6, R7)> {
-  let Size = 16;
-}
-
-// 16-bit GPR class with REX extension (16 regs, for MC layer)
-def GPR_REX : RegisterClass<"ETCA", [i16], 16,
-    (add R0, R1, R2, R3, R4, R5, R6, R7,
-         R8, R9, R10, R11, R12, R13, R14, R15)> {
   let Size = 16;
 }
 
@@ -108,30 +103,29 @@ def GPR32 : RegisterClass<"ETCA", [i32], 32,
   let Size = 32;
 }
 
-// 32-bit GPR class with REX extension (16 regs, for MC layer)
-def GPR32_REX : RegisterClass<"ETCA", [i32], 32,
-    (add D0, D1, D2, D3, D4, D5, D6, D7,
-         D8, D9, D10, D11, D12, D13, D14, D15)> {
-  let Size = 32;
-}
-
 // 64-bit GPR class (base 8 regs for codegen)
 def GPR64 : RegisterClass<"ETCA", [i64], 64,
     (add Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7)> {
   let Size = 64;
 }
 
-// 64-bit GPR class with REX extension (16 regs, for MC layer)
-def GPR64_REX : RegisterClass<"ETCA", [i64], 64,
-    (add Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7,
-         Q8, Q9, Q10, Q11, Q12, Q13, Q14, Q15)> {
-  let Size = 64;
+// 8-bit GPR class (BYTE extension)
+// Uses the same physical registers (R0-R7) as the 16-bit GPR class.
+// Size is explicit for i8 type.
+def GPR8 : RegisterClass<"ETCA", [i8], 8,
+    (add R0, R1, R2, R3, R4, R5, R6, R7)> {
+  let Size = 8;
 }
 
-// Condition code register class (placeholder for flags)
-def CCR : RegisterClass<"ETCA", [i16], 16, (add)> {
-  let CopyCost = -1; // Don't allow copying of status registers
-  let isAllocatable = 0;
+// 8-bit GPR class with REX extension (BYTE extension + REX)
+// Provides 16 registers (R0-R15) for 8-bit values on REX-enabled targets.
+// Currently not wired into the default register allocator (use GPR8 for that);
+// defined here for completeness so calling convention and CSR masks can
+// reference it when needed.
+def GPR8_REX : RegisterClass<"ETCA", [i8], 8,
+    (add R0, R1, R2, R3, R4, R5, R6, R7,
+         R8, R9, R10, R11, R12, R13, R14, R15)> {
+  let Size = 8;
 }
 
 

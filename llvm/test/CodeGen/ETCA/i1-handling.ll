@@ -23,13 +23,14 @@ define i1 @phi_i1_false() #0 {
 ; GEN16:       ; %bb.0:                                ; %entry
 ; GEN16-NEXT:   	movz %r0h, 0
 ; GEN16-NEXT:   	; %bb.1:                                ; %end
+; GEN16-NEXT:   	movz %r0h, %r0h
 ; GEN16-NEXT:   	jmpr %r7
 ;
 ; WS32-LABEL: phi_i1_false:
 ; WS32:       ; %bb.0:                                ; %entry
 ; WS32-NEXT:   	movz %r0h, 0
 ; WS32-NEXT:   	; %bb.1:                                ; %end
-; WS32-NEXT:   	movz %r0, %r0
+; WS32-NEXT:   	movz %r0h, %r0h
 ; WS32-NEXT:   	movs %r0, %r0
 ; WS32-NEXT:   	jmpr %r7
 ;
@@ -37,7 +38,7 @@ define i1 @phi_i1_false() #0 {
 ; WS64:       ; %bb.0:                                ; %entry
 ; WS64-NEXT:   	movz %r0h, 0
 ; WS64-NEXT:   	; %bb.1:                                ; %end
-; WS64-NEXT:   	movz %r0, %r0
+; WS64-NEXT:   	movz %r0h, %r0h
 ; WS64-NEXT:   	movs %r0, %r0
 ; WS64-NEXT:   	jmpr %r7
 ;
@@ -45,6 +46,7 @@ define i1 @phi_i1_false() #0 {
 ; BYTE:       ; %bb.0:                                ; %entry
 ; BYTE-NEXT:   	movz %r0h, 0
 ; BYTE-NEXT:   	; %bb.1:                                ; %end
+; BYTE-NEXT:   	movz %r0h, %r0h
 ; BYTE-NEXT:   	jmpr %r7
 ;
 entry:
@@ -60,13 +62,14 @@ define i1 @phi_i1_true() #0 {
 ; GEN16:       ; %bb.0:                                ; %entry
 ; GEN16-NEXT:   	movz %r0h, 1
 ; GEN16-NEXT:   	; %bb.1:                                ; %end
+; GEN16-NEXT:   	movz %r0h, %r0h
 ; GEN16-NEXT:   	jmpr %r7
 ;
 ; WS32-LABEL: phi_i1_true:
 ; WS32:       ; %bb.0:                                ; %entry
 ; WS32-NEXT:   	movz %r0h, 1
 ; WS32-NEXT:   	; %bb.1:                                ; %end
-; WS32-NEXT:   	movz %r0, %r0
+; WS32-NEXT:   	movz %r0h, %r0h
 ; WS32-NEXT:   	movs %r0, %r0
 ; WS32-NEXT:   	jmpr %r7
 ;
@@ -74,7 +77,7 @@ define i1 @phi_i1_true() #0 {
 ; WS64:       ; %bb.0:                                ; %entry
 ; WS64-NEXT:   	movz %r0h, 1
 ; WS64-NEXT:   	; %bb.1:                                ; %end
-; WS64-NEXT:   	movz %r0, %r0
+; WS64-NEXT:   	movz %r0h, %r0h
 ; WS64-NEXT:   	movs %r0, %r0
 ; WS64-NEXT:   	jmpr %r7
 ;
@@ -82,6 +85,7 @@ define i1 @phi_i1_true() #0 {
 ; BYTE:       ; %bb.0:                                ; %entry
 ; BYTE-NEXT:   	movz %r0h, 1
 ; BYTE-NEXT:   	; %bb.1:                                ; %end
+; BYTE-NEXT:   	movz %r0h, %r0h
 ; BYTE-NEXT:   	jmpr %r7
 ;
 entry:
@@ -95,28 +99,28 @@ end:
 define i1 @phi_i1_arg(i1 %x) #0 {
 ; GEN16-LABEL: phi_i1_arg:
 ; GEN16:       ; %bb.0:                                ; %entry
-; GEN16-NEXT:   	movz %r0h, %r0h
 ; GEN16-NEXT:   	; %bb.1:                                ; %end
+; GEN16-NEXT:   	movz %r0h, %r0h
 ; GEN16-NEXT:   	jmpr %r7
 ;
 ; WS32-LABEL: phi_i1_arg:
 ; WS32:       ; %bb.0:                                ; %entry
 ; WS32-NEXT:   	; %bb.1:                                ; %end
-; WS32-NEXT:   	movz %r0, %r0
+; WS32-NEXT:   	movz %r0h, %r0h
 ; WS32-NEXT:   	movs %r0, %r0
 ; WS32-NEXT:   	jmpr %r7
 ;
 ; WS64-LABEL: phi_i1_arg:
 ; WS64:       ; %bb.0:                                ; %entry
 ; WS64-NEXT:   	; %bb.1:                                ; %end
-; WS64-NEXT:   	movz %r0, %r0
+; WS64-NEXT:   	movz %r0h, %r0h
 ; WS64-NEXT:   	movs %r0, %r0
 ; WS64-NEXT:   	jmpr %r7
 ;
 ; BYTE-LABEL: phi_i1_arg:
 ; BYTE:       ; %bb.0:                                ; %entry
-; BYTE-NEXT:   	movz %r0h, %r0h
 ; BYTE-NEXT:   	; %bb.1:                                ; %end
+; BYTE-NEXT:   	movz %r0h, %r0h
 ; BYTE-NEXT:   	jmpr %r7
 ;
 entry:
@@ -131,25 +135,27 @@ define i1 @const_false() #0 {
 ; GEN16-LABEL: const_false:
 ; GEN16:       ; %bb.0:
 ; GEN16-NEXT:   	movz %r0h, 0
+; GEN16-NEXT:   	movz %r0h, %r0h
 ; GEN16-NEXT:   	jmpr %r7
 ;
 ; WS32-LABEL: const_false:
 ; WS32:       ; %bb.0:
 ; WS32-NEXT:   	movz %r0h, 0
-; WS32-NEXT:   	movz %r0, %r0
+; WS32-NEXT:   	movz %r0h, %r0h
 ; WS32-NEXT:   	movs %r0, %r0
 ; WS32-NEXT:   	jmpr %r7
 ;
 ; WS64-LABEL: const_false:
 ; WS64:       ; %bb.0:
 ; WS64-NEXT:   	movz %r0h, 0
-; WS64-NEXT:   	movz %r0, %r0
+; WS64-NEXT:   	movz %r0h, %r0h
 ; WS64-NEXT:   	movs %r0, %r0
 ; WS64-NEXT:   	jmpr %r7
 ;
 ; BYTE-LABEL: const_false:
 ; BYTE:       ; %bb.0:
 ; BYTE-NEXT:   	movz %r0h, 0
+; BYTE-NEXT:   	movz %r0h, %r0h
 ; BYTE-NEXT:   	jmpr %r7
 ;
   ret i1 false
@@ -160,25 +166,27 @@ define i1 @const_true() #0 {
 ; GEN16-LABEL: const_true:
 ; GEN16:       ; %bb.0:
 ; GEN16-NEXT:   	movz %r0h, 1
+; GEN16-NEXT:   	movz %r0h, %r0h
 ; GEN16-NEXT:   	jmpr %r7
 ;
 ; WS32-LABEL: const_true:
 ; WS32:       ; %bb.0:
 ; WS32-NEXT:   	movz %r0h, 1
-; WS32-NEXT:   	movz %r0, %r0
+; WS32-NEXT:   	movz %r0h, %r0h
 ; WS32-NEXT:   	movs %r0, %r0
 ; WS32-NEXT:   	jmpr %r7
 ;
 ; WS64-LABEL: const_true:
 ; WS64:       ; %bb.0:
 ; WS64-NEXT:   	movz %r0h, 1
-; WS64-NEXT:   	movz %r0, %r0
+; WS64-NEXT:   	movz %r0h, %r0h
 ; WS64-NEXT:   	movs %r0, %r0
 ; WS64-NEXT:   	jmpr %r7
 ;
 ; BYTE-LABEL: const_true:
 ; BYTE:       ; %bb.0:
 ; BYTE-NEXT:   	movz %r0h, 1
+; BYTE-NEXT:   	movz %r0h, %r0h
 ; BYTE-NEXT:   	jmpr %r7
 ;
   ret i1 true
@@ -191,13 +199,14 @@ define i1 @D_GrabMouseCallback() #0 {
 ; GEN16:       ; %bb.0:                                ; %entry
 ; GEN16-NEXT:   	movz %r0h, 0
 ; GEN16-NEXT:   	; %bb.1:                                ; %land.end
+; GEN16-NEXT:   	movz %r0h, %r0h
 ; GEN16-NEXT:   	jmpr %r7
 ;
 ; WS32-LABEL: D_GrabMouseCallback:
 ; WS32:       ; %bb.0:                                ; %entry
 ; WS32-NEXT:   	movz %r0h, 0
 ; WS32-NEXT:   	; %bb.1:                                ; %land.end
-; WS32-NEXT:   	movz %r0, %r0
+; WS32-NEXT:   	movz %r0h, %r0h
 ; WS32-NEXT:   	movs %r0, %r0
 ; WS32-NEXT:   	jmpr %r7
 ;
@@ -205,7 +214,7 @@ define i1 @D_GrabMouseCallback() #0 {
 ; WS64:       ; %bb.0:                                ; %entry
 ; WS64-NEXT:   	movz %r0h, 0
 ; WS64-NEXT:   	; %bb.1:                                ; %land.end
-; WS64-NEXT:   	movz %r0, %r0
+; WS64-NEXT:   	movz %r0h, %r0h
 ; WS64-NEXT:   	movs %r0, %r0
 ; WS64-NEXT:   	jmpr %r7
 ;
@@ -213,6 +222,7 @@ define i1 @D_GrabMouseCallback() #0 {
 ; BYTE:       ; %bb.0:                                ; %entry
 ; BYTE-NEXT:   	movz %r0h, 0
 ; BYTE-NEXT:   	; %bb.1:                                ; %land.end
+; BYTE-NEXT:   	movz %r0h, %r0h
 ; BYTE-NEXT:   	jmpr %r7
 ;
 entry:

@@ -61,7 +61,7 @@ define i16 @normal_func(i16 %v0, i16 %v1, i16 %v2) {
 ; EW:  add %r0, %r3
 ; EW:  add %r0, %r4
 ; EW:  movz %r6, %r5
-; EW:  sub %r6, 8
+; EW:  sub %r6, 4
 ; EW:  pop %r4
 ; EW:  pop %r3
 ; EW:  pop %r5
@@ -287,8 +287,7 @@ define i16 @call_all(i16 %v0, i16 %v1, i16 %v2) {
 ; QW:  add %r0, %r3
 ; QW:  add %r0, %r4
 ; QW:  movz %r6, %r5
-; QW:  sub %r6, 15
-; QW:  sub %r6, 1
+; QW:  sub %r6, 4
 ; QW:  pop %r4
 ; QW:  pop %r3
 ; QW:  pop %r5
@@ -305,8 +304,7 @@ define i16 @call_all(i16 %v0, i16 %v1, i16 %v2) {
 ; P64:  add %r0, %r3
 ; P64:  add %r0, %r4
 ; P64:  movz %r6, %r5
-; P64:  sub %r6, 15
-; P64:  sub %r6, 1
+; P64:  sub %r6, 4
 ; P64:  pop %r4
 ; P64:  pop %r3
 ; P64:  pop %r5
@@ -342,7 +340,8 @@ define coldcc i16 @coldcc_leaf(i16 %a, i16 %b) {
 ; GN:       jmpr %r7
 ;
 ; EW-LABEL: coldcc_leaf:
-; EW:       jmpr %r7
+; EW:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
+; EW:  jmpr %r7
 ;
 ; QW-LABEL: coldcc_leaf:
 ; QW:       {{add %r[0-9]+[dqh]?, %r[0-9]+[dqh]?}}
